@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><script src="./image-slot.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+html,body{margin:0;padding:0;background:#0B0C0D;-webkit-font-smoothing:antialiased}
+a{color:#0B0B0C;text-decoration:none}a:hover{color:#3A3A3C}
+input{font:inherit}
+*{scrollbar-width:none;-ms-overflow-style:none}
+*::-webkit-scrollbar{width:0;height:0;display:none}
+@keyframes sheetUp{from{transform:translateY(101%)}to{transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style></helmet>
+
+<div style="min-height:100vh;box-sizing:border-box;padding:64px 48px 80px;background:#0B0C0D;font-family:-apple-system,'SF Pro Text','SF Pro Display',Geist,'Helvetica Neue',sans-serif">
+
+  <div style="max-width:1420px;margin:0 auto 52px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:1.6px;color:rgba(255,255,255,0.42)">OPD QUEUE · iOS</div>
+    <div style="font-size:32px;font-weight:600;letter-spacing:-1px;color:#fff;margin-top:12px;line-height:38px">Skip the waiting room.</div>
+    <div style="font-size:16px;letter-spacing:-0.2px;color:rgba(255,255,255,0.5);margin-top:8px;max-width:520px;text-wrap:pretty">Find a hospital, see the live OPD queue, and join it from your phone.</div>
+  </div>
+
+  <div style="max-width:1420px;margin:0 auto;display:flex;flex-wrap:wrap;gap:54px;align-items:flex-start">
+
+    <!-- ── DISCOVER ── -->
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div style="position:relative;height:100%;display:flex;flex-direction:column;background:#F7F7F8;font-family:-apple-system,'SF Pro Text',Geist,sans-serif">
+
+          <div style="flex:1;overflow:auto;padding:60px 0 10px">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 24px 0">
+              <div style="display:flex;align-items:center;gap:5px">
+                <span style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A8A8E">MUMBAI</span>
+                <svg width="8" height="5" viewBox="0 0 8 5"><path d="M0.8 0.8L4 4l3.2-3.2" stroke="#8A8A8E" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </div>
+              <div style="width:30px;height:30px;border-radius:15px;background:#E6E6E8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#48484A;letter-spacing:0.3px">PS</div>
+            </div>
+
+            <div style="padding:24px 24px 0">
+              <div style="font-size:34px;font-weight:600;letter-spacing:-1.2px;line-height:39px;color:#0B0B0C">Hospitals</div>
+              <div style="font-size:15px;letter-spacing:-0.3px;color:#8A8A8E;margin-top:6px">15 open near you right now</div>
+            </div>
+
+            <div style="padding:20px 24px 0">
+              <div style="display:flex;align-items:center;gap:8px;height:46px;padding:0 14px;border-radius:15px;background:rgba(10,10,12,0.045)">
+                <svg width="15" height="15" viewBox="0 0 15 15"><circle cx="6.3" cy="6.3" r="4.9" stroke="#8A8A8E" stroke-width="1.5" fill="none"></circle><path d="M10.1 10.1L14 14" stroke="#8A8A8E" stroke-width="1.7" stroke-linecap="round"></path></svg>
+                <input type="text" placeholder="Hospitals, doctors, specialities" value="{{ query }}" onChange="{{ onQuery }}" style="flex:1;border:none;outline:none;background:transparent;font-size:15px;letter-spacing:-0.3px;color:#0B0B0C;padding:0" />
+              </div>
+            </div>
+
+            <div style="padding:24px 24px 0">
+              <div style="position:relative;height:236px;border-radius:26px;overflow:hidden;background:#DDD;box-shadow:0 12px 30px rgba(11,12,13,0.12)">
+                <image-slot id="v3-hero-card" shape="rect" src="{{ heroSrc }}" placeholder=""></image-slot>
+                <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(to top,rgba(8,10,12,0.74) 0%,rgba(8,10,12,0.30) 42%,rgba(8,10,12,0.02) 74%)"></div>
+                <div style="position:absolute;left:20px;right:20px;bottom:18px;pointer-events:none">
+                  <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:9px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+                    <span style="width:6px;height:6px;border-radius:3px;background:#5DD39E;display:block"></span>
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.6px;color:#fff">{{ hOpd }} OPD OPEN NOW</span>
+                  </div>
+                  <div style="font-size:25px;font-weight:600;letter-spacing:-0.7px;color:#fff;line-height:30px;margin-top:10px">{{ hName }}</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:rgba(255,255,255,0.82);margin-top:3px">{{ hArea }} · {{ hWait }} average wait</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A8A8E;padding:32px 24px 4px">NEARBY</div>
+
+            <div style="padding:0 24px 12px">
+
+              <sc-if value="{{ show0 }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ pick0 }}" style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:0.5px solid rgba(10,10,12,0.09);cursor:pointer">
+                <div style="width:52px;height:52px;flex:none;border-radius:15px;overflow:hidden;background:#E6E6E8"><image-slot id="v3-t-sunrise" shape="rect" src="img/sunrise.png" placeholder=""></image-slot></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:550;letter-spacing:-0.4px;color:#0B0B0C">Sunrise Multispeciality</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Andheri West · 1.2 km</div>
+                </div>
+                <sc-if value="{{ sel0 }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px;font-weight:600;letter-spacing:0.8px;color:#0B0B0C">VIEWING</span></sc-if>
+                <sc-if value="{{ un0 }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:#8A8A8E;letter-spacing:-0.1px">18m</span></sc-if>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ show1 }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ pick1 }}" style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:0.5px solid rgba(10,10,12,0.09);cursor:pointer">
+                <div style="width:52px;height:52px;flex:none;border-radius:15px;overflow:hidden;background:#E6E6E8"><image-slot id="v3-t-lotus" shape="rect" src="img/lotus.png" placeholder=""></image-slot></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:550;letter-spacing:-0.4px;color:#0B0B0C">Lotus Health Clinic</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Bandra East · 3.4 km</div>
+                </div>
+                <sc-if value="{{ sel1 }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;letter-spacing:0.8px;color:#0B0B0C">VIEWING</span></sc-if>
+                <sc-if value="{{ un1 }}" hint-placeholder-val="{{ true }}"><span style="font-size:13px;color:#8A8A8E;letter-spacing:-0.1px">12m</span></sc-if>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ show2 }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ pick2 }}" style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:0.5px solid rgba(10,10,12,0.09);cursor:pointer">
+                <div style="width:52px;height:52px;flex:none;border-radius:15px;overflow:hidden;background:#E6E6E8"><image-slot id="v3-t-green" shape="rect" src="img/greenvalley.png" placeholder=""></image-slot></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:550;letter-spacing:-0.4px;color:#0B0B0C">Green Valley Hospital</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Powai · 8.1 km</div>
+                </div>
+                <sc-if value="{{ sel2 }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;letter-spacing:0.8px;color:#0B0B0C">VIEWING</span></sc-if>
+                <sc-if value="{{ un2 }}" hint-placeholder-val="{{ true }}"><span style="font-size:13px;color:#8A8A8E;letter-spacing:-0.1px">26m</span></sc-if>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ show3 }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ pick3 }}" style="display:flex;align-items:center;gap:14px;padding:14px 0;cursor:pointer">
+                <div style="width:52px;height:52px;flex:none;border-radius:15px;overflow:hidden;background:#E6E6E8"><image-slot id="v3-t-nirmal" shape="rect" src="img/nirmal.png" placeholder=""></image-slot></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:550;letter-spacing:-0.4px;color:#0B0B0C">Nirmal Clinic</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Dadar West · 6.7 km</div>
+                </div>
+                <sc-if value="{{ sel3 }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;letter-spacing:0.8px;color:#0B0B0C">VIEWING</span></sc-if>
+                <sc-if value="{{ un3 }}" hint-placeholder-val="{{ true }}"><span style="font-size:13px;color:#8A8A8E;letter-spacing:-0.1px">15m</span></sc-if>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:44px 0;text-align:center;font-size:14px;color:#8A8A8E;letter-spacing:-0.2px">Nothing matches “{{ query }}”</div>
+              </sc-if>
+
+            </div>
+          </div>
+
+          <div style="flex:none;height:82px;padding-top:10px;background:rgba(247,247,248,0.86);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid rgba(10,10,12,0.08);display:flex;align-items:flex-start;justify-content:space-around">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.4" stroke="#0B0B0C" stroke-width="1.5" fill="none"></circle><path d="M14.4 7.6l-2 5.1-5.1 2 2-5.1 5.1-2z" fill="#0B0B0C"></path></svg>
+              <span style="font-size:10px;font-weight:600;color:#0B0B0C;letter-spacing:0.2px">Discover</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><rect x="5" y="3.4" width="12" height="15.2" rx="2.6" stroke="#8A8A8E" stroke-width="1.5" fill="none"></rect><path d="M8 8.4h6M8 11.8h3.6" stroke="#8A8A8E" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px;color:#8A8A8E;letter-spacing:0.2px">Visits</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="8" r="3.4" stroke="#8A8A8E" stroke-width="1.5" fill="none"></circle><path d="M4.6 18.4c1.2-3.1 3.6-4.7 6.4-4.7s5.2 1.6 6.4 4.7" stroke="#8A8A8E" stroke-width="1.5" fill="none" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px;color:#8A8A8E;letter-spacing:0.2px">Profile</span>
+            </div>
+          </div>
+
+        </div>
+      </x-import>
+      <div style="font-size:12px;letter-spacing:0.2px;color:rgba(255,255,255,0.38);padding-left:4px">Discover · tap a hospital to load it →</div>
+    </div>
+
+    <!-- ── HOSPITAL ── -->
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div style="position:relative;height:100%;display:flex;flex-direction:column;background:#F7F7F8;font-family:-apple-system,'SF Pro Text',Geist,sans-serif">
+
+          <div style="flex:1;overflow:auto">
+
+            <div style="position:relative;height:300px;background:#DDD">
+              <image-slot id="v3-hosp-hero" shape="rect" src="{{ heroSrc }}" placeholder=""></image-slot>
+              <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(8,10,12,0.34) 0%,rgba(8,10,12,0.04) 34%,rgba(8,10,12,0.10) 100%)"></div>
+              <div style="position:absolute;top:58px;left:18px;width:36px;height:36px;border-radius:18px;background:rgba(255,255,255,0.22);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center">
+                <svg width="9" height="15" viewBox="0 0 9 15"><path d="M7.4 1L1.6 7.5 7.4 14" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </div>
+              <div style="position:absolute;top:58px;right:18px;display:flex;gap:8px">
+                <div style="width:36px;height:36px;border-radius:18px;background:rgba(255,255,255,0.22);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center">
+                  <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 12.2S1.4 8.6 1.4 4.9A2.9 2.9 0 017 3.2a2.9 2.9 0 015.6 1.7c0 3.7-5.6 7.3-5.6 7.3z" stroke="#fff" stroke-width="1.5" fill="none" stroke-linejoin="round"></path></svg>
+                </div>
+              </div>
+            </div>
+
+            <div style="position:relative;margin-top:-34px;background:#fff;border-radius:30px 30px 0 0;padding:26px 24px 4px">
+              <div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A8A8E">MULTISPECIALITY · {{ hArea }}</div>
+              <div style="font-size:28px;font-weight:600;letter-spacing:-0.9px;line-height:33px;color:#0B0B0C;margin-top:8px">{{ hName }}</div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+                <span style="width:6px;height:6px;border-radius:3px;background:#1F9D62;display:block"></span>
+                <span style="font-size:14px;letter-spacing:-0.2px;color:#48484A">Open until 8 PM</span>
+                <span style="font-size:14px;color:#C6C6CA">·</span>
+                <span style="font-size:14px;letter-spacing:-0.2px;color:#48484A">{{ hDist }} away</span>
+              </div>
+
+              <div style="display:flex;gap:10px;margin-top:20px">
+                <div style="flex:1;height:46px;border-radius:14px;background:#0B0B0C;color:#fff;display:flex;align-items:center;justify-content:center;gap:7px;font-size:15px;font-weight:550;letter-spacing:-0.2px;cursor:pointer">
+                  <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 3.2c0-.7.5-1.2 1.2-1.2h1.4c.5 0 1 .4 1.1.9l.5 2c.1.4 0 .8-.4 1l-1 .7c.8 1.6 2 2.8 3.6 3.6l.7-1c.2-.3.6-.5 1-.4l2 .5c.5.1.9.6.9 1.1v1.4c0 .7-.5 1.2-1.2 1.2C6.2 13 1 7.8 2 3.2z" fill="#fff"></path></svg>
+                  <span>Call</span>
+                </div>
+                <div style="flex:1;height:46px;border-radius:14px;background:rgba(10,10,12,0.05);color:#0B0B0C;display:flex;align-items:center;justify-content:center;gap:7px;font-size:15px;font-weight:550;letter-spacing:-0.2px;cursor:pointer">
+                  <svg width="14" height="14" viewBox="0 0 14 14"><path d="M12.6 1.4L1.8 5.6c-.6.2-.6 1 0 1.2l4.2 1.4 1.4 4.2c.2.6 1 .6 1.2 0l4.2-10.8c.2-.5-.3-1-.8-.8z" fill="#0B0B0C"></path></svg>
+                  <span>Directions</span>
+                </div>
+              </div>
+
+              <div style="display:flex;margin-top:22px;border-top:0.5px solid rgba(10,10,12,0.08);padding-top:18px">
+                <div style="flex:1">
+                  <div style="font-size:20px;font-weight:600;letter-spacing:-0.5px;color:#0B0B0C">4.6</div>
+                  <div style="font-size:11px;letter-spacing:0.6px;color:#8A8A8E;margin-top:3px">RATING</div>
+                </div>
+                <div style="flex:1">
+                  <div style="font-size:20px;font-weight:600;letter-spacing:-0.5px;color:#0B0B0C">{{ hOpd }}</div>
+                  <div style="font-size:11px;letter-spacing:0.6px;color:#8A8A8E;margin-top:3px">OPD TODAY</div>
+                </div>
+                <div style="flex:1">
+                  <div style="font-size:20px;font-weight:600;letter-spacing:-0.5px;color:#0B0B0C">{{ hWait }}</div>
+                  <div style="font-size:11px;letter-spacing:0.6px;color:#8A8A8E;margin-top:3px">AVG WAIT</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#fff;padding:26px 24px 0">
+              <div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A8A8E">DEPARTMENTS</div>
+            </div>
+
+            <div style="background:#fff;padding:0 0 28px">
+
+              <div onClick="{{ dept0 }}" style="display:flex;align-items:center;gap:12px;padding:0 24px;min-height:66px;position:relative;cursor:pointer">
+                <div style="flex:1">
+                  <div style="font-size:17px;letter-spacing:-0.4px;color:#0B0B0C">Cardiology</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Next token 11:20 AM · 2 doctors</div>
+                </div>
+                <sc-if value="{{ isD0 }}" hint-placeholder-val="{{ true }}"><span style="width:7px;height:7px;border-radius:4px;background:#0B0B0C;display:block"></span></sc-if>
+                <sc-if value="{{ notD0 }}" hint-placeholder-val="{{ false }}"><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1 1l5 5-5 5" stroke="#C6C6CA" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+                <div style="position:absolute;bottom:0;left:24px;right:0;height:0.5px;background:rgba(10,10,12,0.07)"></div>
+              </div>
+
+              <div onClick="{{ dept1 }}" style="display:flex;align-items:center;gap:12px;padding:0 24px;min-height:66px;position:relative;cursor:pointer">
+                <div style="flex:1">
+                  <div style="font-size:17px;letter-spacing:-0.4px;color:#0B0B0C">Orthopaedics</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Next token 10:40 AM · 1 doctor</div>
+                </div>
+                <sc-if value="{{ isD1 }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:4px;background:#0B0B0C;display:block"></span></sc-if>
+                <sc-if value="{{ notD1 }}" hint-placeholder-val="{{ true }}"><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1 1l5 5-5 5" stroke="#C6C6CA" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+                <div style="position:absolute;bottom:0;left:24px;right:0;height:0.5px;background:rgba(10,10,12,0.07)"></div>
+              </div>
+
+              <div onClick="{{ dept2 }}" style="display:flex;align-items:center;gap:12px;padding:0 24px;min-height:66px;position:relative;cursor:pointer">
+                <div style="flex:1">
+                  <div style="font-size:17px;letter-spacing:-0.4px;color:#0B0B0C">General Medicine</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Next token 11:55 AM · 3 doctors</div>
+                </div>
+                <sc-if value="{{ isD2 }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:4px;background:#0B0B0C;display:block"></span></sc-if>
+                <sc-if value="{{ notD2 }}" hint-placeholder-val="{{ true }}"><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1 1l5 5-5 5" stroke="#C6C6CA" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+                <div style="position:absolute;bottom:0;left:24px;right:0;height:0.5px;background:rgba(10,10,12,0.07)"></div>
+              </div>
+
+              <div onClick="{{ dept3 }}" style="display:flex;align-items:center;gap:12px;padding:0 24px;min-height:66px;position:relative;cursor:pointer">
+                <div style="flex:1">
+                  <div style="font-size:17px;letter-spacing:-0.4px;color:#0B0B0C">Paediatrics</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Next token 12:30 PM · 1 doctor</div>
+                </div>
+                <sc-if value="{{ isD3 }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:4px;background:#0B0B0C;display:block"></span></sc-if>
+                <sc-if value="{{ notD3 }}" hint-placeholder-val="{{ true }}"><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1 1l5 5-5 5" stroke="#C6C6CA" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+                <div style="position:absolute;bottom:0;left:24px;right:0;height:0.5px;background:rgba(10,10,12,0.07)"></div>
+              </div>
+
+              <div onClick="{{ dept4 }}" style="display:flex;align-items:center;gap:12px;padding:0 24px;min-height:66px;position:relative;cursor:pointer">
+                <div style="flex:1">
+                  <div style="font-size:17px;letter-spacing:-0.4px;color:#0B0B0C">Dermatology</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Next token 12:45 PM · 2 doctors</div>
+                </div>
+                <sc-if value="{{ isD4 }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:4px;background:#0B0B0C;display:block"></span></sc-if>
+                <sc-if value="{{ notD4 }}" hint-placeholder-val="{{ true }}"><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1 1l5 5-5 5" stroke="#C6C6CA" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+                <div style="position:absolute;bottom:0;left:24px;right:0;height:0.5px;background:rgba(10,10,12,0.07)"></div>
+              </div>
+
+              <div onClick="{{ dept5 }}" style="display:flex;align-items:center;gap:12px;padding:0 24px;min-height:66px;position:relative;cursor:pointer">
+                <div style="flex:1">
+                  <div style="font-size:17px;letter-spacing:-0.4px;color:#0B0B0C">ENT</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:2px">Next token 11:35 AM · 1 doctor</div>
+                </div>
+                <sc-if value="{{ isD5 }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:4px;background:#0B0B0C;display:block"></span></sc-if>
+                <sc-if value="{{ notD5 }}" hint-placeholder-val="{{ true }}"><svg width="7" height="12" viewBox="0 0 7 12"><path d="M1 1l5 5-5 5" stroke="#C6C6CA" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+              </div>
+
+            </div>
+          </div>
+
+          <div style="flex:none;height:82px;padding-top:10px;background:rgba(247,247,248,0.86);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid rgba(10,10,12,0.08);display:flex;align-items:flex-start;justify-content:space-around">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.4" stroke="#0B0B0C" stroke-width="1.5" fill="none"></circle><path d="M14.4 7.6l-2 5.1-5.1 2 2-5.1 5.1-2z" fill="#0B0B0C"></path></svg>
+              <span style="font-size:10px;font-weight:600;color:#0B0B0C;letter-spacing:0.2px">Discover</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><rect x="5" y="3.4" width="12" height="15.2" rx="2.6" stroke="#8A8A8E" stroke-width="1.5" fill="none"></rect><path d="M8 8.4h6M8 11.8h3.6" stroke="#8A8A8E" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px;color:#8A8A8E;letter-spacing:0.2px">Visits</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="8" r="3.4" stroke="#8A8A8E" stroke-width="1.5" fill="none"></circle><path d="M4.6 18.4c1.2-3.1 3.6-4.7 6.4-4.7s5.2 1.6 6.4 4.7" stroke="#8A8A8E" stroke-width="1.5" fill="none" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px;color:#8A8A8E;letter-spacing:0.2px">Profile</span>
+            </div>
+          </div>
+
+        </div>
+      </x-import>
+      <div style="font-size:12px;letter-spacing:0.2px;color:rgba(255,255,255,0.38);padding-left:4px">Hospital · tap a department to load its queue →</div>
+    </div>
+
+    <!-- ── QUEUE ── -->
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div style="position:relative;height:100%;display:flex;flex-direction:column;background:#F7F7F8;font-family:-apple-system,'SF Pro Text',Geist,sans-serif;overflow:hidden">
+
+          <div style="flex:none;padding-top:56px;height:44px;display:flex;align-items:center;justify-content:center;position:relative;background:rgba(247,247,248,0.88);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:0.5px solid rgba(10,10,12,0.08);z-index:4">
+            <div style="position:absolute;left:18px;bottom:12px;display:flex;align-items:center;gap:5px">
+              <svg width="9" height="15" viewBox="0 0 9 15"><path d="M7.4 1L1.6 7.5 7.4 14" stroke="#0B0B0C" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span style="font-size:15px;letter-spacing:-0.3px;color:#0B0B0C">{{ hShort }}</span>
+            </div>
+            <div style="font-size:16px;font-weight:600;letter-spacing:-0.4px;color:#0B0B0C;position:absolute;bottom:12px">{{ dName }}</div>
+          </div>
+
+          <div style="flex:1;overflow:auto;padding:22px 0 8px">
+
+            <div style="padding:0 24px">
+              <div style="background:#fff;border-radius:28px;padding:24px 22px 22px;box-shadow:0 1px 2px rgba(11,12,13,0.05),0 14px 36px rgba(11,12,13,0.05)">
+
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="width:42px;height:42px;border-radius:21px;flex:none;background:#F0F0F2;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;letter-spacing:0.3px;color:#48484A">{{ lead.initials }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:17px;font-weight:550;letter-spacing:-0.4px;color:#0B0B0C">{{ lead.name }}</div>
+                    <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:1px">{{ lead.hours }}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="width:6px;height:6px;border-radius:3px;background:#1F9D62;display:block"></span>
+                    <span style="font-size:12px;font-weight:600;letter-spacing:0.3px;color:#1F7A4D">Live</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:26px">
+                  <div>
+                    <div style="font-size:11px;font-weight:600;letter-spacing:1.2px;color:#8A8A8E">NOW SERVING</div>
+                    <div style="font-size:32px;font-weight:600;letter-spacing:-1.3px;line-height:50px;color:#8A8A8E;margin-top:4px">{{ lead.token }}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:11px;font-weight:600;letter-spacing:1.2px;color:#8A8A8E">YOUR TOKEN</div>
+                    <div style="font-size:46px;font-weight:600;letter-spacing:-2.2px;line-height:50px;color:#0B0B0C;margin-top:4px">{{ lead.yours }}</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:flex-end;gap:5px;height:30px;margin-top:24px">
+                  <sc-for list="{{ lead.bars }}" as="b" hint-placeholder-count="13">
+                    <div style="width:6px;flex:none;border-radius:3px;background:{{ b.bg }};height:{{ b.h }}"></div>
+                  </sc-for>
+                </div>
+
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:12px">
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E"><span style="color:#0B0B0C;font-weight:550">{{ lead.ahead }}</span> ahead of you</div>
+                  <div style="font-size:13px;letter-spacing:-0.1px;color:#8A8A8E">Seen <span style="color:#0B0B0C;font-weight:550">{{ lead.window }}</span></div>
+                </div>
+
+                <div onClick="{{ lead.join }}" style="height:52px;border-radius:26px;background:#0B0B0C;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;font-weight:550;letter-spacing:-0.2px;margin-top:24px;cursor:pointer" style-hover="background:#26262A">
+                  <span>Join queue</span>
+                  <sc-if value="{{ showFees }}" hint-placeholder-val="{{ true }}"><span style="color:rgba(255,255,255,0.6)">·</span><span style="color:rgba(255,255,255,0.85)">{{ lead.fee }}</span></sc-if>
+                </div>
+                <div style="text-align:center;font-size:12px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:12px">Free to cancel until your token is called</div>
+
+              </div>
+            </div>
+
+            <sc-if value="{{ hasOthers }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A8A8E;padding:30px 24px 10px">ALSO IN {{ dUpper }}</div>
+              <div style="padding:0 24px 24px">
+                <div style="background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 1px 2px rgba(11,12,13,0.05)">
+                  <sc-for list="{{ others }}" as="d" hint-placeholder-count="1">
+                    <div style="display:flex;align-items:center;gap:12px;padding:15px 18px;position:relative">
+                      <div style="width:36px;height:36px;border-radius:18px;flex:none;background:#F0F0F2;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#48484A;letter-spacing:0.3px">{{ d.initials }}</div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:15px;font-weight:550;letter-spacing:-0.3px;color:#0B0B0C">{{ d.name }}</div>
+                        <div style="font-size:12.5px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:1px">{{ d.hours }} · {{ d.ahead }} waiting</div>
+                      </div>
+                      <div onClick="{{ d.join }}" style="height:32px;padding:0 16px;border-radius:16px;background:rgba(10,10,12,0.06);color:#0B0B0C;font-size:14px;font-weight:550;letter-spacing:-0.2px;display:flex;align-items:center;cursor:pointer" style-hover="background:rgba(10,10,12,0.11)">Join</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+          </div>
+
+          <div style="flex:none;height:82px;padding-top:10px;background:rgba(247,247,248,0.86);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid rgba(10,10,12,0.08);display:flex;align-items:flex-start;justify-content:space-around">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.4" stroke="#0B0B0C" stroke-width="1.5" fill="none"></circle><path d="M14.4 7.6l-2 5.1-5.1 2 2-5.1 5.1-2z" fill="#0B0B0C"></path></svg>
+              <span style="font-size:10px;font-weight:600;color:#0B0B0C;letter-spacing:0.2px">Discover</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><rect x="5" y="3.4" width="12" height="15.2" rx="2.6" stroke="#8A8A8E" stroke-width="1.5" fill="none"></rect><path d="M8 8.4h6M8 11.8h3.6" stroke="#8A8A8E" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px;color:#8A8A8E;letter-spacing:0.2px">Visits</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:84px">
+              <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="8" r="3.4" stroke="#8A8A8E" stroke-width="1.5" fill="none"></circle><path d="M4.6 18.4c1.2-3.1 3.6-4.7 6.4-4.7s5.2 1.6 6.4 4.7" stroke="#8A8A8E" stroke-width="1.5" fill="none" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px;color:#8A8A8E;letter-spacing:0.2px">Profile</span>
+            </div>
+          </div>
+
+          <sc-if value="{{ joined }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:80;background:rgba(8,10,12,0.36);animation:fadeIn 0.22s ease;display:flex;align-items:flex-end">
+              <div style="width:100%;background:#fff;border-radius:30px 30px 0 0;padding:12px 24px 46px;animation:sheetUp 0.36s cubic-bezier(0.32,0.72,0,1)">
+                <div style="width:36px;height:5px;border-radius:3px;background:rgba(10,10,12,0.14);margin:0 auto 26px"></div>
+                <div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A8A8E">YOU'RE IN THE QUEUE</div>
+                <div style="font-size:64px;font-weight:600;letter-spacing:-3px;line-height:68px;color:#0B0B0C;margin-top:10px">{{ joinedToken }}</div>
+                <div style="font-size:16px;letter-spacing:-0.3px;color:#48484A;margin-top:6px">{{ joinedName }} · {{ dName }}</div>
+                <div style="margin-top:26px;border-top:0.5px solid rgba(10,10,12,0.09)">
+                  <div style="display:flex;justify-content:space-between;padding:15px 0;border-bottom:0.5px solid rgba(10,10,12,0.09)">
+                    <span style="font-size:15px;letter-spacing:-0.3px;color:#8A8A8E">Expected</span>
+                    <span style="font-size:15px;letter-spacing:-0.3px;color:#0B0B0C">{{ joinedWindow }}</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;padding:15px 0;border-bottom:0.5px solid rgba(10,10,12,0.09)">
+                    <span style="font-size:15px;letter-spacing:-0.3px;color:#8A8A8E">Reach hospital by</span>
+                    <span style="font-size:15px;letter-spacing:-0.3px;color:#0B0B0C">{{ joinedReach }}</span>
+                  </div>
+                </div>
+                <div onClick="{{ closeSheet }}" style="height:52px;border-radius:26px;background:#0B0B0C;color:#fff;font-size:16px;font-weight:550;letter-spacing:-0.2px;display:flex;align-items:center;justify-content:center;margin-top:24px;cursor:pointer">Done</div>
+                <div style="text-align:center;font-size:12px;letter-spacing:-0.1px;color:#8A8A8E;margin-top:14px">We'll notify you when two tokens remain</div>
+                <div style="width:139px;height:5px;border-radius:3px;background:rgba(10,10,12,0.25);margin:22px auto -34px"></div>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+      </x-import>
+      <div style="font-size:12px;letter-spacing:0.2px;color:rgba(255,255,255,0.38);padding-left:4px">Live queue · tap Join queue</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;liveQueue&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behaviour&quot;},&quot;showFees&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Queue card&quot;}}">
+const HOSPITALS = [
+  { name: 'Sunrise Multispeciality', short: 'Sunrise', area: 'Andheri West', opd: 4, wait: '18m', dist: '1.2 km', img: 'img/sunrise.png' },
+  { name: 'Lotus Health Clinic', short: 'Lotus', area: 'Bandra East', opd: 2, wait: '12m', dist: '3.4 km', img: 'img/lotus.png' },
+  { name: 'Green Valley Hospital', short: 'Green Valley', area: 'Powai', opd: 6, wait: '26m', dist: '8.1 km', img: 'img/greenvalley.png' },
+  { name: 'Nirmal Clinic', short: 'Nirmal', area: 'Dadar West', opd: 3, wait: '15m', dist: '6.7 km', img: 'img/nirmal.png' },
+];
+
+const DEPTS = ['Cardiology', 'Orthopaedics', 'General Medicine', 'Paediatrics', 'Dermatology', 'ENT'];
+
+const DOCTORS = {
+  'Cardiology': [
+    { name: 'Dr Anjali Rao', hours: '10 AM – 1 PM', open: true, prefix: 'A', base: 7, checked: 3, booked: 5, window: '11:20 – 11:50 AM', reach: '11:10 AM', fee: '₹500' },
+    { name: 'Dr Vikram Sharma', hours: '2 – 5 PM', open: false, prefix: 'B', base: 12, checked: 6, booked: 2, window: '4:05 – 4:35 PM', reach: '3:55 PM', fee: '₹650' },
+  ],
+  'Orthopaedics': [
+    { name: 'Dr Meera Iyer', hours: '9 AM – 12 PM', open: true, prefix: 'C', base: 4, checked: 2, booked: 4, window: '10:40 – 11:10 AM', reach: '10:30 AM', fee: '₹450' },
+  ],
+  'General Medicine': [
+    { name: 'Dr Rohit Nair', hours: '9 AM – 1 PM', open: true, prefix: 'G', base: 21, checked: 9, booked: 7, window: '11:55 AM – 12:25 PM', reach: '11:45 AM', fee: '₹350' },
+    { name: 'Dr Sana Qureshi', hours: '11 AM – 3 PM', open: true, prefix: 'H', base: 8, checked: 4, booked: 6, window: '1:15 – 1:45 PM', reach: '1:05 PM', fee: '₹400' },
+    { name: 'Dr Prakash Menon', hours: '4 – 7 PM', open: false, prefix: 'J', base: 3, checked: 5, booked: 3, window: '5:30 – 6:00 PM', reach: '5:20 PM', fee: '₹400' },
+  ],
+  'Paediatrics': [
+    { name: 'Dr Kavita Desai', hours: '10 AM – 2 PM', open: true, prefix: 'P', base: 11, checked: 5, booked: 3, window: '12:30 – 1:00 PM', reach: '12:20 PM', fee: '₹550' },
+  ],
+  'Dermatology': [
+    { name: 'Dr Arjun Kapoor', hours: '11 AM – 2 PM', open: true, prefix: 'D', base: 6, checked: 2, booked: 4, window: '12:45 – 1:15 PM', reach: '12:35 PM', fee: '₹700' },
+    { name: 'Dr Neha Bhatt', hours: '3 – 6 PM', open: false, prefix: 'E', base: 9, checked: 7, booked: 5, window: '4:50 – 5:20 PM', reach: '4:40 PM', fee: '₹700' },
+  ],
+  'ENT': [
+    { name: 'Dr Suresh Pillai', hours: '10 AM – 1 PM', open: true, prefix: 'N', base: 5, checked: 3, booked: 2, window: '11:35 AM – 12:05 PM', reach: '11:25 AM', fee: '₹500' },
+  ],
+};
+
+const CIRC = 364.4;
+
+class Component extends DCLogic {
+  state = { hospital: 0, dept: 0, query: '', joined: null, tick: 0 };
+
+  componentDidMount() {
+    if (this.props.liveQueue ?? true) {
+      this.timer = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 4500);
+    }
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  pad(n) { return n < 10 ? '00' + n : '0' + n; }
+
+  shape(d, i) {
+    const t = this.state.tick % 5;
+    const served = d.base + (d.open ? t : 0);
+    const ahead = Math.max(1, d.checked + d.booked - t);
+    const frac = Math.min(0.92, 0.18 + t * 0.14);
+    const bars = [];
+    const seen = 4;
+    for (let k = 0; k < seen; k++) bars.push({ bg: 'rgba(10,10,12,0.78)', h: '15px' });
+    for (let k = 0; k < Math.min(ahead, 14); k++) bars.push({ bg: 'rgba(10,10,12,0.14)', h: '11px' });
+    bars.push({ bg: '#0B0B0C', h: '30px' });
+    return {
+      initials: d.name.replace('Dr ', '').split(' ').map(w => w[0]).join(''),
+      name: d.name, hours: d.hours, open: d.open, busy: !d.open,
+      token: d.prefix + this.pad(served),
+      yours: d.prefix + this.pad(d.base + d.checked + d.booked + 1),
+      bars,
+      ahead, dash: CIRC - CIRC * frac,
+      window: d.window, fee: d.fee,
+      join: () => this.setState({ joined: i }),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim().toLowerCase();
+    const h = HOSPITALS[s.hospital];
+    const dName = DEPTS[s.dept];
+    const showFees = this.props.showFees ?? true;
+
+    const vals = {
+      query: s.query,
+      onQuery: e => this.setState({ query: e.target.value }),
+      hName: h.name, hShort: h.short, hArea: h.area, hOpd: h.opd, hWait: h.wait, hDist: h.dist, heroSrc: h.img,
+      dName, dUpper: dName.toUpperCase(), showFees, noFees: !showFees,
+    };
+
+    let visible = 0;
+    HOSPITALS.forEach((x, i) => {
+      const show = !q || x.name.toLowerCase().includes(q) || x.area.toLowerCase().includes(q);
+      if (show) visible++;
+      vals['show' + i] = show;
+      vals['sel' + i] = s.hospital === i;
+      vals['un' + i] = s.hospital !== i;
+      vals['pick' + i] = () => this.setState({ hospital: i, joined: null });
+    });
+    vals.empty = visible === 0;
+
+    DEPTS.forEach((d, i) => {
+      vals['isD' + i] = s.dept === i;
+      vals['notD' + i] = s.dept !== i;
+      vals['dept' + i] = () => this.setState({ dept: i, joined: null });
+    });
+
+    const list = DOCTORS[dName] || [];
+    vals.lead = this.shape(list[0], 0);
+    vals.others = list.slice(1).map((d, i) => this.shape(d, i + 1));
+    vals.hasOthers = vals.others.length > 0;
+
+    const j = s.joined !== null ? list[s.joined] : null;
+    vals.joined = !!j;
+    vals.joinedName = j ? j.name : '';
+    vals.joinedToken = j ? j.prefix + this.pad(j.base + j.checked + j.booked + 1) : '';
+    vals.joinedWindow = j ? j.window : '';
+    vals.joinedReach = j ? j.reach : '';
+    vals.closeSheet = () => this.setState({ joined: null });
+
+    return vals;
+  }
+}
+</script>
+</body>
+</html>

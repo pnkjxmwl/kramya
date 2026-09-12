@@ -77,12 +77,13 @@ const styles = StyleSheet.create({
   screen: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: theme.space[6],
+    paddingHorizontal: theme.gutter,
+    paddingVertical: theme.space[8],
     gap: theme.space[4],
-    // Matches login: white ground, so the field borders are the only edges on screen.
+    // Matches login: white ground, so the recessed fields are the only shapes on it.
     backgroundColor: theme.color.surface,
   },
-  intro: { gap: theme.space[1], marginBottom: theme.space[2] },
-  title: { ...theme.font.h1, color: theme.color.text },
-  subtitle: { ...theme.font.bodyLg, color: theme.color.textMuted },
+  intro: { gap: 6, marginBottom: theme.space[4] },
+  title: { ...theme.font.display, color: theme.color.ink },
+  subtitle: { ...theme.font.body, color: theme.color.inkTertiary },
 });

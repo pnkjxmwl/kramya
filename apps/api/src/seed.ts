@@ -36,9 +36,15 @@ const prisma = new PrismaClient();
  * photograph will come from an upload in the admin console later; `photoUrl` does not
  * change when it does.
  *
- * **One hospital and one doctor are deliberately left null.** Null is the ordinary
- * case at pilot - most clinics will never upload anything - and a fallback nobody
- * ever sees is a fallback nobody has checked.
+ * **One doctor is deliberately left null.** Null is the ordinary case at pilot - most
+ * clinics will never upload anything - and a fallback nobody ever sees is a fallback
+ * nobody has checked.
+ *
+ * Every HOSPITAL now has one, which is a change: Hinduja used to be the null case
+ * too. The featured card on the redesigned Discover screen is a 236pt full-bleed
+ * photograph and is the first thing on the app's first screen, so a null there did
+ * not read as "this clinic has no photo" - it read as the redesign being broken. The
+ * doctor still covers the fallback path, at a size where it looks deliberate.
  */
 const unsplash = (id: string) =>
   `https://images.unsplash.com/${id}?w=900&q=80&auto=format&fit=crop`;
@@ -105,7 +111,7 @@ const HOSPITALS = [
     name: "Hinduja Healthcare",
     city: "Mumbai",
     area: "Khar West",
-    photoUrl: null,
+    photoUrl: unsplash("photo-1587351021759-3e566b6af7cc"),
   },
   {
     id: "aaaaaaaa-0000-4000-8000-000000000009",
@@ -636,13 +642,28 @@ const OTHER_BOOKINGS = [
   { status: "CONFIRMED" as const, joined: 16 },
 ] as const;
 
+/**
+ * The patient account's own bookings - one per hospital, across the FAMILY profiles
+ * only.
+ *
+ * **Profile 0 is the account holder, and it deliberately holds nothing.** It used to
+ * hold two of these six, and that made the most common state in the whole app
+ * untestable: `bookingStateFor` is account-scoped, so a session this account has
+ * booked renders "View your token · T-12" and can never show the state a first-time
+ * patient actually sees - the WAITING figure and the `Join queue · ₹500` pill. Seeding
+ * the app into its own success case hid the path that leads there.
+ *
+ * They were REASSIGNED to family rather than deleted: My Visits still needs a past
+ * visit and a cancellation to have anything in its "Past" tab, and "For <name>" still
+ * needs more than one name to get right.
+ */
 const ONLINE_PLAN = [
-  { status: "CONFIRMED" as const, profile: 0, joined: 30 },
+  { status: "CONFIRMED" as const, profile: 1, joined: 30 },
   { status: "CHECKED_IN" as const, profile: 1, joined: 44, checkedIn: 12 },
   { status: "CONFIRMED" as const, profile: 2, joined: 26 },
   {
     status: "COMPLETED" as const,
-    profile: 0,
+    profile: 2,
     joined: 82,
     checkedIn: 77,
     called: 31,
@@ -657,6 +678,32 @@ async function assertSafeToSeed(): Promise<void> {
   if (process.env.NODE_ENV === "production") {
     throw new Error("refusing to seed: NODE_ENV is production");
   }
+
+  /**
+   * Say which database this is about to write to, before it writes.
+   *
+   * Both guards below answer "is this data safe to overwrite"; neither answers "is
+   * this the database I meant". That gap stopped being theoretical the first time
+   * this was pointed at a deployed Postgres from a laptop: `DATABASE_URL` can arrive
+   * from the shell OR from apps/api/.env, dotenv does not overwrite a variable the
+   * shell already set, and NOTHING printed which of the two won. A seed that
+   * silently converges the wrong database is not recoverable by re-running it.
+   *
+   * Host and database name only - a connection string carries the password.
+   */
+  const raw = process.env.DATABASE_URL;
+  if (raw === undefined || raw === "") {
+    throw new Error("refusing to seed: DATABASE_URL is not set");
+  }
+  let target: string;
+  try {
+    const url = new URL(raw);
+    target = `${url.host}${url.pathname}`;
+  } catch {
+    throw new Error("refusing to seed: DATABASE_URL is not a valid connection URL");
+  }
+  const remote = !/^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(new URL(raw).host);
+  console.log(`[seed] target: ${target}${remote ? "  << REMOTE, not localhost" : ""}`);
 
   const seededIds: string[] = HOSPITALS.map((h) => h.id);
   const foreign = await prisma.hospital.count({
