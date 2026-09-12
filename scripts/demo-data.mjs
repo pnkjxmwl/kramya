@@ -47,8 +47,10 @@
  *
  * Onboarding refuses a duplicate name+city, and that refusal is treated as success -
  * the script logs in with the existing admin instead. Departments and doctors are
- * matched by name. Sessions are unique on (doctor, date, start). Walk-ins are the one
- * thing that would duplicate, so they are only added to a session with an empty queue.
+ * matched by name. Sessions are unique on (doctor, date, start), and a duplicate is
+ * RECOVERED rather than dropped, so a rerun still reaches queues an earlier run built.
+ * Walk-ins top up to a target depth instead of being skipped, and the queue is only
+ * advanced on a session nobody has worked yet - a queue cannot be un-called.
  */
 
 import { execFile } from 'node:child_process';
@@ -350,10 +352,28 @@ async function main() {
         }, token, login);
         sessions.push({ ...s, doctor });
       } catch {
-        // Unique on (doctor, date, start): a rerun lands here, which is the point.
+        /*
+          Unique on (doctor, date, start): a rerun lands here, which is the point -
+          but it must still RECOVER the session rather than drop it.
+
+          The first version just swallowed the duplicate, so on any rerun `sessions`
+          came back empty and every step after this one silently did nothing: "0
+          sessions created, 0 queues filled" while four healthy clinics sat in the
+          database. That made the script look idempotent when it was actually inert,
+          and a change to the queue shape could never reach a session built earlier.
+        */
+        try {
+          const mine = await api(
+            'GET', `/doctors/${doctor.id}/sessions?limit=5`, undefined, token, login,
+          );
+          const today = (mine.items ?? [])[0];
+          if (today) sessions.push({ ...today, doctor });
+        } catch {
+          // Genuinely unreachable session; the summary will show it missing.
+        }
       }
     }
-    say(`    ${sessions.length} sessions created for ${TODAY} (IST), each spanning now`);
+    say(`    ${sessions.length} sessions for ${TODAY} (IST), each spanning now`);
 
     // 5. Queues, seeded MID-CLINIC.
     //
@@ -361,32 +381,64 @@ async function main() {
     // zero, and the ETA engine has no history to blend. So one patient is seen and
     // finished and a second is with the doctor right now.
     let queued = 0;
-    for (const s of sessions) {
+    for (const [index, s] of sessions.entries()) {
       // CALL_NEXT is refused unless the doctor is present, and calling the first
       // patient is what makes a session ACTIVE - there is no start-session command.
       await api('POST', `/sessions/${s.id}/presence`, { presence: 'PRESENT' }, token, login);
 
-      const existing = await api('GET', `/sessions/${s.id}/queue?limit=1`, undefined, token, login);
-      if ((existing.items ?? []).length > 0) continue;
+      /*
+        TOP UP rather than skip.
 
-      // A walk-in is CHECKED_IN by definition (docs/PRD.md 8.6) - these are the
-      // "checked in and waiting" number the patient app shows.
-      const n = 4 + (s.doctor.name.length % 3);
-      for (let i = 0; i < n; i += 1) {
+        This used to `continue` the moment a session had any entry at all, which made
+        a re-run a no-op for every queue built by an earlier run - so a change to the
+        shape of the fixture could never reach a session that already existed. It now
+        reads how many are there and adds the difference, so re-running converges on
+        the intended shape instead of freezing the first one that happened to be built.
+      */
+      const existing = await api('GET', `/sessions/${s.id}/queue?limit=100`, undefined, token, login);
+      const have = (existing.items ?? []).length;
+      const advanced = (existing.items ?? []).some(
+        (e) => e.status === 'IN_CONSULTATION' || e.status === 'COMPLETED',
+      );
+
+      /*
+        Queue depth varies by POSITION, not by the doctor's name.
+
+        It used to be `4 + (doctor.name.length % 3)`. "Nikhil Save" and "Priya Menon"
+        are both eleven characters, so the two General Medicine doctors at Lotus Care
+        got identical queues - same walk-in count, same "now serving G002", and
+        therefore the same ETA window to the millisecond, because snapshots() computes
+        every card in one pass from a shared `now` and identical inputs give identical
+        output. Two different doctors rendered as the same card, and it was reported as
+        a bug in the app. The app was right; the fixture was indistinguishable.
+
+        Position spreads properly: a name hash can collide, an index cannot.
+      */
+      // How far through the list the doctor is, and how many are behind them. Both
+      // vary by index so no two cards on one screen can coincide.
+      const seen = index % 3; // 0, 1 or 2 finished before the one in the room
+      const target = 4 + (index % 6) + seen;
+      for (let i = have; i < target; i += 1) {
         await api('POST', `/sessions/${s.id}/walk-in`, {
-          name: WALK_INS[i % WALK_INS.length],
+          name: WALK_INS[(index * 3 + i) % WALK_INS.length],
           gender: i % 2 === 0 ? 'MALE' : 'FEMALE',
         }, token, login);
       }
 
-      const first = await api('POST', `/sessions/${s.id}/call-next`, {}, token, login);
-      await api('POST', `/sessions/${s.id}/start-consultation`, { entryId: first.entry.id }, token, login);
-      await api('POST', `/sessions/${s.id}/complete-consultation`, { entryId: first.entry.id }, token, login);
-      const second = await api('POST', `/sessions/${s.id}/call-next`, {}, token, login);
-      await api('POST', `/sessions/${s.id}/start-consultation`, { entryId: second.entry.id }, token, login);
+      // Only on a queue nobody has worked yet. Calling next while someone is already
+      // in the room is refused by the state machine, and correctly so.
+      if (!advanced) {
+        for (let i = 0; i < seen; i += 1) {
+          const done = await api('POST', `/sessions/${s.id}/call-next`, {}, token, login);
+          await api('POST', `/sessions/${s.id}/start-consultation`, { entryId: done.entry.id }, token, login);
+          await api('POST', `/sessions/${s.id}/complete-consultation`, { entryId: done.entry.id }, token, login);
+        }
+        const current = await api('POST', `/sessions/${s.id}/call-next`, {}, token, login);
+        await api('POST', `/sessions/${s.id}/start-consultation`, { entryId: current.entry.id }, token, login);
+      }
       queued += 1;
     }
-    say(`    ${queued} queues filled (walk-ins, 1 seen, 1 in consultation)`);
+    say(`    ${queued} queues topped up (walk-ins, varied depth, one in consultation)`);
     say('');
     done.push(h);
   }
