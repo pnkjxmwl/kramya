@@ -37,7 +37,11 @@ export default function Hospital() {
   );
 
   const data = hospital.data;
-  const openToday = data?.todaySessionCount ?? 0;
+  // Two different facts, and the screen now states both. "OPD today" is the
+  // programme; "open now" is what you can actually act on, and a hospital whose day
+  // has finished reads 0 there while still showing the 8 it ran.
+  const todayCount = data?.todaySessionCount ?? 0;
+  const openNow = data?.openSessionCount ?? 0;
 
   return (
     <View style={styles.screen}>
@@ -64,10 +68,17 @@ export default function Hospital() {
               <Text style={styles.eyebrow}>{(data.area ?? data.city).toUpperCase()}</Text>
               <Text style={styles.name}>{data.name}</Text>
 
+              {/* The dot means "you can book here now", so it follows openNow - it
+                  used to follow the day's programme and stayed green over a hospital
+                  that had closed hours earlier. */}
               <View style={styles.statusLine}>
-                {openToday > 0 ? <Dot /> : null}
+                {openNow > 0 ? <Dot /> : null}
                 <Text style={styles.status}>
-                  {openToday === 0 ? 'No OPD today' : `${openToday} OPD today`}
+                  {openNow > 0
+                    ? `${openNow} OPD open now`
+                    : todayCount > 0
+                      ? 'Closed for today'
+                      : 'No OPD today'}
                   {'  ·  '}
                   {data.city}
                 </Text>
@@ -82,7 +93,8 @@ export default function Hospital() {
               <Hairline style={styles.rule} />
 
               <View style={styles.stats}>
-                <Stat figure={String(openToday)} label="OPD TODAY" />
+                <Stat figure={String(openNow)} label="OPEN NOW" />
+                <Stat figure={String(todayCount)} label="OPD TODAY" />
                 <Stat figure={String(departments.data?.total ?? 0)} label="DEPARTMENTS" />
               </View>
             </>

@@ -82,6 +82,45 @@ export function PresencePill({ presence }: { presence: DoctorPresence }) {
 }
 
 /**
+ * Presence at caption size, for the session card's head.
+ *
+ * **Why the card needed this at all.** The card's only marker was `LiveMark`, which
+ * reports the SESSION's status - and session status and doctor presence are separate
+ * facts on purpose (docs/PRD.md 8.10). A session reads "Live" while the doctor is on
+ * a break or has gone home, and until now you had to open the session screen to find
+ * that out. Whether there is a doctor in the room is the single most decision-shaping
+ * thing on the card, and it was the one thing the card did not say.
+ *
+ * A pill would have been the reusable answer and is too heavy here: the head already
+ * carries a name, the hours and the live marker, and a fourth tinted block turns the
+ * card's most important line into a row of badges. This is the same icon and the same
+ * words at caption weight, sharing the hours' line.
+ *
+ * Icon AND label, never the colour alone - docs/Design.md 8.
+ */
+export function PresenceNote({ presence }: { presence: DoctorPresence }) {
+  const { label, tone, icon } = PRESENCE_LABEL[presence];
+  const palette =
+    tone === 'success'
+      ? theme.color.success
+      : tone === 'warning'
+        ? theme.color.warning
+        : theme.color.info;
+  // Neutral is the "not arrived" case: true, but not a warning and not good news, so
+  // it stays in the caption's own grey rather than borrowing a status colour.
+  const color = tone === 'neutral' ? theme.color.inkTertiary : palette.fg;
+
+  return (
+    <View style={styles.presenceNote}>
+      <Icon name={icon} size={12} color={color} />
+      <Text style={[styles.presenceNoteText, { color }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
  * The handoff's live marker: a 6px dot and the word "Live".
  *
  * Only for a session that is genuinely running. Everything else falls back to the
@@ -371,9 +410,13 @@ export function SessionCardView({
           <Text style={styles.doctor} numberOfLines={1}>
             {card.doctorName}
           </Text>
-          <Text style={styles.caption} numberOfLines={1}>
-            {istRange(card.scheduledStart, card.scheduledEnd)}
-          </Text>
+          <View style={styles.captionRow}>
+            <Text style={[styles.caption, styles.captionTime]} numberOfLines={1}>
+              {istRange(card.scheduledStart, card.scheduledEnd)}
+            </Text>
+            <Text style={styles.captionDot}>·</Text>
+            <PresenceNote presence={card.doctorPresence} />
+          </View>
         </View>
         <LiveMark status={card.status} />
       </View>
@@ -465,6 +508,7 @@ export function DoctorQueueRow({
   onPress,
   onJoin,
   onOpenToken,
+  selected = false,
   booking = { kind: 'none' },
 }: {
   card: SessionCard;
@@ -472,6 +516,23 @@ export function DoctorQueueRow({
   onJoin: () => void;
   /** Open the token this account already holds here. */
   onOpenToken?: (entryId: string) => void;
+  /**
+   * This is the session the card above is showing.
+   *
+   * **Three signals, because one was not enough.** The first version tinted the row
+   * with `fillSubtle` alone - 4.5% black on white, which is invisible in daylight on
+   * a phone and was reported as "which one is highlighted?". Tint carries almost no
+   * weight at that strength and cannot be pushed much harder either: a strongly
+   * greyed row sitting among tappable ones stops reading as *chosen* and starts
+   * reading as *disabled*, which is the opposite meaning.
+   *
+   * So: a 3pt ink rail on the leading edge (the handoff's selection vocabulary is an
+   * ink MARK - a dot on screen 2, the word VIEWING on screen 1 - and the trailing
+   * slot here is already spoken for by the Join pill), the name in semibold ink, and
+   * the tint kept as support. The rail is absolutely positioned, so nothing in the
+   * row shifts when the selection moves.
+   */
+  selected?: boolean;
   booking?: BookingState;
 }) {
   const booked = booking.kind === 'booked';
@@ -494,11 +555,17 @@ export function DoctorQueueRow({
       : onPress;
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" {...pressable(0)}>
-      <View style={styles.otherRow}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      {...pressable(0)}
+    >
+      <View style={[styles.otherRow, selected && styles.otherRowOn]}>
+        {selected ? <View style={styles.selectedRail} /> : null}
         <Avatar name={card.doctorName} size={36} />
         <View style={styles.rowText}>
-          <Text style={styles.otherName} numberOfLines={1}>
+          <Text style={[styles.otherName, selected && styles.otherNameOn]} numberOfLines={1}>
             {card.doctorName}
           </Text>
           <Text style={styles.otherMeta} numberOfLines={1}>
@@ -607,6 +674,18 @@ const styles = StyleSheet.create({
   cardHeadText: { flex: 1, gap: 1 },
   doctor: { ...theme.font.h3, color: theme.color.ink },
   caption: { ...theme.font.caption, color: theme.color.inkTertiary },
+  // `flexShrink` on the hours, not on the presence: if the head is tight, the time
+  // range truncates and "Doctor has left" stays whole. Losing the warning to an
+  // ellipsis is the one failure this line must not have.
+  captionRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+  captionTime: { flexShrink: 1 },
+  captionDot: { ...theme.font.caption, color: theme.color.inkQuaternary },
+  presenceNote: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  presenceNoteText: {
+    ...theme.font.caption,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: '500',
+  },
   substitute: { ...theme.font.caption, color: theme.color.inkTertiary, marginTop: theme.space[2] },
 
   tokens: {
@@ -655,12 +734,27 @@ const styles = StyleSheet.create({
   action: { marginTop: theme.space[6] },
 
   otherRow: { flexDirection: 'row', alignItems: 'center', gap: theme.space[3], paddingVertical: 15, paddingHorizontal: 18 },
+  otherRowOn: { backgroundColor: theme.color.fillSecondary },
+  // Absolute, so selecting a different row moves the mark without moving the text.
+  // Full-bleed to the row's edges: the ListGroup clips it to the group's radius, so
+  // on the first and last row it takes the corner rather than poking past it.
+  selectedRail: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: theme.color.ink,
+  },
   otherName: {
     ...theme.font.body,
     fontFamily: theme.fontFamily.medium,
     fontWeight: '500',
     color: theme.color.ink,
   },
+  // 500 -> 600. The unselected rows are already ink, so weight is what separates
+  // them - colour cannot, on a list where every row is a live control.
+  otherNameOn: { fontFamily: theme.fontFamily.semibold, fontWeight: '600' },
   otherMeta: { fontSize: 12.5, lineHeight: 17, letterSpacing: -0.1, fontFamily: theme.fontFamily.regular, color: theme.color.inkTertiary },
   ghostPill: {
     height: 32,
