@@ -8033,3 +8033,70 @@ every bar and header now that the chrome is the same colour as the content behin
 saying so rather than pretending the two apps share a palette. The queue strip caps at 14
 bars (`ponytail:` noted in `discovery.tsx`); past the cap it stops being a count and
 becomes "a lot", while the legend under it still states the true number.
+
+---
+
+## 2026-09-12 · The redesign shipped to staging, and the APK rebuilt on it
+
+**What.** Committed the ink redesign that had been sitting uncommitted since 2026-09-10,
+merged it to `main` (`3a6fce9`, `--no-ff`, matching the `b53db50` precedent), pushed, and
+rebuilt the Android APK on that exact commit. Two commits behind the merge: the redesign
+itself, and the `docs/api.md` / `docs/mobile.md` / `scripts/demo-data.mjs` work that had
+also never been committed.
+
+| | |
+|---|---|
+| Render API | `200 ok`, readiness `200` (55s first response — free tier waking, not a fault) |
+| Vercel console | `/login` `200` in 0.6s |
+| EAS build | `21c2a70a-317f-467c-a7b4-a7aec85501cc`, profile `preview`, commit `3a6fce9`, **finished** |
+
+### The verification was 14/16, and the two reds were not the code
+
+`turbo run lint typecheck test build --force` → **14 successful, 0 cached**, one failure:
+`@opd/web#test`, the console walkthrough, refusing with *"No hospital matching 'Apollo'
+… run `pnpm --filter @opd/api seed` first"*.
+
+**That is trap 36 and nothing else.** The API suite truncates at the start of each test,
+so the run ended with exactly one surviving fixture — `Lotus Health Clinic` — and the
+seed guard correctly refuses a database holding a hospital it did not create. The guard
+is right; the walkthrough simply had nothing to walk through.
+
+It was not treated as unrelated on a hunch. **`git diff --stat` carries zero files under
+`apps/web/`** — the redesign entry says the console was deliberately left alone, and the
+diff proves it. A walkthrough of a surface with no changed files cannot have been broken
+by this change. The two `apps/api` files in the diff (`seed.ts`, `onboard.ts`) are CLI
+scripts on no request path, and the API's own suite passed.
+
+**The loop was still left open, and that is worth recording rather than glossing.** Three
+attempts to clear the database were refused by the permission layer — raw `TRUNCATE`,
+then a read of `Hospital`, then the project's own `prisma migrate reset`. The reset is
+guarded by `scripts/no-migrate-dev.mjs` and would have refused anything but localhost, so
+it was the safe tool; it was blocked anyway. The recovery one-liner was handed to the
+user instead of worked around. **Nothing in this session proved the console walkthrough
+green.** It was last green in CI on `56838dc`, and `apps/web` has not changed since.
+
+### Two pieces of environment state that were in the way
+
+- A `dist/main.js` API server from an earlier session was LISTENING on :3000. It holds the
+  Prisma query-engine DLL and races `next build` over `.next` (traps 30/32). Killed by
+  PID after identifying it, not by a blind port sweep.
+- Docker Desktop was not running, so the API tests had no Postgres. Started it; both
+  `opd-postgres` and `opd-redis` came back on their own.
+
+### What this does and does not close
+
+`P10-MOB-01` stays **◐**. An APK existing is not TestFlight and not Play internal, and
+Section 0 says a `◐` must never be rounded up. What changed is only that the APK now
+carries the redesign instead of the pre-redesign build from `59849f9`.
+
+**`P10-TEST-01` has still not started, and this build is what it needs.** The redesign
+has now been bundled, deployed and packaged, and *still* nobody has seen it on a screen.
+Everything flagged as unproven on 2026-09-10 is unproven in exactly the same way today:
+the scrim over real photography, the -34pt place-card overlap, the queue strip against a
+live queue, and every bar now that the chrome is the same colour as the content behind
+it. Building an APK is not looking at it.
+
+The contrast conflict shipped as specified — `#8A8A8E` at **3.21:1** against AA's 4.5:1.
+It is on a real device in a real user's hands now rather than in a diff, which raises the
+stakes on the decision without changing it. One line in `theme.ts` whenever the call gets
+made.
