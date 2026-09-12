@@ -164,7 +164,9 @@ export class DiscoveryService {
       this.prisma.hospital.count({ where }),
     ]);
 
-    const counts = await this.todayCountsBy('hospitalId', rows.map((row) => row.id));
+    const ids = rows.map((row) => row.id);
+    const counts = await this.todayCountsBy('hospitalId', ids);
+    const open = await this.openCountsByHospital(ids);
 
     return {
       items: rows.map((row) => ({
@@ -174,11 +176,57 @@ export class DiscoveryService {
         area: row.area,
         photoUrl: row.photoUrl,
         todaySessionCount: counts.get(row.id) ?? 0,
+        openSessionCount: open.get(row.id) ?? 0,
       })),
       total,
       limit: query.limit,
       offset: query.offset,
     };
+  }
+
+  /**
+   * How many of today's sessions each hospital would accept a booking into, now.
+   *
+   * **It runs the real gate, not a cheaper version of it.** The tempting shortcut is
+   * a `groupBy` with `status IN (OPEN_FOR_REGISTRATION, ACTIVE) AND
+   * registrationClosedAt IS NULL AND scheduledEnd > now` - three of the gate's six
+   * terms, in one query, and it would be right for every tenant today because the
+   * other three are policy fields that all currently default to null.
+   *
+   * It is still the wrong thing to write. `common/registration.ts` says why in its
+   * own docstring: the button and the write have to agree, and the moment "open"
+   * has two definitions they drift - silently, and in the direction of a card
+   * advertising a session the server then refuses. The first hospital to set
+   * `maxOnlineTokens` would break it, and nothing would fail loudly when it did.
+   *
+   * So this loads today's sessions for these hospitals and runs `snapshots()`, which
+   * is the single place `registrationOpen` is decided. Cost is one extra session
+   * read plus the aggregates `snapshots` already batches - never a query per card.
+   *
+   * ponytail: fine while a city holds tens of hospitals. If a list ever spans
+   * hundreds, push the count into SQL and accept the duplicated rule ONLY with the
+   * gate's terms generated from one source.
+   */
+  private async openCountsByHospital(ids: string[]): Promise<Map<string, number>> {
+    const open = new Map<string, number>();
+    if (ids.length === 0) return open;
+
+    const sessions = await this.prisma.oPDSession.findMany({
+      where: {
+        hospitalId: { in: ids },
+        ...listableSession(dateColumnFromString(istToday())),
+      },
+      include: SESSION_INCLUDE,
+    });
+    if (sessions.length === 0) return open;
+
+    const snapshots = await this.snapshots(sessions, new Date());
+    for (const session of sessions) {
+      if (snapshots.get(session.id)?.registrationOpen === true) {
+        open.set(session.hospitalId, (open.get(session.hospitalId) ?? 0) + 1);
+      }
+    }
+    return open;
   }
 
   async hospital(id: string): Promise<HospitalDetail> {
@@ -188,6 +236,7 @@ export class DiscoveryService {
     if (!row) throw new NotFoundError('Hospital not found');
 
     const counts = await this.todayCountsBy('hospitalId', [row.id]);
+    const open = await this.openCountsByHospital([row.id]);
 
     return {
       id: row.id,
@@ -197,6 +246,7 @@ export class DiscoveryService {
       address: row.address,
       photoUrl: row.photoUrl,
       todaySessionCount: counts.get(row.id) ?? 0,
+      openSessionCount: open.get(row.id) ?? 0,
     };
   }
 

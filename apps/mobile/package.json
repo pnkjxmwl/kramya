@@ -4,7 +4,8 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "expo start",
+    "dev": "expo start --go",
+    "dev:client": "expo start --dev-client",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "build": "echo \"mobile builds ship via EAS (Phase 10)\" && exit 0",

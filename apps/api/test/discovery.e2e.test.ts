@@ -193,6 +193,27 @@ describe('Phase 3 discovery', () => {
       expect(res.body.items.some((h: { id: string }) => h.id === hospitalPending)).toBe(false);
     });
 
+    /*
+      The two counts must not be the same number.
+
+      `todaySessionCount` is the day's PROGRAMME and includes sessions nobody can
+      book any more; `openSessionCount` is what the gate would accept right now. The
+      hero card rendered the first as "8 OPD OPEN NOW" and was caught on staging
+      advertising eight open clinics at a hospital where every session had ended.
+
+      This fixture is exactly the shape that catches it: hospital A has two sessions
+      today and one of them is manually closed, so a regression that re-points the
+      card at the wrong field makes these two assertions equal and fails here.
+    */
+    it('counts only sessions the gate would accept, separately from today’s programme', async () => {
+      const res = await get('/hospitals').expect(200);
+      const apollo = res.body.items.find((h: { id: string }) => h.id === hospitalA);
+
+      expect(apollo.todaySessionCount).toBe(2);
+      expect(apollo.openSessionCount).toBe(1);
+      expect(apollo.openSessionCount).toBeLessThan(apollo.todaySessionCount);
+    });
+
     it('filters by city, area and name, case-insensitively', async () => {
       expect((await get('/hospitals?city=mumbai').expect(200)).body.total).toBe(1);
       expect((await get('/hospitals?area=indira').expect(200)).body.total).toBe(1);
@@ -209,6 +230,9 @@ describe('Phase 3 discovery', () => {
         name: 'Apollo Clinic',
         address: '1 Andheri West Road',
         todaySessionCount: 2,
+        // HospitalDetail extends HospitalCard, so the detail endpoint owes the same
+        // honest number - it was the second place the old count leaked out.
+        openSessionCount: 1,
       });
 
       // Not 403: distinguishing "unverified" from "no such id" would confirm which

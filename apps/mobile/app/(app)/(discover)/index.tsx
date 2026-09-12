@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { HospitalCard, Paginated, Patient, PublicDoctor } from '@opd/contracts';
@@ -30,11 +30,21 @@ import { theme } from '../../../theme';
  * The city is remembered (lib/city.tsx), so this opens straight onto the hospitals in
  * it rather than asking again every visit.
  *
- * **The featured card is the first hospital, and the NEARBY list is the rest.** The
- * handoff drives it from a "selected hospital" the prototype keeps in memory and
- * marks VIEWING in the list below - which is a prototype affordance for demoing three
- * screens off one dataset, not a thing the product has. Showing the same hospital
- * twice to reproduce the marker would be a duplicate row that does nothing.
+ * **The featured card is the SELECTED hospital, and NEARBY lists them all.** Tapping a
+ * row selects it - the card above swaps to that hospital and the row marks itself
+ * VIEWING. The card is the way in: tapping it opens the hospital.
+ *
+ * This reverses the first version, which made the card `items[0]` and had every row
+ * navigate. That read the handoff's selection state as a prototype affordance for
+ * demoing three screens off one dataset. It is not: the README's Interactions section
+ * names "Hospital select (screen 1 row tap) -> sets hospital; updates featured card"
+ * as behaviour, and the markup carries a VIEWING marker on each of the four rows,
+ * which only means something if a row can change which one is selected.
+ *
+ * **Selecting scrolls back to the top**, because the card is 236pt tall and sits under
+ * a header - by the time a row is in reach the thing it updates is off-screen, and an
+ * interaction whose only feedback is invisible is indistinguishable from a dead tap.
+ * The handoff is a showcase where all of it is visible at once; a phone is not.
  *
  * While searching there is no featured card at all: the handoff is explicit that
  * typing filters the list, and promoting whichever result sorted first to a 236pt
@@ -49,6 +59,11 @@ export default function Home() {
   const router = useRouter();
   const { city, ready } = useCity();
   const [q, setQ] = useState('');
+  // Which hospital the featured card is showing. Null until a row is tapped, which is
+  // the first hospital - deliberately not seeded with an id, because the list has not
+  // loaded yet and seeding it would mean tracking every way that list can change.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const list = useRef<FlatList<HospitalCard>>(null);
   const query = q.trim();
   const searching = query.length > 0;
 
@@ -71,9 +86,34 @@ export default function Home() {
   );
 
   const items = hospitals.data?.items ?? [];
-  const featured = searching ? undefined : items[0];
-  const nearby = featured ? items.slice(1) : items;
-  const openNow = items.filter((h) => h.todaySessionCount > 0).length;
+  /*
+    Before anything is tapped, lead with a hospital that is actually running OPD today.
+
+    The list arrives in the server's order, which is alphabetical - so the card was
+    whichever clinic sorted first, open or not. In Mumbai that is a leftover called
+    "Demo Hospital" with no photograph and no sessions, and the app opened on a 236pt
+    initials block advertising NO OPD TODAY. That is the worst possible first frame and
+    it was not a data accident: any city can have a closed clinic sort first.
+
+    "Open today" and not "has a photo", because the reason to lead with a hospital is
+    that a patient can do something there. A real clinic with no photo is an ordinary
+    state and the initials fallback is built for it.
+  */
+  const featured = searching
+    ? undefined
+    : (items.find((hospital) => hospital.id === selectedId) ??
+      items.find((hospital) => hospital.openSessionCount > 0) ??
+      items[0]);
+  // Every hospital, including the featured one. It is not a duplicate: it is the
+  // control that changes the card, and the handoff marks it VIEWING for that reason.
+  const nearby = items;
+  // Hospitals you could book into right now, not hospitals with a programme today.
+  const openNow = items.filter((h) => h.openSessionCount > 0).length;
+
+  const select = (id: string) => {
+    setSelectedId(id);
+    list.current?.scrollToOffset({ offset: 0, animated: true });
+  };
 
   const header = (
     <View>
@@ -136,7 +176,7 @@ export default function Home() {
         <Pressable
           onPress={() => router.push({ pathname: '/hospital/[id]', params: { id: featured.id } })}
           accessibilityRole="button"
-          accessibilityLabel={`${featured.name}, ${featured.todaySessionCount} OPD today`}
+          accessibilityLabel={`Open ${featured.name}, ${featured.openSessionCount} OPD open now`}
           {...pressable(theme.radius.hero)}
         >
           <View style={styles.hero}>
@@ -149,14 +189,24 @@ export default function Home() {
             />
             <Scrim />
             <View style={styles.heroText}>
+              {/*
+                Three states, because there are three - and the middle one is the
+                reason this changed. "8 OPD OPEN NOW" was `todaySessionCount`, which
+                counts today's PROGRAMME including finished clinics, so the hero card
+                was measured advertising eight open sessions at a hospital where every
+                one had ended. A hospital whose day is over is not the same as a
+                hospital with no OPD, and neither is "open now".
+              */}
               <View style={styles.heroPill}>
-                {featured.todaySessionCount > 0 ? (
+                {featured.openSessionCount > 0 ? (
                   <Dot color={theme.color.success.onPhoto} />
                 ) : null}
                 <Text style={styles.heroPillText}>
-                  {featured.todaySessionCount > 0
-                    ? `${featured.todaySessionCount} OPD OPEN NOW`
-                    : 'NO OPD TODAY'}
+                  {featured.openSessionCount > 0
+                    ? `${featured.openSessionCount} OPD OPEN NOW`
+                    : featured.todaySessionCount > 0
+                      ? `${featured.todaySessionCount} OPD TODAY · CLOSED`
+                      : 'NO OPD TODAY'}
                 </Text>
               </View>
               <Text style={styles.heroName} numberOfLines={2}>
@@ -224,30 +274,47 @@ export default function Home() {
   return (
     <Screen>
       <FlatList
+        ref={list}
         contentContainerStyle={styles.content}
         data={nearby}
         keyExtractor={(hospital) => hospital.id}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={header}
-        renderItem={({ item }) => (
-          <Row
-            photoUrl={item.photoUrl}
-            avatar={item.name}
-            title={item.name}
-            subtitle={`${item.area ?? item.city} · ${
-              item.todaySessionCount === 0 ? 'No OPD today' : `${item.todaySessionCount} OPD today`
-            }`}
-            onPress={() => router.push({ pathname: '/hospital/[id]', params: { id: item.id } })}
-          />
-        )}
+        renderItem={({ item }) => {
+          const viewing = item.id === featured?.id;
+          return (
+            <Row
+              photoUrl={item.photoUrl}
+              avatar={item.name}
+              title={item.name}
+              subtitle={`${item.area ?? item.city} · ${
+                item.openSessionCount > 0
+                  ? `${item.openSessionCount} open now`
+                  : item.todaySessionCount > 0
+                    ? 'Closed for today'
+                    : 'No OPD today'
+              }`}
+              trailing={viewing ? <Text style={styles.viewing}>VIEWING</Text> : undefined}
+              /*
+                Selecting, not navigating - but only while there is a card to update.
+                A search hides the featured card, so a row tap there has nothing to
+                change and must still lead somewhere.
+              */
+              onPress={
+                searching
+                  ? () => router.push({ pathname: '/hospital/[id]', params: { id: item.id } })
+                  : () => select(item.id)
+              }
+            />
+          );
+        }}
         ItemSeparatorComponent={Hairline}
         ListEmptyComponent={
           <QueryState
             pending={!ready || hospitals.isPending}
             error={hospitals.error}
-            // `featured` already showed the only hospital there is - an empty NEARBY
-            // list under it is a correct, quiet outcome, not an empty screen.
-            isEmpty={hospitals.isSuccess && featured === undefined}
+            // NEARBY now lists every hospital, so an empty list means there are none.
+            isEmpty={hospitals.isSuccess && items.length === 0}
             emptyText={
               searching
                 ? `Nothing matches “${query}”`
@@ -333,6 +400,10 @@ const styles = StyleSheet.create({
 
   block: { marginTop: theme.space[8], gap: theme.space[3] },
   nearbyLabel: { paddingTop: theme.space[8], paddingBottom: theme.space[1] },
+  // The handoff's marker on the selected row: 11/600/+0.8 in ink, where the chevron
+  // would be. Ink rather than tertiary on purpose - it is the one row that is not
+  // "tap me to go somewhere", so it should not look like the others.
+  viewing: { ...theme.font.micro, color: theme.color.ink },
 
   prompt: {
     alignItems: 'center',

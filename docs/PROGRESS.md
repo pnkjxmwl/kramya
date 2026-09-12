@@ -8100,3 +8100,474 @@ The contrast conflict shipped as specified — `#8A8A8E` at **3.21:1** against A
 It is on a real device in a real user's hands now rather than in a diff, which raises the
 stakes on the decision without changing it. One line in `theme.ts` whenever the call gets
 made.
+
+---
+
+## 2026-09-12 · The featured card was a dead end — reversing the "prototype affordance" call
+
+**What.** On Discover and on the department screen, the big card at the top was
+permanently the first item in the list and every row beneath it navigated away. The
+user reported both as bugs, independently, in the same breath: *"it is still currently
+fixed to demo hospital"* and *"if I click on next OPD it redirects me to the join queue
+section and not updating the whole card itself."* Both are now selection: tapping a row
+swaps it into the card above.
+
+### This reverses a decision recorded on 2026-09-10, and the earlier one was wrong
+
+The redesign's `index.tsx` docstring said the handoff's selected-hospital state was
+"a prototype affordance for demoing three screens off one dataset, not a thing the
+product has", and that reproducing the VIEWING marker "would be a duplicate row that
+does nothing."
+
+**The handoff says otherwise, twice, and it was not read closely enough.** README §1.5:
+*"Tapping a row selects that hospital (updates the featured card and screen 2/3)."*
+And §Interactions: *"Hospital select (screen 1 row tap) -> sets hospital; updates
+featured card."* The markup carries a `VIEWING` conditional on **each of the four
+rows** (`sel0`..`sel3`), which is only meaningful if a row can change which one is set.
+
+The row is not a duplicate that does nothing. It is the control, and the card is its
+preview. What made the original reading plausible is that the prototype is a showcase
+with all three phones visible at once, so "updates screen 2/3" genuinely is an artifact
+of that presentation - but "updates the featured card" is on the same screen and is not.
+
+### What changed
+
+| | Before | After |
+|---|---|---|
+| Discover featured | `items[0]`, fixed | selected, `?? items[0]` |
+| Discover NEARBY | `items.slice(1)` | every hospital; selected one marked `VIEWING` |
+| Discover row tap | push `/hospital/[id]` | select — **except while searching** |
+| Department lead | `items[0]`, fixed | selected, `?? items[0]` |
+| Department row tap | push `/session/[id]` | select |
+| Way in | the row | **the card** (both screens already had it) |
+
+**Selecting scrolls to the top, and without that the fix would have read as a second
+bug.** The featured card is 236pt under a header; by the time a row is in reach the
+thing it updates is off-screen, so the tap would have produced no visible change at
+all. The handoff never has to solve this because everything in it is visible at once.
+
+**While searching, Discover rows still navigate.** The redesign deliberately hides the
+featured card during a search - promoting whichever result sorted first to a 236pt
+photograph would be the screen picking a favourite out of a set still being narrowed.
+With no card to update, a selecting row would do nothing, so there it still leads
+somewhere. One layout, two behaviours, which is a wart; the alternative is a row that
+is dead exactly when the user is most actively looking.
+
+**The department screen drops the selected row from ALSO and Discover keeps it in
+NEARBY.** That asymmetry is the handoff's, not an oversight: §3 says ALSO holds "the
+remaining doctors", §1 draws all four hospitals with a marker on one.
+
+### Not done, and one that is data rather than code
+
+`hospital/[id].tsx` was left alone. The handoff marks a selected department there too,
+but screen 3 is a real screen in a real navigator - there is no card on the hospital
+screen for a department to update, so those rows correctly navigate. Checked
+`doctor/[id]` and `doctors` for the same shape; neither has a lead/others split.
+
+**The default featured card is still the worst hospital on the list.** `Demo Hospital`
+sorts first, has no photograph and no sessions, so Discover opens on an initials
+fallback at 236pt - which is what prompted the report. The selection fix does not
+change that default. Two ways out, neither taken here: give that row a photo, or
+prefer a hospital with `todaySessionCount > 0` as the initial selection. The second is
+one line and is a product decision about what the app leads with, so it was raised
+rather than made.
+
+**Verified:** typecheck, eslint, the `check-pressable-style` guard, and a full Metro
+bundle for android - all clean. **No test.** `apps/mobile` has no runner and adding one
+for `items.find(...) ?? items[0]` would be a framework for two lines of array access.
+The risk here was never the resolution logic; it is whether the interaction reads
+correctly on a device, and nothing but a device answers that.
+
+---
+
+## 2026-09-13 · Expo Go cannot open this project any more, and why the QR did nothing
+
+**Symptom.** Scanning the dev server's QR did not open the app in Expo Go. Two
+independent causes, and the second one ends the Expo Go workflow for good.
+
+### 1. `expo-dev-client` silently changes what `expo start` serves
+
+`expo-dev-client@6.0.21` is a dependency (the EAS `development` profile needs it). When
+it is installed, `expo start` defaults to **development-build mode** and the QR encodes
+`opdqueue://expo-development-client/?url=...` - the app's own scheme. Expo Go cannot
+open that, so the scan does nothing, or hands off to the installed preview APK, which
+ignores the URL.
+
+Ruled out first, because both look identical from the phone: the LAN IP was correct
+(`192.168.0.3`, the Wi-Fi adapter, with the Hyper-V switches listing first exactly as
+trap 16 says), and the dev server was serving that address correctly - a manifest
+fetched from `http://192.168.0.3:8081/` came back with a matching `launchAsset.url` and
+`sdkVersion: 54.0.0`. Nothing was wrong with the network.
+
+**Fixed:** `dev` is now `expo start --go` and `dev:client` is `expo start --dev-client`.
+The handoff's documented command is `pnpm --filter @opd/mobile dev`, so the fix belongs
+on that script rather than in a flag somebody has to remember.
+
+### 2. The real blocker: this is SDK 54 and Expo Go is now SDK 57
+
+`https://api.expo.dev/v2/versions/latest` reports **`expoGoSdkVersion: "57.0.0"`**.
+
+**Expo Go supports exactly one SDK - the current one.** Multi-SDK support was removed
+years ago, so an Expo Go installed from the store today cannot open an SDK 54 project
+at all, with or without `--go`.
+
+**This reverses a note that has been guiding the project since Phase 3.** PROGRESS and
+the agent memory both say "Expo SDK is pinned to 54 on purpose - it is what the test
+device's Expo Go supports", recorded after that mistake was made twice. It was true
+when written. It is not true now: Expo Go auto-updates from the store and has moved
+three majors since. The pin was never wrong, the *conclusion drawn from it* has expired.
+
+The one case where it still works: a device whose Expo Go never auto-updated and is
+still on `54.0.8` (the client version that pairs with SDK 54). Worth thirty seconds to
+check before doing anything else, because it costs nothing.
+
+### The fix is the development build, and it was already on the board
+
+`expo-dev-client` is installed and `eas.json` already carries a `development` profile
+with `developmentClient: true` and `buildType: apk`. One cloud build gives back
+everything Expo Go was providing and more:
+
+- hot reload against this same Metro server (`pnpm --filter @opd/mobile dev:client`)
+- **push notifications, which Expo Go can never do** - remote push was removed from
+  Expo Go on Android in SDK 53 and iOS never had it. That is the exact blocker holding
+  `P8-MOB-01` open since 2026-09-02.
+- the real native runtime the shipped app uses, rather than a different one
+
+Rejected: upgrading 54 -> 57 (three majors, touches everything, and the SDK pin has
+already cost this project time twice), and sideloading an old Expo Go APK (the store
+updates it back).
+
+**Correction, same day, before the above was acted on.** The user confirmed their Expo
+Go still supports SDK 54 - it is the old `54.0.8` client and has not auto-updated. So
+**cause 2 did not apply to this device** and the entry above ranks the two wrongly:
+`expo-dev-client` serving a dev-client QR was the whole bug, and `--go` fixes it.
+
+What stands from that entry: the `--go` fix and the script change are right regardless,
+and `expoGoSdkVersion` really is 57 - so this workflow is one Play Store auto-update
+away from ending, on a device nobody controls. The development build stops being the
+recommendation and becomes the contingency, but it is still the thing that unblocks
+`P8-MOB-01`, which no Expo Go of any version can do.
+
+**Lesson worth more than the bug:** two plausible causes were found and the one with the
+better evidence trail was assumed to be the operative one, without asking the single
+question - "what does your Expo Go say?" - that separates them. The device was reachable
+the whole time.
+
+---
+
+## 2026-09-13 · Today's sessions, and the three screens that were still baseline
+
+### The sessions expired exactly as predicted, and the fix was already written
+
+`demo-data.mjs` re-run against staging: 16 sessions for 2026-09-13, all four tenants,
+every window straddling now. Lotus Care has 4 and Green Valley 2, which is what was
+asked for. It is idempotent by design - admins were signed into rather than
+re-onboarded, and `if existing.items.length > 0 continue` skipped queues that were
+already filled - so the whole thing is one command with no cleanup.
+
+**What could NOT be created, and why that is the system working.** The ask was for
+some bookings CHECKED IN and some booked-but-not-arrived. Only the first half is
+reachable:
+
+- A walk-in is born `CHECKED_IN` (`walk-in.ts`, docs/PRD.md 8.6) - that half is free,
+  and each session now carries 4-6 of them with one seen and one mid-consultation.
+- "Booked, paid, not arrived" is `CONFIRMED`, and `CONFIRM_PAYMENT` is reachable from
+  **exactly one place: the signature-verified Razorpay webhook** (CLAUDE.md 1.4,
+  state-machine.ts 185). There is no zero-fee bypass and no staff command for it.
+
+So producing that state from a script needs `RAZORPAY_WEBHOOK_SECRET`, which lives only
+in Render's environment. **That is the guarantee holding, not a gap.** A fixture script
+that could confirm a payment would be a script that could take a token without money.
+Recorded here so the next person does not go looking for the missing endpoint.
+
+### The three screens
+
+`profile/index.tsx`, `profile/patients.tsx` and `(discover)/location.tsx` were the
+screens the ink redesign left on baseline styling. All three now match the system.
+
+**Profile is a settings screen, so it is built like one.** The values moved from the
+subtitle to the right-hand edge (`Family profiles ... 3`), every row took a leading
+glyph, and the identity block went centred at 64pt. The old version put the value in
+the subtitle, which made "3 people" read as a description of the row rather than as
+its current setting, and left the right edge empty so nothing scanned.
+
+**One row was deleted rather than restyled.** It read "Tokens and past visits / Open
+the Visits tab" and pointed at a tab that is permanently on screen two inches below
+it. A settings row whose entire content is "use the other control" is an apology for
+the navigation, and this navigation does not need one.
+
+**Sign out became a row.** Centred, red, in its own group, no chevron because it does
+not navigate. A secondary Button under the last group read as a form submit for the
+list above it.
+
+**Family profiles: the list now comes first.** The screen opened with a permanently
+expanded form - name field, seven relation chips, submit - above the list it added to,
+so the answer to "who do I book for" was two scrolls down and the common case paid the
+rare case's cost. Same form, folded behind a button.
+
+**A real defect, not a styling one: deleting a family member asked nothing.** One tap
+on a trash glyph, unconfirmed and unrecoverable, on a row holding a person's name -
+the only destructive control in the patient app and the easiest to hit by accident.
+Now behind `Alert` (React Native's own, no dependency), and the glyph went from danger
+red to tertiary: seven red icons down a list of your own family reads as seven
+warnings, and the stakes belong in the confirmation, not the resting state.
+
+**The 409 copy is now true.** `QueueEntry.patient` and `Consultation.patient` are both
+`onDelete: Restrict`, so removing someone who has ever held a token is refused by the
+database. The old message - "Could not remove this profile" - blamed the app for a
+record being protected.
+
+**City picker: the title moved into the content.** Every other first-class screen opens
+on a 34pt display title; this one opened on a 16pt centred nav title over a grey
+paragraph, which made the app's second-ever screen look like a sub-page of itself. The
+nav bar keeps the back chevron and nothing else, so the title does not appear twice.
+The tick became a filled ink circle in a width-reserving slot, so the list stops
+shifting sideways when the choice moves.
+
+### A backend gap found while doing this, and deliberately not fixed
+
+`PatientsService.remove` is a hard delete with an ownership check and nothing else -
+no guard on deleting your own `SELF` profile, which is what supplies the name and
+avatar on every screen. The client now confirms, which covers the accident; the server
+would still allow it deliberately. Out of scope for a screen redesign and recorded
+rather than quietly widened.
+
+**Verified:** typecheck, eslint, the `check-pressable-style` guard and a full Metro
+bundle - clean. Seen on a device: not yet.
+
+**Trap, found immediately after the above.** The three redesigned screens did not appear
+on the device. The files were correct on disk and the dev server was alive - but its log
+showed **no rebuild at all** after the edits, only the original bundle. Cause: `expo
+export` was run twice to verify the bundles **while `expo start` was serving the same
+project**. Both write `.expo` state and share Metro's cache directory, so the watcher
+stopped producing updates while still answering requests - a live server serving a
+frozen bundle.
+
+**This is trap 30 in a second costume** (`next build` racing `next dev` over `.next`).
+Same rule, now known to apply to Expo: do not run a bundler's build command against a
+project whose dev server is running. Either stop the dev server first, or export to an
+isolated cache. The tell is a dev server that responds normally and never logs a
+rebuild - it looks like the edit did not happen rather than like a stale cache.
+
+Recovery is `--clear`, which forces a full rebuild (~60s), plus a reload on the device.
+
+---
+
+## 2026-09-13 · The bug that was a fixture, and the screens that needed a second pass
+
+### Two doctors, one card — reported as a bug, and it was not
+
+Lotus Care > General Medicine showed Dr Nikhil Save and Dr Priya Menon with identical
+cards: `nowServingToken: "G002"`, `checkedInCount: 4`, and ETA windows equal **to the
+millisecond**. Queried both sessions directly against staging: two distinct session ids,
+two distinct doctors, byte-identical snapshots.
+
+**The app was right.** `demo-data.mjs` sized every queue as
+`4 + (doctor.name.length % 3)`, and `"Nikhil Save"` and `"Priya Menon"` are both exactly
+eleven characters - so both got six walk-ins, both had one completed and one in the
+room, both served the second token of a sequence starting at 1 with prefix `G`. The
+identical ETA follows for free, because `snapshots()` computes every card in one pass
+from a shared `now` and identical inputs give identical output.
+
+A fixture that renders two different doctors as the same card is a bad fixture even
+though nothing is broken - it cost a bug report, and it would have cost a demo. Depth
+now varies by session INDEX, along with how many have been seen, so no two cards on one
+screen can coincide: an index cannot collide, a name hash can.
+
+### The second defect was the one that mattered: the script was inert, not idempotent
+
+Fixing the variance changed nothing, because re-running printed **"0 sessions created,
+0 queues filled"** against four healthy clinics. Sessions are unique on
+(doctor, date, start) and the duplicate was caught and *dropped* - so `sessions` came
+back empty on every rerun and every step after it silently did nothing.
+
+It had always been this way. The script looked idempotent and was actually **inert
+after first run**, which is worse: a change to the fixture could never reach a session
+an earlier run had built, and the summary said "succeeded" while doing nothing. Now a
+duplicate is RECOVERED via `GET /doctors/:id/sessions`, and walk-ins top up to a target
+instead of being skipped. The queue is only advanced on a session nobody has worked,
+because a queue cannot be un-called.
+
+Verified after: the two General Medicine doctors now read 6 and 5 checked in.
+
+### The three screens, second pass
+
+**City picker — the shape was wrong, not the type size.** It had been a pushed screen
+with a small nav title, then a pushed screen with a 34pt content title. The second put a
+back chevron in a bar directly above a large title, and the two stacked into separate
+zones - a title that looked dropped below the chrome rather than owning the screen.
+
+`headerLargeTitle` is the native answer to exactly that and is **iOS-only**, so on the
+Android device this is being built against it does nothing. Checked before reaching for
+it, which is the only reason it was not the fix.
+
+It is now a **modal**. Picking a city is a task you finish, not a destination in a
+hierarchy; a modal has no back chevron to compete with, so the title has the bar to
+itself. Cancel is suppressed when no city is set yet - a Cancel that strands someone on
+a city-less app is worse than none.
+
+**Add-a-profile became its own modal screen, and the pills are gone.** Seven relation
+pills made a single-choice field look like multi-select tags, wrapped to three ragged
+rows, and put small targets where iOS puts a labelled row. It is a checkmark list now -
+the control iOS uses for "pick exactly one of a short set" - with Cancel and Save in the
+bar and no submit button in the content. Save is disabled until there is a name, so the
+form cannot be submitted empty. The screen also previews the avatar the list will show,
+which is the only feedback a form like this can give before it commits.
+
+**Family profiles is now only the list**, with `+` in the bar. Two earlier shapes kept a
+task and a record on one screen: first a permanently expanded form above the list it fed,
+then the same form folded behind a button sitting below a list of unknown length, where
+it could not be found.
+
+**Profile gained an About group** carrying the real version from `expo-constants`
+(already a dependency). It earns the row: it is the first thing any support conversation
+asks for, and an app with no way to answer makes the person guess.
+
+**Verified:** typecheck, eslint and the pressable guard, clean. **`expo export` was
+deliberately NOT run** - the dev server is live and that is the trap recorded two entries
+above. The dev server's own bundle on reload is the runtime check here.
+
+---
+
+## 2026-09-13 · Profile, fifth attempt — and the screen had no content, not bad styling
+
+Four in-app versions and four HTML mockups were all rejected. Asked directly which
+direction was wanted; the answer was "I don't know", which is the honest answer and the
+signal that more options were the wrong thing to offer.
+
+**The mockups were the diagnosis.** Laid out side by side it was obvious that all four
+differed only in the top quarter - identity card, ink header, centred name, tiles - and
+kept an identical grouped-row list underneath. Four hats on one screen. No header
+treatment was ever going to fix it, because the problem was not the header: the screen
+held two rows and a sign-out, and **a screen with nothing on it reads as thin no matter
+how it is styled.**
+
+**The family profiles were the content the whole time**, sitting behind a row you had to
+tap through. They are now the screen: a horizontal rail of face cards with an Add card at
+the end, the account compacted to a 44pt line above it, and settings demoted to one group
+below.
+
+**Not the live token**, which was the other candidate and is the more eye-catching one. It
+would duplicate the Visits tab, which owns it. This screen answers "who is this account
+and who does it book for"; Visits answers "what is happening right now". Two screens
+leading with the same card is how a tab bar stops meaning anything.
+
+### Trap 32, in its worst form yet: a dev server that was dead and still answering
+
+The Expo dev server's wrapper was killed. Metro survived, kept port 8081, and kept
+returning `200` on `/status` - but every manifest request came back
+`runtimeversion:resolve ... exited with non-zero code: 3221225794` (0xC0000142, Windows
+DLL init failure), because its child processes had died with the wrapper and it could no
+longer spawn the CLI helper it needs.
+
+So the port check said healthy, the status endpoint said healthy, and the app could not
+load at all. **Checking the port is not enough - fetch a manifest.** `taskkill //T` to
+take the whole tree, then restart; a plain `//F` on the parent is what created the zombie
+in the first place.
+
+---
+
+## 2026-09-13 · Changing your city from Profile dumped you on the Discover home screen
+
+**Reported:** picking a city from Profile > City returned to the home screen instead of
+to Profile.
+
+**Cause, and it was structural rather than a mistake in the handler.** Each tab owns its
+own Stack (`(app)/_layout.tsx`), so a route belongs to exactly one of them - and
+`location.tsx` lives in `app/(app)/(discover)/`. Pushing `/location` from Profile
+therefore switched to the **Discover** tab, opened the picker there, and `close()`'s
+`router.back()` popped to that stack's own index. The Profile stack was abandoned
+behind it. Nothing in `location.tsx` was wrong; it never knew it had been opened from
+somewhere else.
+
+**Fix: register the screen in both stacks.** `profile/city.tsx` is a one-line re-export
+of the same component, declared modal in the profile layout, and Profile now pushes
+`/profile/city`. That is React Navigation's standard answer for a destination two tabs
+both need, and it keeps each tab's back stack honest. The component is imported, not
+copied - there is still exactly one city picker.
+
+### The same shape exists elsewhere, deliberately left alone
+
+`/join` and `/visit/[id]` live in `(visits)`, and the Discover stack pushes both from
+every session card (`department/[id]`, `doctor/[id]`, `session/[id]`). So tapping Join
+while browsing crosses to the Visits tab the same way.
+
+**Not changed, because it may be the intended behaviour**: after booking you are looking
+at your token, and the Visits tab is where tokens live. The `tabPress` listener in
+`(app)/_layout.tsx` was written knowing booking lands there, which reads as a decision
+rather than an accident. Raised with the user rather than silently rewritten - the
+difference between this and the city bug is that landing in Visits after booking is
+arguably right, and landing on Discover home after changing a setting never is.
+
+---
+
+## 2026-09-13 · The Discover hero card was advertising clinics that had closed
+
+**Found while listing ways to use the featured card better**, which is the only reason
+it was found at all - nobody was looking for a bug.
+
+`HospitalCard.todaySessionCount` counts every listable session today
+(`listableSession` is `status != 'CANCELLED'`), and COMPLETED and ENDED_EARLY sessions
+deliberately stay listable so a patient browsing at 16:00 can see the morning clinic
+ran. That is right. The client then rendered that number as **"8 OPD OPEN NOW"**.
+
+Measured against staging before changing anything:
+
+| Hospital | Card said | Actually open |
+|---|---|---|
+| Sunrise Multispeciality | **8 OPD OPEN NOW** | **0** |
+| Lotus Care Hospital | 8 OPD OPEN NOW | 4 |
+| Green Valley Clinic | 2 OPD OPEN NOW | 0 |
+
+The first thing on the app's first screen, wrong for every hospital in the city. And
+the featured-card default added earlier the same day - "lead with a hospital that has
+sessions today" - was built on the same number, so Discover was choosing to feature
+Sunrise (0 open) over Lotus (4 open).
+
+### The fix runs the real gate, and the shortcut was rejected on purpose
+
+`HospitalCard` gains `openSessionCount`. Additive, because removing or renaming a
+field breaks the APK already on a phone.
+
+The cheap implementation is a `groupBy` with `status IN (OPEN_FOR_REGISTRATION,
+ACTIVE) AND registrationClosedAt IS NULL AND scheduledEnd > now` - three of the gate's
+six terms in one query, and **correct for every tenant today**, because the other
+three are policy fields that all currently default to null.
+
+It was still the wrong thing to write. `common/registration.ts` exists precisely so
+"open" has one definition: the button and the write have to agree, or a card
+advertises a session the server then refuses. The first hospital to set
+`maxOnlineTokens` would have broken the shortcut silently. So `openCountsByHospital`
+loads today's sessions for the listed hospitals and runs `snapshots()` - the same path
+that decides `registrationOpen` on a session card, including policy, held tokens and
+the ETA-overrun cutoff. One extra session read, no query per card, `ponytail:` note
+left for the day a list spans hundreds of hospitals.
+
+### Every consumer of the old number was wrong in the same way
+
+Fixed together, because fixing only the one that was reported leaves the siblings
+broken: the hero pill, the NEARBY row subtitles, the "N open near you right now"
+count, the featured-card default, the hero's accessibility label, and the hospital
+screen's status line and stats. The hospital screen now states both facts - "OPEN NOW"
+and "OPD TODAY" - which incidentally makes its stats row the handoff's trio.
+
+`PublicDepartment.todaySessionCount` was left alone: its rows say "N OPD today", which
+is what that field means and is true.
+
+### The test was falsified before it was trusted
+
+The existing fixture already had the exact shape needed - hospital A has two sessions
+today, one of them manually closed - so the assertion is `todaySessionCount: 2,
+openSessionCount: 1`.
+
+Then the bug was deliberately reintroduced (`openSessionCount: counts.get(...)`) and
+the test was re-run: **`expected 2 to be 1`**. A test that has never failed proves
+nothing, and this one now demonstrably catches the regression it was written for.
+
+**380 API tests in 25 files, all passing.** Contracts, API and mobile typecheck and
+lint clean.
+
+**Not yet deployed.** The mobile client reads `openSessionCount`, so until this reaches
+Render the app sees `undefined` and shows every hospital as closed. Contract and
+backend must land before the client is exercised - docs/CLAUDE.md 11's merge order,
+and here they ship in one push, so the window is just the deploy.

@@ -1,45 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { CreatePatientRequest, Patient, PatientRelation } from '@opd/contracts';
+import { Stack, useRouter } from 'expo-router';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { Patient, PatientRelation } from '@opd/contracts';
 import { useAuth } from '../../../lib/auth';
 import { Icon } from '../../../lib/icon';
 import { QueryState } from '../../../lib/discovery';
-import {
-  Avatar,
-  Button,
-  Card,
-  ErrorNote,
-  Field,
-  Hairline,
-  ListGroup,
-  SectionLabel,
-  pressable,
-} from '../../../lib/ui';
+import { Avatar, ErrorNote, Hairline, ListGroup, pressable } from '../../../lib/ui';
 import { theme } from '../../../theme';
 
-const RELATIONS: PatientRelation[] = [
-  'SELF',
-  'SPOUSE',
-  'MOTHER',
-  'FATHER',
-  'CHILD',
-  'SIBLING',
-  'OTHER',
-];
-
-/** The people this account books for (docs/PRD.md 6.1, family profiles). */
+/**
+ * The people this account books for (docs/PRD.md 6.1, family profiles).
+ *
+ * **This screen is now only the list.** It went through two shapes first: a
+ * permanently expanded form above the list it added to, then the same form folded
+ * behind a button at the bottom. Both kept a task and a record on one screen, so the
+ * common case (who do I book for?) paid for the rare one (add someone), and the add
+ * button sat below a list of unknown length where it could not be found.
+ *
+ * Adding is a `+` in the bar opening `add.tsx` as a modal - the iOS list-and-detail
+ * shape, where the collection screen holds only the collection.
+ *
+ * **Deleting asks first.** It used to be one tap on a trash glyph, unconfirmed and
+ * unrecoverable, on a row holding a family member's name - the only destructive
+ * control in the patient app and the easiest to hit by accident. `Alert` is React
+ * Native's own, so the confirmation costs no dependency.
+ */
 export default function Patients() {
+  const router = useRouter();
   const { authedFetch } = useAuth();
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState('');
-  const [relation, setRelation] = useState<PatientRelation>('SELF');
-  const [formError, setFormError] = useState<string | null>(null);
-
-  // The key matches lib/api.ts's useApi('/patients'), so adding a profile here also
-  // refreshes the greeting and avatar on home.
   const patients = useQuery({
     queryKey: ['/patients'],
     queryFn: async (): Promise<Patient[]> => {
@@ -49,120 +39,112 @@ export default function Patients() {
     },
   });
 
-  const addPatient = useMutation({
-    mutationFn: async (body: CreatePatientRequest) => {
-      const res = await authedFetch('/patients', { method: 'POST', body: JSON.stringify(body) });
-      if (!res.ok) throw new Error('Could not add this profile');
-      return res.json() as Promise<Patient>;
-    },
-    onSuccess: () => {
-      setName('');
-      setRelation('SELF');
-      setFormError(null);
-      void queryClient.invalidateQueries({ queryKey: ['/patients'] });
-    },
-    onError: (e: Error) => setFormError(e.message),
-  });
-
   const removePatient = useMutation({
     mutationFn: async (id: string) => {
       const res = await authedFetch(`/patients/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Could not remove this profile');
+      /*
+        Say why, when the server says why.
+
+        `QueueEntry.patient` and `Consultation.patient` are both `onDelete: Restrict`,
+        so removing someone who has ever held a token is refused by the database. The
+        old copy - "Could not remove this profile" - described that as a failure of
+        the app. It is the record being protected, and the person deserves the reason.
+      */
+      if (!res.ok) {
+        throw new Error(
+          res.status === 409
+            ? 'This person has a booking or a past visit, so their profile has to stay.'
+            : 'Could not remove this profile',
+        );
+      }
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['/patients'] }),
-    onError: (e: Error) => setFormError(e.message),
   });
 
-  function onAdd() {
-    if (!name.trim()) {
-      setFormError('Enter a name');
-      return;
-    }
-    addPatient.mutate({ name: name.trim(), relation });
+  function confirmRemove(patient: Patient) {
+    Alert.alert(
+      `Remove ${patient.name}?`,
+      'Their profile is deleted from your account. Tokens they already hold are not cancelled.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => removePatient.mutate(patient.id) },
+      ],
+    );
   }
 
+  const list = patients.data ?? [];
+
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Stack.Screen options={{ title: 'Family profiles' }} />
+    <>
+      <Stack.Screen
+        options={{
+          title: 'Family profiles',
+          headerRight: () => (
+            <Pressable
+              onPress={() => router.push('/profile/add')}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Add a profile"
+              {...pressable(theme.radius.full)}
+            >
+              <Icon name="plus" size={22} color={theme.color.ink} />
+            </Pressable>
+          ),
+        }}
+      />
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <Text style={styles.intro}>
+          Every token names one of these people. Add anyone you book on behalf of.
+        </Text>
 
-      <Card title="Add a profile">
-        <Field label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
-
-        <Text style={styles.label}>Relation</Text>
-        <View style={styles.chips}>
-          {RELATIONS.map((r) => {
-            const selected = r === relation;
-            return (
-              <Pressable
-                key={r}
-                onPress={() => setRelation(r)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                // 34pt tall by design; hitSlop carries it past the 44x44 floor.
-                hitSlop={8}
-                {...pressable(theme.radius.full)}
-              >
-                <View style={[styles.chip, selected && styles.chipSelected]}>
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                    {label(r)}
+        {list.length > 0 ? (
+          <ListGroup inset={66}>
+            {list.map((p) => (
+              <View key={p.id} style={styles.row}>
+                <Avatar name={p.name} size={38} />
+                <View style={styles.rowText}>
+                  <Text style={styles.rowName} numberOfLines={1}>
+                    {p.name}
                   </Text>
+                  <Text style={styles.rowMeta}>{label(p.relation)}</Text>
                 </View>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {formError && <ErrorNote message={formError} />}
-
-        <Button title="Add profile" onPress={onAdd} pending={addPatient.isPending} />
-      </Card>
-
-      <View style={styles.section}>
-        <SectionLabel>Your profiles</SectionLabel>
-      </View>
-
-      {patients.data && patients.data.length > 0 ? (
-        <ListGroup inset={66}>
-          {patients.data.map((p) => (
-            <View key={p.id} style={styles.row}>
-              <Avatar name={p.name} size={36} />
-              <View style={styles.rowText}>
-                <Text style={styles.rowName}>{p.name}</Text>
-                <Text style={styles.rowMeta}>{label(p.relation)}</Text>
+                <Pressable
+                  onPress={() => confirmRemove(p)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${p.name}`}
+                  hitSlop={8}
+                  {...pressable(theme.radius.full)}
+                >
+                  <View style={styles.remove}>
+                    <Icon name="trash-2" size={16} color={theme.color.inkTertiary} />
+                  </View>
+                </Pressable>
               </View>
-              <Pressable
-                onPress={() => removePatient.mutate(p.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${p.name}`}
-                hitSlop={8}
-                {...pressable(theme.radius.full)}
-              >
-                <View style={styles.remove}>
-                  <Icon name="trash-2" size={17} color={theme.color.danger.fg} />
-                </View>
-              </Pressable>
-            </View>
-          ))}
-        </ListGroup>
-      ) : (
-        <QueryState
-          pending={patients.isPending}
-          error={patients.error}
-          isEmpty={patients.isSuccess && patients.data.length === 0}
-          emptyText="No profiles yet. Add yourself first."
-          onRetry={() => void patients.refetch()}
-        />
-      )}
+            ))}
+          </ListGroup>
+        ) : (
+          <QueryState
+            pending={patients.isPending}
+            error={patients.error}
+            isEmpty={patients.isSuccess && list.length === 0}
+            emptyText="No profiles yet. Tap + to add yourself first."
+            onRetry={() => void patients.refetch()}
+          />
+        )}
 
-      <Hairline style={styles.footRule} />
-      <Text style={styles.footnote}>
-        A profile is who a booking is for. Every token you hold names one of these people.
-      </Text>
-    </ScrollView>
+        {removePatient.error && (
+          <View style={styles.error}>
+            <ErrorNote message={(removePatient.error as Error).message} />
+          </View>
+        )}
+
+        <Hairline style={styles.footRule} />
+        <Text style={styles.footnote}>
+          A profile is who a booking is for — it is not a separate login. Everyone here
+          books through this one account.
+        </Text>
+      </ScrollView>
+    </>
   );
 }
 
@@ -174,38 +156,20 @@ function label(relation: PatientRelation): string {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: theme.color.canvas },
-  content: { paddingHorizontal: theme.gutter, paddingTop: 22, paddingBottom: theme.space[8] },
-
-  label: { ...theme.font.overline, color: theme.color.inkTertiary, textTransform: 'uppercase' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] },
-  chip: {
-    // 34 tall inside a row that keeps 44pt of tappable area via the parent padding.
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: theme.radius.full,
-    justifyContent: 'center',
-    backgroundColor: theme.color.fillSecondary,
+  content: {
+    paddingHorizontal: theme.gutter,
+    paddingTop: theme.space[5],
+    paddingBottom: theme.space[8],
   },
-  // Ink fill, white label - the same relationship the primary button has, at chip
-  // size. A border-only selected state was invisible on a white card.
-  chipSelected: { backgroundColor: theme.color.ink },
-  chipText: {
-    ...theme.font.caption,
-    fontSize: 14,
-    fontFamily: theme.fontFamily.medium,
-    fontWeight: '500',
-    color: theme.color.ink,
-  },
-  chipTextSelected: { color: '#FFFFFF' },
 
-  section: { paddingTop: 30, paddingBottom: 10 },
+  intro: { ...theme.font.body, color: theme.color.inkTertiary, marginBottom: theme.space[5] },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.space[3],
-    minHeight: 60,
-    paddingHorizontal: 18,
+    gap: 14,
+    minHeight: 62,
+    paddingHorizontal: 14,
     paddingVertical: 12,
   },
   rowText: { flex: 1, gap: 2 },
@@ -218,6 +182,8 @@ const styles = StyleSheet.create({
     color: theme.color.ink,
   },
   rowMeta: { ...theme.font.caption, color: theme.color.inkTertiary },
+  // Tertiary, not danger red. Seven red glyphs down the right edge of a list of your
+  // own family reads as seven warnings; the confirm is where the stakes belong.
   remove: {
     width: 44,
     height: 44,
@@ -226,6 +192,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.full,
   },
 
+  error: { marginTop: theme.space[5] },
   footRule: { marginTop: 30 },
   footnote: { ...theme.font.caption, color: theme.color.inkTertiary, marginTop: theme.space[4] },
 });

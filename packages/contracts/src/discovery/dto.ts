@@ -112,6 +112,24 @@ export const HospitalCard = z.object({
   photoUrl: z.string().nullable(),
   /** OPD sessions listable today - so a hospital with nothing on can say so. */
   todaySessionCount: z.number().int().nonnegative(),
+  /**
+   * How many of today's sessions would accept a booking RIGHT NOW.
+   *
+   * **Added because the client had no honest number to show.** `todaySessionCount`
+   * counts every listable session today, finished ones included - it is a programme,
+   * not an availability. The Discover hero card rendered it as "8 OPD OPEN NOW" and
+   * was measured on staging advertising eight open clinics at a hospital where every
+   * session had already ended.
+   *
+   * This is `registrationGate().open` counted per hospital, decided by the SAME
+   * function the JOIN command uses - never a cheaper approximation. A second
+   * definition of "open" is exactly what `common/registration.ts` exists to prevent:
+   * the two would drift, and a patient would tap a button the server then refuses.
+   *
+   * Advisory, like `QueueSnapshot.registrationOpen` and for the same reason - the
+   * answer can change between this read and the write that counts.
+   */
+  openSessionCount: z.number().int().nonnegative(),
 });
 export type HospitalCard = z.infer<typeof HospitalCard>;
 

@@ -1,14 +1,29 @@
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { MeResponse, Patient } from '@opd/contracts';
 import { useApi } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import { useCity } from '../../../lib/city';
 import { QueryState, Row } from '../../../lib/discovery';
-import { Avatar, Button, ListGroup, Screen, SectionLabel } from '../../../lib/ui';
+import { Avatar, ListGroup, Screen, SectionLabel, pressable } from '../../../lib/ui';
 import { theme } from '../../../theme';
 
-/** The account: who you are, who you book for, and the way out. */
+/**
+ * The account: who you are, who you book for, and the way out.
+ *
+ * **Direction C, chosen from the mockups** - the quietest of the five, and the only
+ * one with nothing decorative on it. There is no card and no stats trio: a 76pt
+ * avatar, the name AS the screen title, the email under it, then grouped rows.
+ *
+ * The four rejected directions all differed only in the top quarter and kept an
+ * identical list underneath, which is what finally showed that the header was never
+ * the problem. What makes this version work where an earlier centred one did not is
+ * the rows: each carries its value as a SECOND LINE rather than right-aligned against
+ * the chevron, so "Family profiles / You, Aarav" answers the question the row asks
+ * instead of just labelling it. A settings row that names the people is worth more
+ * than one that counts them.
+ */
 export default function Profile() {
   const router = useRouter();
   const { signOut } = useAuth();
@@ -17,22 +32,26 @@ export default function Profile() {
   const me = useApi<MeResponse>('/me');
   // Same cache key home uses, so this costs nothing on a warm app.
   const patients = useApi<Patient[]>('/patients');
-  const self = patients.data?.find((p) => p.relation === 'SELF');
-  const count = patients.data?.length ?? 0;
+  const people = patients.data ?? [];
+  const self = people.find((p) => p.relation === 'SELF');
+
+  // "You, Aarav" - the first names, with SELF spoken as "You". First names only
+  // because the row is one line and a family shares a surname.
+  const who = people
+    .map((p) => (p.relation === 'SELF' ? 'You' : (p.name.split(' ')[0] ?? p.name)))
+    .join(', ');
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Profile</Text>
-
         <View style={styles.identity}>
-          <Avatar name={self?.name ?? me.data?.email ?? '?'} size={56} />
-          <View style={styles.identityText}>
-            {/* H3, not a title. This is a list screen with a person at the top of it,
-                not a title page - at 28px the name outweighed every row beneath it. */}
-            <Text style={styles.name}>{self?.name ?? 'Your account'}</Text>
-            <Text style={styles.email}>{me.data?.email ?? ' '}</Text>
-          </View>
+          <Avatar name={self?.name ?? me.data?.email ?? '?'} size={76} />
+          <Text style={styles.name} numberOfLines={1}>
+            {self?.name ?? 'Your account'}
+          </Text>
+          <Text style={styles.email} numberOfLines={1}>
+            {me.data?.email ?? ' '}
+          </Text>
         </View>
 
         <QueryState pending={me.isPending} error={me.error} onRetry={() => void me.refetch()} />
@@ -40,46 +59,66 @@ export default function Profile() {
         <View style={styles.label}>
           <SectionLabel>Booking</SectionLabel>
         </View>
-        <ListGroup inset={theme.gutter}>
+        {/* 18 of row padding + a 36 glyph + the row's own 14 gap: the hairline starts
+            where the text does, which is the whole point of an inset separator. */}
+        <ListGroup inset={68}>
           <Row
+            icon="users"
             title="Family profiles"
-            subtitle={
-              count === 0
-                ? 'Add the people you book for'
-                : `${count} ${count === 1 ? 'person' : 'people'}`
-            }
-            padH={theme.gutter}
+            subtitle={who === '' ? 'Add the people you book for' : who}
+            padH={18}
             onPress={() => router.push('/profile/patients')}
           />
           <Row
+            icon="map-pin"
             title="City"
             subtitle={city ?? 'Not set'}
-            padH={theme.gutter}
-            onPress={() => router.push('/location')}
+            padH={18}
+            // This tab's own copy of the picker, NOT `/location`. That route lives in
+            // the Discover stack, so pushing it from here crossed tabs and dismissed
+            // back onto the Discover home screen.
+            onPress={() => router.push('/profile/city')}
           />
         </ListGroup>
 
         <View style={styles.label}>
-          <SectionLabel>Your visits</SectionLabel>
+          <SectionLabel>About</SectionLabel>
         </View>
-        <ListGroup inset={theme.gutter}>
+        <ListGroup inset={68}>
           {/*
-            This once said "your tokens and past visits will appear here once booking
-            is switched on" - written in Phase 3, still on screen four phases after
-            booking shipped and a Visits tab appeared next to this one. Stale copy
-            that describes a product as unfinished is worse than no copy.
+            A real version, from the manifest the running bundle was built from -
+            expo-constants is already a dependency. It earns its row: it is the first
+            thing any support conversation asks for, and an app with no way to answer
+            makes the person guess.
           */}
           <Row
-            title="Tokens and past visits"
-            subtitle="Open the Visits tab"
-            padH={theme.gutter}
-            onPress={() => router.push('/visits')}
+            icon="info"
+            title="Version"
+            meta={Constants.expoConfig?.version ?? '—'}
+            padH={18}
+            // Reports, does not navigate - so no chevron, and the tap does nothing.
+            onPress={() => {}}
+            trailing={<View />}
           />
         </ListGroup>
 
-        <View style={styles.signOut}>
-          <Button title="Sign out" variant="secondary" icon="log-out" onPress={() => void signOut()} />
+        <View style={styles.label}>
+          <SectionLabel>Account</SectionLabel>
         </View>
+        <ListGroup>
+          {/* Centred, red, no chevron: iOS puts the destructive action in its own
+              group and gives it no destination, because it has none. */}
+          <Pressable
+            onPress={() => void signOut()}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            {...pressable(0)}
+          >
+            <View style={styles.signOut}>
+              <Text style={styles.signOutText}>Sign out</Text>
+            </View>
+          </Pressable>
+        </ListGroup>
       </ScrollView>
     </Screen>
   );
@@ -88,21 +127,24 @@ export default function Profile() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: theme.gutter,
-    paddingTop: theme.space[2],
+    paddingTop: theme.space[6],
     paddingBottom: theme.space[8],
   },
-  title: { ...theme.font.display, color: theme.color.ink },
 
-  identity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.space[4],
-    marginTop: theme.space[6],
-  },
-  identityText: { flex: 1, gap: 3 },
-  name: { ...theme.font.h3, fontSize: 19, color: theme.color.ink },
+  // No screen title. The name IS the title - a "Profile" heading above someone's own
+  // name is the app narrating itself.
+  identity: { alignItems: 'center', gap: 3 },
+  name: { ...theme.font.h2, color: theme.color.ink, marginTop: theme.space[4] },
   email: { ...theme.font.caption, color: theme.color.inkTertiary },
 
   label: { paddingTop: 30, paddingBottom: 10 },
-  signOut: { marginTop: theme.space[8] },
+
+  signOut: { minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  signOutText: {
+    fontSize: 16,
+    letterSpacing: -0.4,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: '500',
+    color: theme.color.danger.fg,
+  },
 });
