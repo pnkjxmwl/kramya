@@ -1649,10 +1649,16 @@ false starts, is in `docs/PROGRESS.md`.
 - ☑ **Five console config pages** and the queue list, board, check-in and walk-in
   pages — done in the 2026-09-05 console redesign, off one design system in
   `apps/web/components/`. See PROGRESS.md, "The console redesign".
-- ☐ **Six mobile screens** still on baseline styling: location, department, doctors
-  list, doctor detail, session detail, join, patients. My Visits, the token screen and
-  profile were rebuilt on 2026-09-05.
-  **None of the rebuilt screens has been confirmed on a device yet.**
+- ☑ **Six mobile screens still on baseline styling** — closed 2026-09-10 by the ink
+  redesign, which redrew ALL fifteen mobile screens on
+  `docs/design_handoff_opd_queue/README.md` rather than finishing the teal ones.
+  See PROGRESS.md, "The ink redesign".
+- ☐ **None of the mobile screens has been confirmed on a device yet**, and the ink
+  redesign did not change that. It typechecks, lints, passes the pressable-style guard
+  and bundles through Metro; none of that can see a screen. Specifically unverified:
+  the scrim gradient over real photography, the -34pt place card overlap, the queue
+  strip's bar arithmetic against a live queue, and every bar and header now that the
+  chrome is the same colour as the content behind it.
 - ☐ **The console redesign has not been seen in a browser either.** It builds,
   typechecks and lints clean, and the console walkthrough cannot run without two live
   servers and a seeded database. Every defect in Phases 5 and 6 was found by a person
