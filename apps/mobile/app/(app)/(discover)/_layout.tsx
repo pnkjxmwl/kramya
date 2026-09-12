@@ -48,6 +48,13 @@ export default function DiscoverLayout() {
         in before the screen's own options apply.
       */}
       <Stack.Screen name="hospital/[id]" options={{ headerShown: false }} />
+      {/*
+        Choosing a city is a task you finish, not a place you navigate to - so it is
+        presented, not pushed. Set here rather than in the screen because
+        `presentation` is a navigator option: applied from inside the screen it takes
+        effect one render late and the push animation plays first.
+      */}
+      <Stack.Screen name="location" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }
