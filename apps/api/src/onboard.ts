@@ -63,6 +63,7 @@ interface Options {
   city: string;
   area: string | null;
   address: string | null;
+  photoUrl: string | null;
   admin: string;
   consoleUrl: string;
 }
@@ -75,6 +76,7 @@ Onboard a hospital and invite its first administrator.
   --admin        Email of the first administrator         (required)
   --area         Neighbourhood, shown on discovery cards  (optional)
   --address      Street address                           (optional)
+  --photo        https URL of a photograph of the building (optional)
   --console-url  Where the invite link should point       (default http://localhost:3001)
 
 Example:
@@ -96,6 +98,7 @@ function readOptions(): Options {
       city: { type: 'string' },
       area: { type: 'string' },
       address: { type: 'string' },
+      photo: { type: 'string' },
       admin: { type: 'string' },
       'console-url': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
@@ -128,11 +131,32 @@ function readOptions(): Options {
     return out === '' ? null : out;
   };
 
+  /**
+   * The photograph, and why it is a flag rather than a console feature.
+   *
+   * `Hospital` has a `photoUrl` column and there is NO write path to it: no
+   * `PATCH /hospitals/:id`, no upload, nothing. So every hospital created the only
+   * legitimate way - this script - was permanently photoless, and the redesigned
+   * Discover screen leads with a 236pt full-bleed photograph of exactly that
+   * hospital. The fallback renders initials on a grey ground, which at that size
+   * reads as a broken image rather than as a clinic that has not uploaded one.
+   *
+   * A URL, not an upload, because object storage is a later phase and the column has
+   * always held a URL. Rejected non-https on purpose: this lands on a patient's phone
+   * and iOS blocks mixed content by default, so an http URL would silently show
+   * nothing on exactly the platform the design targets.
+   */
+  const photoUrl = trimmed(values.photo);
+  if (photoUrl !== null && !/^https:\/\//.test(photoUrl)) {
+    throw new Error(`--photo must be an https URL: ${photoUrl}`);
+  }
+
   return {
     name: values.name!.trim(),
     city: values.city!.trim(),
     area: trimmed(values.area),
     address: trimmed(values.address),
+    photoUrl,
     admin,
     consoleUrl: (values['console-url'] ?? 'http://localhost:3001').replace(/\/+$/, ''),
   };
@@ -171,13 +195,14 @@ async function main(): Promise<void> {
         city: options.city,
         area: options.area,
         address: options.address,
+        photoUrl: options.photoUrl,
         // VERIFIED, not PENDING. Running this command IS the verification step - a
         // human decided to onboard this hospital. PENDING would create a tenant that
         // no patient can see and nothing in the product can promote, which is the
         // hole this script exists to close rather than reproduce.
         status: 'VERIFIED',
       },
-      select: { id: true, name: true, city: true },
+      select: { id: true, name: true, city: true, photoUrl: true },
     });
 
     // The queue engine must never meet a hospital without a policy - every command
@@ -195,6 +220,7 @@ async function main(): Promise<void> {
     say(`  Hospital   ${hospital.name} — ${hospital.city}`);
     say(`  Id         ${hospital.id}`);
     say(`  Status     VERIFIED (listable to patients)`);
+    say(`  Photo      ${hospital.photoUrl ?? 'none - discovery will show initials'}`);
     say(`  Policy     created with platform defaults`);
     say(`  Admin      ${invite.email} (invited, expires ${new Date(invite.inviteExpiresAt).toDateString()})`);
     say();

@@ -1,85 +1,99 @@
 import { Tabs, router } from 'expo-router';
-import { Platform, StyleSheet } from 'react-native';
-import { Icon } from '../../lib/icon';
+import { Platform, StyleSheet, Text } from 'react-native';
+import { Icon, type IconName } from '../../lib/icon';
 import { theme } from '../../theme';
 
 /**
- * The signed-in shell: a bottom tab bar (docs/Design.md 5.9).
+ * The signed-in shell: a bottom tab bar.
  *
- * Each tab owns its own Stack, so the tab bar stays visible while a detail screen
- * is pushed. That is the whole point: without it, a patient five screens deep into
+ * Each tab owns its own Stack, so the tab bar stays visible while a detail screen is
+ * pushed. That is the whole point: without it, a patient five screens deep into
  * city -> hospital -> department -> session has no way back to the top but to press
- * back five times, which is exactly the complaint this replaced.
+ * back five times.
  *
- * "My Visits" arrived with Phase 5, when there were finally tokens to list. It was
- * deliberately absent until then: a tab that leads nowhere is the /queue mistake.
+ * Redrawn to the handoff's bar: 82pt tall on iOS (a 49pt bar plus the home-indicator
+ * inset), 22pt line glyphs, 10pt labels, ink for the active item and #8A8A8E for the
+ * rest, over a 0.5px top hairline.
+ *
+ * **No blur.** The handoff specifies `rgba(247,247,248,0.86)` over `blur(24px)`;
+ * expo-blur is a native module we do not have and docs/CLAUDE.md 2 forbids adding
+ * one for a decoration. A translucent bar with nothing blurring behind it is worse
+ * than an opaque one - content shows through at full sharpness - so the bar is
+ * opaque canvas and the hairline does the separating. See theme.color.bar.
  */
+
+/**
+ * The label, rendered rather than styled.
+ *
+ * `tabBarLabelStyle` is one style for both states, so it cannot carry the handoff's
+ * weight change - 600 when active, 400 when not. Three lines here beats three
+ * near-identical copies in the options below.
+ */
+const label = (text: string) =>
+  function TabLabel({ focused, color }: { focused: boolean; color: string }) {
+    return <Text style={[styles.label, { color }, focused && styles.labelActive]}>{text}</Text>;
+  };
+
+const icon = (name: IconName) =>
+  function TabIcon({ color }: { color: string }) {
+    return <Icon name={name} size={22} color={color} />;
+  };
+
 export default function AppLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.color.primary,
-        tabBarInactiveTintColor: theme.color.textDisabled,
-        /*
-          A hairline, not the platform's 1px grey slab, and enough height that the
-          label is not pressed against the home indicator on a modern phone. The
-          default bar sat 49pt tall with a 1px `#000`-ish divider, which is the one
-          piece of chrome on every screen and the fastest way to make a considered
-          app look like a default one.
-        */
+        tabBarActiveTintColor: theme.color.ink,
+        tabBarInactiveTintColor: theme.color.inkTertiary,
         tabBarStyle: {
-          backgroundColor: theme.color.surface,
+          backgroundColor: theme.color.bar,
           borderTopColor: theme.color.border,
           borderTopWidth: StyleSheet.hairlineWidth,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingTop: 6,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          height: Platform.OS === 'ios' ? 82 : 64,
+          paddingTop: 10,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
         },
         tabBarItemStyle: { paddingVertical: 0 },
-        tabBarLabelStyle: { ...theme.font.caption, marginTop: 2 },
       }}
     >
       <Tabs.Screen
         name="(discover)"
-        options={{
-          title: 'Discover',
-          tabBarIcon: ({ color }) => <Icon name="compass" size={22} color={color} />,
-        }}
+        options={{ tabBarLabel: label('Discover'), tabBarIcon: icon('compass') }}
       />
       <Tabs.Screen
         name="(visits)"
-        options={{
-          title: 'My Visits',
-          tabBarIcon: ({ color }) => <Icon name="clipboard" size={22} color={color} />,
-        }}
+        // "Visits", the handoff's word. The SCREEN is still titled "My Visits" - a
+        // tab label has ten pixels of height and no room for a possessive.
+        options={{ tabBarLabel: label('Visits'), tabBarIcon: icon('clipboard') }}
         /*
           Always open on the list.
 
           Booking pushes `join` onto THIS tab's stack and then replaces it with the
           token, so after paying the tab was left parked on a single token card -
           tapping My Visits showed that one token instead of the list, and with two
-          bookings there was no way to the second without pressing back. A tab called
-          "My Visits" has to show the visits.
+          bookings there was no way to the second without pressing back.
 
           `navigate` pops back to the list if it is already in the stack rather than
-          stacking another copy.
+          stacking another copy. Deliberately NOT preventDefault: the default tab
+          switch still runs, so if this ever stops working the tab still opens.
         */
-        listeners={{
-          // Deliberately NOT preventDefault: the default tab switch still runs, and
-          // this only pops back to the list on top of it. If the navigate ever stops
-          // working the tab still opens - on the wrong screen, which is today's bug -
-          // rather than becoming a tab that does nothing at all.
-          tabPress: () => router.navigate('/visits'),
-        }}
+        listeners={{ tabPress: () => router.navigate('/visits') }}
       />
       <Tabs.Screen
         name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <Icon name="user" size={22} color={color} />,
-        }}
+        options={{ tabBarLabel: label('Profile'), tabBarIcon: icon('user') }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    ...theme.font.tab,
+    fontFamily: theme.fontFamily.regular,
+    fontWeight: '400',
+    marginTop: 4,
+  },
+  labelActive: { fontFamily: theme.fontFamily.semibold, fontWeight: '600' },
+});

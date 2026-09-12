@@ -14,7 +14,7 @@ import { WebView } from 'react-native-webview';
 import type { JoinResponse, MyQueueEntry, Paginated, Patient, SessionDetail } from '@opd/contracts';
 import { useApi, useApiPost } from '../../../lib/api';
 import { QueryState } from '../../../lib/discovery';
-import { Button, ErrorNote, SectionLabel } from '../../../lib/ui';
+import { Button, Card, ErrorNote, ListGroup } from '../../../lib/ui';
 import { Icon } from '../../../lib/icon';
 import { MY_ACTIVE_ENTRIES, useMyActiveEntries } from '../../../lib/visits';
 import { calendarDate, istRange, rupees } from '../../../lib/format';
@@ -240,8 +240,7 @@ export default function Join() {
 
         {detail !== undefined && (
           <>
-            <View style={styles.card}>
-              <SectionLabel>Appointment</SectionLabel>
+            <Card title="Appointment">
               <Text style={styles.doctor}>{detail.doctorName}</Text>
               <Text style={styles.meta}>
                 {detail.departmentName} · {detail.hospitalName}
@@ -249,10 +248,9 @@ export default function Join() {
               <Text style={styles.meta}>
                 {calendarDate(detail.date)} · {istRange(detail.scheduledStart, detail.scheduledEnd)}
               </Text>
-            </View>
+            </Card>
 
-            <View style={styles.card}>
-              <SectionLabel>Who is visiting</SectionLabel>
+            <Card title="Who is visiting">
               {people.length === 0 ? (
                 <Text style={styles.meta}>
                   Add a patient profile from the Profile tab before booking.
@@ -263,7 +261,8 @@ export default function Join() {
                   profile from the Profile tab to book for someone else.
                 </Text>
               ) : (
-                people.map((person) => {
+                <ListGroup inset={0} style={styles.people}>
+                  {people.map((person) => {
                   const alreadyBooked = bookedPatientIds.has(person.id);
                   const selected = patientId === person.id;
                   return (
@@ -273,31 +272,29 @@ export default function Join() {
                       disabled={alreadyBooked}
                       accessibilityRole="radio"
                       accessibilityState={{ selected, disabled: alreadyBooked }}
-                      style={[styles.person, selected && styles.personOn]}
+                      style={styles.person}
                     >
-                      <Icon
-                        name={alreadyBooked ? 'check' : selected ? 'check-circle' : 'circle'}
-                        size={20}
-                        color={
-                          alreadyBooked
-                            ? theme.color.textDisabled
-                            : selected
-                              ? theme.color.primary
-                              : theme.color.textDisabled
-                        }
-                      />
                       <Text style={[styles.personName, alreadyBooked && styles.personBooked]}>
                         {person.name}
                       </Text>
                       {/* Never colour alone (docs/Design.md 8) - say why it is greyed. */}
-                      {alreadyBooked ? <Text style={styles.personNote}>Already booked</Text> : null}
+                      {alreadyBooked ? (
+                        <Text style={styles.personNote}>Already booked</Text>
+                      ) : (
+                        <Icon
+                          name={selected ? 'check' : 'circle'}
+                          size={selected ? 18 : 16}
+                          color={selected ? theme.color.ink : theme.color.chevron}
+                        />
+                      )}
                     </Pressable>
                   );
-                })
+                  })}
+                </ListGroup>
               )}
-            </View>
+            </Card>
 
-            <View style={styles.card}>
+            <Card>
               <View style={styles.feeRow}>
                 <Text style={styles.feeLabel}>Consultation fee</Text>
                 {/* The server's number. The app never computes or sends an amount. */}
@@ -307,7 +304,7 @@ export default function Join() {
                 Your place is held for a few minutes while you pay. You will get a token with a QR
                 code to check in at reception.
               </Text>
-            </View>
+            </Card>
 
             {notice !== null && <ErrorNote message={notice} />}
             {join.error !== null && <ErrorNote message={join.error.message} />}
@@ -354,7 +351,7 @@ export default function Join() {
             accessibilityLabel="Close payment"
             style={styles.close}
           >
-            <Icon name="x" size={22} color={theme.color.text} />
+            <Icon name="x" size={22} color={theme.color.ink} />
           </Pressable>
           {phase.name === 'checkout' && (
             <WebView
@@ -373,7 +370,7 @@ export default function Join() {
               startInLoadingState
               renderLoading={() => (
                 <View style={styles.loading}>
-                  <ActivityIndicator color={theme.color.primary} />
+                  <ActivityIndicator color={theme.color.inkTertiary} />
                 </View>
               )}
               onShouldStartLoadWithRequest={(request) => {
@@ -442,7 +439,7 @@ function checkoutHtml(order: JoinResponse, hospitalName: string): string {
     currency: order.currency,
     name: hospitalName,
     description: `${order.entry.departmentName} · Token ${order.entry.tokenLabel}`,
-    theme: { color: theme.color.primary },
+    theme: { color: theme.color.ink },
     /*
       REDIRECT MODE, and it is the whole reason netbanking works.
 
@@ -495,34 +492,35 @@ function checkoutHtml(order: JoinResponse, hospitalName: string): string {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.canvas },
-  content: { padding: theme.space[4], gap: theme.space[3], paddingBottom: theme.space[10] },
-  card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.color.border,
-    padding: theme.space[4],
-    gap: theme.space[2],
+  content: {
+    paddingHorizontal: theme.gutter,
+    paddingTop: 22,
+    gap: theme.space[4],
+    paddingBottom: theme.space[10],
   },
-  doctor: { ...theme.font.h3, color: theme.color.text },
-  meta: { ...theme.font.caption, color: theme.color.textMuted },
+  doctor: { ...theme.font.h3, color: theme.color.ink },
+  meta: { ...theme.font.caption, color: theme.color.inkTertiary },
+
+  // Negative margins so the grouped table runs to the card's own edges - a group
+  // inset inside a card reads as a box in a box.
+  people: { marginHorizontal: -theme.space[5], borderRadius: 0, shadowOpacity: 0, elevation: 0 },
   person: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.space[3],
     paddingVertical: theme.space[3],
-    paddingHorizontal: theme.space[3],
-    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.space[5],
     // docs/Design.md 9: 44x44 minimum.
-    minHeight: 44,
+    minHeight: 48,
   },
-  personOn: { backgroundColor: theme.color.teal[50] },
-  personName: { ...theme.font.body, color: theme.color.text },
-  personBooked: { color: theme.color.textDisabled },
-  personNote: { ...theme.font.caption, color: theme.color.textMuted, marginLeft: 'auto' },
-  feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  feeLabel: { ...theme.font.body, color: theme.color.textMuted },
-  fee: { ...theme.font.h2, color: theme.color.text, fontVariant: ['tabular-nums'] },
+  personName: { ...theme.font.body, color: theme.color.ink, flex: 1 },
+  personBooked: { color: theme.color.inkTertiary },
+  personNote: { ...theme.font.caption, color: theme.color.inkTertiary },
+
+  feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  feeLabel: { ...theme.font.body, color: theme.color.inkTertiary },
+  fee: { ...theme.font.stat, color: theme.color.ink, fontVariant: ['tabular-nums'] },
+
   modal: { flex: 1, backgroundColor: theme.color.canvas },
   close: {
     alignSelf: 'flex-end',

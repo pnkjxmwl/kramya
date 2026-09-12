@@ -2,7 +2,34 @@
 
 ## OPD Queue Platform — Visual System
 
-**Status:** Draft v1
+> ### ⚠️ This document now describes **apps/web only**.
+>
+> **The patient app (apps/mobile) follows a different visual system as of 2026-09-10:**
+> `docs/design_handoff_opd_queue/README.md` — an iOS-native **ink** system (ink `#0B0B0C`
+> primary, `#F7F7F8` ground, tracked caps eyebrows, hairline-separated grouped lists,
+> green only for a live/open dot). `apps/mobile/theme.ts` is its implementation and the
+> authority for every mobile value; **the teal tables below no longer describe any mobile
+> screen.**
+>
+> The split was deliberate, not drift. The handoff is a complete language — palette, type
+> scale, radii, bar chrome — and half-adopting it gives you an app with two of them. The
+> console was left on teal because the redesign was scoped to the phone, and because a
+> dense staff console genuinely wants different conventions than a patient's phone: the
+> handoff is built on 44/49pt bars, blurred bar materials and grouped white cards on a
+> light system background, none of which a keyboard-driven table view wants.
+>
+> **What still applies to both:** §1 Principles, §6 Iconography, §7 Motion, §8
+> Accessibility, §11 Voice & Tone. **What is web-only:** §2 Color, §3 Typography,
+> §4 Spacing/Radius/Elevation, §5 Components, §12 Tokens.
+>
+> One known conflict, recorded rather than silently resolved: the handoff's tertiary grey
+> `#8A8A8E` measures **3.21:1** on its own `#F7F7F8` ground and so fails the AA bar §8
+> sets. It is Apple's own tertiaryLabel and the handoff is signed off as final, so it
+> ships as specified — with the arithmetic and the two compliant replacements written
+> into `apps/mobile/theme.ts` above the token. Every mobile screen reads that one token,
+> so the fix is one line whenever the call is made.
+
+**Status:** Draft v1 (web); mobile superseded by the handoff above
 **Theme:** Calm clinical · Light mode (MVP) · Inter
 **Companion docs:** PRD.md · Architecture.md · Rules.md · Phases.md
 
@@ -409,7 +436,12 @@ the wrong person is called in.
 ---
 
 ## 12. Design Tokens (for implementation)
-Expose the above as shared tokens (Tailwind theme on web; a matching RN theme object on mobile), sourced conceptually from one place so both apps stay consistent.
+
+> **Web only.** The mobile token set is `apps/mobile/theme.ts`, mirroring
+> `docs/design_handoff_opd_queue/README.md`. The two apps deliberately no longer share a
+> palette; they still share the principles in §1 and the rules in §6-§8 and §11.
+
+Expose the above as Tailwind theme tokens on web.
 
 **React Native elevation needs both families set on every level.** iOS reads
 `shadowColor/Offset/Opacity/Radius` and ignores `elevation`; Android reads only `elevation` and

@@ -66,7 +66,7 @@ function Gate() {
     // at users who are already signed in. The font load joins the same wait.
     return (
       <View style={styles.splash}>
-        <ActivityIndicator color={theme.color.primary} />
+        <ActivityIndicator color={theme.color.inkTertiary} />
       </View>
     );
   }

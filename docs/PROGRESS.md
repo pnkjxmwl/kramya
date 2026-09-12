@@ -7786,3 +7786,250 @@ came from exactly this kind of looking.
 
 Also unexercised: a card payment through checkout, and push to this build from the
 deployed API.
+
+---
+
+## 2026-09-08 — `docs/api.md`: the backend explained from zero
+
+**What.** Wrote `docs/api.md` (4,455 lines) — a start-to-finish walkthrough of
+`apps/api` for a reader assuming no TypeScript, NestJS, Prisma, SQL-transaction or
+WebSocket knowledge. Sixteen parts, from language syntax through to five end-to-end
+request traces, plus fourteen exercises.
+
+**Why now.** The API was built by an agent across ten phases and is deployed to
+staging, but its owner has never read it. That is the real risk sitting under Phase 10:
+a system nobody on the team can debug at 3am is not shipped, whatever the checkboxes
+say. Every defect this project has hit came from a gap between what the code did and
+what someone assumed it did — and there is currently one reader who holds none of those
+assumptions because they have never formed any.
+
+**Decided: one file, not a chapter set.** Asked, and the answer was a single file.
+It is long, but it is greppable in one pass and cannot rot in the way a
+cross-referenced set does when one chapter is updated and four are not.
+
+**Decided: quote code inline rather than point at it.** Same question, same answer.
+The cost is real — quoted snippets go stale — so the document leans on `file`-level
+references rather than line numbers, which drift faster.
+
+**Decided: teach from the comments, not around them.** This codebase's comments explain
+decisions and frequently name the bug that forced them, which is unusual and is the
+single biggest asset for a new reader. The document quotes them directly and repeatedly
+tells the reader to read the comment before the code. The alternative — paraphrasing
+into new prose — would have produced a second source of truth that drifts from the
+first.
+
+**Decided: the bugs are the curriculum.** The document builds whole sections around
+defects this project actually shipped, because they are what make the rules stick:
+the `TenantGuard` NUL byte inverting the anti-enumeration guarantee; the notifier's
+`take`-before-`WHERE` starvation that was invisible below the batch size; the
+`unique(entryId, type)` dedupe that silenced the second call to the one patient who
+most needed it; the double refund from a missing `changed` flag; the two sweepers whose
+copied loop silently lost its kill switch; `scrub` redacting every `filename` in every
+stack frame; `nulls: 'first'`. Each is presented as "here is what looked correct, and
+here is what it cost."
+
+**Verified rather than asserted.** Every count in the document was checked against the
+tree, and four first drafts were wrong: 13,305 src lines (not 14,000), 16 command files
+plus `result.ts` (not 17 commands), 18 `AppError` subclasses (not "about twenty"),
+8 sweepers (not six — the draft said "six workers" above a table listing eight), 533
+lines in `state-machine.ts` (not 250), 17 test files (not twenty). Writing a teaching
+document is exactly where a confidently wrong number does the most damage, because the
+reader has no way to catch it.
+
+**Surprise worth recording.** Reading all 14k lines back-to-back surfaced how much of
+the design is one argument applied repeatedly: *the state is the schedule.* It is the
+stated reason `reservationExpiresAt` frees a slot with no worker running, the reason
+every background job is a sweep rather than a BullMQ job, the reason the notifier reads
+`QueueEvent` instead of being called from the commands, and the reason an outage
+self-heals in all three places. It was never written down as a single principle
+anywhere — it is derived independently in four files' comments. `docs/api.md` names it
+as idea #8 of ten.
+
+**Not done.** The document covers `apps/api` only. `apps/web` and `apps/mobile` have no
+equivalent, and the same argument for writing this one applies to them.
+
+---
+
+## 2026-09-08 — `docs/mobile.md`: the patient app explained from zero
+
+**What.** Wrote `docs/mobile.md` (2,358 lines) — the companion to `docs/api.md`, covering
+all 5,317 lines of `apps/mobile`. Fifteen parts: React and React Native from nothing,
+Expo Router, the design system, both component libraries, data and auth, realtime,
+push, every screen, the payment flow, and two end-to-end traces.
+
+**Why it is not just api.md again.** The ask was explicitly *"i need to modify the UI
+too"*, which changes what the document is for. `api.md` teaches a system whose
+complexity is essential — money, concurrency, a queue that must not lie. This app is
+mostly layout, and the useful document is therefore a **map of where to edit**, not
+only an explanation of what runs. So Part 12 is a set of recipes — change a colour,
+restyle a component everywhere, reword the app, add a screen, add a component — each
+ending at a specific file.
+
+**Decided: the traps get their own numbered section.** Seven of them, all of which
+already cost this project time on a device: `style` beside a spread `pressable()`;
+`fontWeight` without `fontFamily`; a shadow set for one platform only; `lineHeight` on
+an Android `TextInput`; anything that changes a focused input's geometry; adding a
+native module (a rebuild, not a reload); and route-name collisions. These are the
+class of bug that typechecks, lints, passes review and then looks wrong on a phone —
+which is exactly the class a newcomer cannot yet see, and the reason
+`scripts/check-pressable-style.cjs` exists at all.
+
+**Decided: a section on what is NOT theirs to change.** The risk of a
+"here is how to edit the UI" document is that it reads as permission to edit
+everything. Part 12.10 is a table of the six things that belong to the server —
+queue position, `registrationOpen`, the fee, what counts as paid — with the reason
+each one is server-owned. Restyling is entirely theirs; deciding is not.
+
+**Surprise worth recording.** Reading the mobile code back-to-back after the API
+surfaced that **the same lesson was learned independently on both sides three times**:
+(1) refresh-token concurrency — the API took a `FOR UPDATE` on the token family, and
+the app needed a single shared in-flight promise, because Home fires three requests at
+once and all three 401 in the same instant; (2) IST as fixed-offset arithmetic, in
+`common/ist.ts` and `lib/format.ts`, for different reasons — the server's 00:30 date
+bug and Hermes not shipping `Intl` with `timeZone`; (3) `@opd/contracts` needing an
+explicit build step on every deploy target, now four times (Render, Vercel, EAS twice).
+None of the three is written down as a cross-cutting fact anywhere; each lives as a
+comment in the file that hit it.
+
+**Verified rather than asserted, again.** Five counts were wrong in the first draft and
+were checked against the tree: 31 files not 30, `realtime.tsx` 183 lines not 190,
+13 exports in `ui.tsx` (12 components plus the `pressable` helper), five providers not
+four in a list that named five, and 2 `Record` status maps in `discovery.tsx` rather
+than the 3 the text implied — the third is in `visits.tsx`. Same discipline as the API
+document, same result: the numbers are the part most likely to be confidently wrong.
+
+**Not done.** `apps/web` still has no equivalent. It is the largest remaining gap in
+the docs, and the console is the surface a hospital's staff actually live in all day.
+
+---
+
+## The ink redesign — every mobile screen onto the handoff (2026-09-10)
+
+**What.** `docs/design_handoff_opd_queue/` arrived: three iOS screens (Discover,
+Hospital, Department queue) plus a confirmation sheet, high fidelity, colours and type
+final. The ask was those three built here, and then **every** mobile screen brought to
+the same look — view only, no new features and no new data. All fifteen screens in
+`apps/mobile` were redrawn; `apps/web` was deliberately left alone.
+
+**Three decisions were the user's, not mine, and were asked before any code.**
+
+1. **Monochrome wins.** The handoff is ink `#0B0B0C` where `docs/CLAUDE.md` 9 and
+   `docs/Design.md` mandate teal `#0E7C7B`. Asked; the answer was the handoff. Teal is
+   now gone from mobile entirely.
+2. **Drop the data we do not have.** The handoff shows a rating (4.6), a distance
+   (1.2 km), an average wait (18m), Call and Directions buttons, "next token 11:20 AM ·
+   2 doctors" per department, and a "Reach hospital by" row. **Not one of those fields
+   exists in `packages/contracts`.** Offered as either "drop the slots" or "extend
+   contract + Prisma + API"; the answer was drop. Nothing on screen is invented.
+3. **Mobile only.** The console keeps teal.
+
+**The change is mostly one layer, and that was the point.** `theme.ts`, `lib/ui.tsx` and
+`lib/discovery.tsx` carry the system; every export kept its signature, so the screens
+that only needed to *look* different mostly did not have to be touched at all. Twenty
+files changed and three of them did the work.
+
+### What was decided, and why
+
+**`SectionLabel` uppercases at the component, not the call site.** The handoff's section
+heading is an 11px tracked-caps eyebrow. Doing the `textTransform` inside `SectionLabel`
+turned "Departments", "Your profiles" and "Where you are" into eyebrows without editing a
+single caller — and it is also the guard, because a screen now *cannot* ship a
+sentence-case heading in a system that has none. This reverses the 2026-09-05 decision
+that moved these to bold sentence case on the argument that caps cost legibility for
+older patients. That argument is still true of body copy and is not true of a four-word
+label whose whole job is to separate two groups without competing with either.
+
+**One `Row`, two containers — the change that made the redesign small.** The teal `Row`
+baked a bordered white card into itself, so a grouped iOS table was impossible without a
+second component. The new `Row` has no background, no border and no radius: dropped on
+the canvas with `Hairline` between rows it is Discover's NEARBY list, and stacked inside
+the new `ListGroup` it is the departments table, the cities list, the profile menu and
+the patient list. Five screens, one row.
+
+**The lead card IS `SessionCardView`.** Screen 3's primary card and the session card the
+doctor screen already listed are the same object — doctor, both tokens, the strip, the
+action. They were about to become two components with the same content at two sizes.
+`onPress` became optional so the session screen can render it as its own head without
+pretending to be tappable, and only the compact "ALSO IN CARDIOLOGY" row was new.
+
+**The session screen lost its sticky bottom action bar.** It existed because that screen
+was a flat list of label/value rows with nothing to act on, so the action had to be
+pinned somewhere. Its head is now the primary card, which carries its own join button —
+and two competing primary actions on one short screen is worse than one action three
+lines further up.
+
+**The right-hand figure when you have not joined.** The handoff's token pair assumes a
+token you already hold, and its whole hierarchy is that your own number is the loudest
+thing on the card. Before you have one there is no such number, and inventing "your token
+would be 25" is the client predicting queue state, which `docs/Rules.md` 1 forbids
+outright. The slot holds `checkedInCount` under a `WAITING` label instead — the number
+that actually drives the decision to join.
+
+**Two handoff effects we cannot draw, and what replaced them.**
+
+- *Blur.* Every bar is specified as `rgba(247,247,248,0.86)` over `blur(24px)`.
+  `expo-blur` is a native module, is not installed, and `docs/CLAUDE.md` 2 forbids adding
+  a dependency for a decoration. **A translucent bar with nothing blurring behind it is
+  worse than an opaque one** — content shows through at full sharpness and the bar looks
+  broken — so bars are opaque canvas and the hairline does the separating. Consequence
+  found immediately: the nav bar is now the *same colour as the content under it*, so
+  `headerShadowVisible` had to be turned back **on**. That flag is the iOS hairline, not
+  a drop shadow; with it off the bar simply dissolved and titles floated over scrolling
+  content.
+- *Gradients.* RN has none. The four-band stack of translucent Views banded visibly
+  against a sky — which is exactly the upper third of every hospital photo the handoff
+  assumes. `react-native-svg` is already a dependency (`react-native-qrcode-svg` draws
+  with it), so `Scrim` renders the exact specified gradient for nothing that is not
+  already in the bundle.
+
+**Inter stayed.** The handoff names `-apple-system` with Geist as the web fallback. Inter
+is already bundled and already gated on the splash, so the sizes, weights and tracking
+came from the handoff and only the family did not. The handoff's "550" — SF's variable
+weight between medium and semibold — maps to `Inter_500Medium`; Inter at 600 is visibly
+heavier than SF at 550 and turns every row title into a heading.
+
+### Failures and things caught
+
+**A real bug written and caught in the same hour.** `ListGroup` first split its children
+with `Array.isArray(children)`. Discover passes it `{items.map(...)}` *next to* a
+conditional `<Row/>` — a **nested** array — and the naive check treats the whole inner
+array as one row, so a five-item list draws one hairline and the group collapses.
+`Children.toArray` flattens fragments and nested arrays, drops null and false, and
+assigns stable keys. It is the API for exactly this, and the first version did not reach
+for it.
+
+**A dead end the redesign introduced.** The compact doctor row's trailing pill shows the
+token label when you already hold one — and fell back to the row's own `onPress`, so
+tapping a pill that reads "T-12" opened a page about the doctor rather than T-12. A
+control labelled with a token has exactly one correct destination. `onOpenToken` now goes
+to it.
+
+**Three touch targets fell under 44×44** in the handoff's tighter geometry: the 32pt
+ghost pill, the 34pt relation chip and the city eyebrow. The handoff specifies those
+heights and says nothing about targets, so the heights stayed and `hitSlop` carries them
+past the floor. `docs/Design.md` 8 is not a thing to trade away for fidelity.
+
+**The one conflict left standing, deliberately.** The handoff's tertiary grey `#8A8A8E`
+measures **3.21:1** on its own `#F7F7F8` ground. AA wants 4.5:1 below 24px, and
+`docs/CLAUDE.md` 9 asks for AA — so every row subtitle, caption and eyebrow in the app is
+short of it. It is Apple's own tertiaryLabel, which is why it looks right and why the
+handoff specifies it; that does not make it compliant. It ships as specified, because
+quietly darkening a signed-off colour is not a decision to make on a document's behalf —
+but the arithmetic and two compliant replacements (`#72727A` → 4.5:1, `#6A6A72` → 5.0:1)
+are written above the token in `theme.ts`. **Every mobile screen reads that one token**,
+so it is a one-line fix whenever the call gets made. Raised with the user in the same
+breath as delivering it.
+
+**Verified, and the limit of that.** `tsc --noEmit` clean, `eslint` clean, the
+`check-pressable-style` guard clean, and a full Metro bundle
+(`expo export --platform android`) succeeds — that last one is what catches the runtime
+import errors typecheck cannot see. Every `router.push` target was enumerated and checked
+against the generated route table. **None of it has been seen on a device**, and this
+redesign is exactly the kind of change where that matters most: the scrim over real
+photography, the -34pt place-card overlap, the queue strip against a live queue, and
+every bar and header now that the chrome is the same colour as the content behind it.
+
+**Not done.** `apps/web` is still teal, and `docs/Design.md` now opens with a banner
+saying so rather than pretending the two apps share a palette. The queue strip caps at 14
+bars (`ponytail:` noted in `discovery.tsx`); past the cap it stops being a count and
+becomes "a lot", while the legend under it still states the true number.

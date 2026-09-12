@@ -30,14 +30,16 @@ export default function Login() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/*
-        Brand, centred, then the greeting left-aligned beneath it - the shape every
-        reference auth screen uses (docs/ui-screens/01_login.png).
+        Brand mark, then the greeting - both left-aligned, at the handoff's large
+        title size. A centred wordmark over a centred subtitle is a splash screen;
+        this is a form, and a form starts at the left margin like every other screen
+        in the app.
       */}
       <View style={styles.brand}>
         <View style={styles.mark}>
-          <Icon name="activity" size={30} color="#FFFFFF" />
+          <Icon name="activity" size={22} color="#FFFFFF" />
         </View>
-        <Text style={styles.wordmark}>OPD Queue</Text>
+        <Text style={styles.wordmark}>OPD QUEUE</Text>
       </View>
 
       <View style={styles.intro}>
@@ -81,31 +83,33 @@ const styles = StyleSheet.create({
   screen: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: theme.space[6],
+    paddingHorizontal: theme.gutter,
+    paddingVertical: theme.space[8],
     gap: theme.space[4],
-    // White, not canvas. The reference auth screens sit on white and the fields
-    // carry the only borders on the page; a grey ground makes a white input look
-    // like a card sitting on something, which is one surface too many.
+    // White, not canvas. The fields are recessed wells; a grey ground makes a
+    // recessed well look like a card sitting on something, which is one surface too
+    // many for a page with four elements on it.
     backgroundColor: theme.color.surface,
   },
-  brand: { alignItems: 'center', gap: theme.space[3], marginBottom: theme.space[4] },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: theme.space[3] },
   mark: {
-    width: 64,
-    height: 64,
-    // A circle, per docs/ui-screens/01_login.png.
+    width: 34,
+    height: 34,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.color.primary,
+    backgroundColor: theme.color.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  wordmark: { ...theme.font.h2, color: theme.color.primary },
-  intro: { gap: theme.space[1], marginBottom: theme.space[2] },
-  title: { ...theme.font.h1, color: theme.color.text },
-  subtitle: { ...theme.font.bodyLg, color: theme.color.textMuted },
+  wordmark: { ...theme.font.overline, color: theme.color.inkTertiary },
+  intro: { gap: 6, marginTop: theme.space[6], marginBottom: theme.space[4] },
+  title: { ...theme.font.display, color: theme.color.ink },
+  subtitle: { ...theme.font.body, color: theme.color.inkTertiary },
   link: {
-    ...theme.font.bodyLg,
-    color: theme.color.primary,
+    ...theme.font.body,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: '500',
+    color: theme.color.ink,
     textAlign: 'center',
-    marginTop: theme.space[2],
+    marginTop: theme.space[3],
   },
 });

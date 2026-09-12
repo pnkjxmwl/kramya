@@ -6,7 +6,17 @@ import type { CreatePatientRequest, Patient, PatientRelation } from '@opd/contra
 import { useAuth } from '../../../lib/auth';
 import { Icon } from '../../../lib/icon';
 import { QueryState } from '../../../lib/discovery';
-import { Avatar, Button, ErrorNote, Field, SectionLabel, pressable } from '../../../lib/ui';
+import {
+  Avatar,
+  Button,
+  Card,
+  ErrorNote,
+  Field,
+  Hairline,
+  ListGroup,
+  SectionLabel,
+  pressable,
+} from '../../../lib/ui';
 import { theme } from '../../../theme';
 
 const RELATIONS: PatientRelation[] = [
@@ -79,16 +89,8 @@ export default function Patients() {
     >
       <Stack.Screen options={{ title: 'Family profiles' }} />
 
-      <View style={styles.card}>
-        <SectionLabel>Add a profile</SectionLabel>
-
-        <Field
-          label="Name"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          icon="user"
-        />
+      <Card title="Add a profile">
+        <Field label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
 
         <Text style={styles.label}>Relation</Text>
         <View style={styles.chips}>
@@ -100,10 +102,11 @@ export default function Patients() {
                 onPress={() => setRelation(r)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
+                // 34pt tall by design; hitSlop carries it past the 44x44 floor.
+                hitSlop={8}
                 {...pressable(theme.radius.full)}
               >
                 <View style={[styles.chip, selected && styles.chipSelected]}>
-                  {selected ? <Icon name="check" size={14} color="#FFFFFF" /> : null}
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                     {label(r)}
                   </Text>
@@ -115,45 +118,50 @@ export default function Patients() {
 
         {formError && <ErrorNote message={formError} />}
 
-        <Button
-          title="Add profile"
-          icon="plus"
-          onPress={onAdd}
-          pending={addPatient.isPending}
-        />
+        <Button title="Add profile" onPress={onAdd} pending={addPatient.isPending} />
+      </Card>
+
+      <View style={styles.section}>
+        <SectionLabel>Your profiles</SectionLabel>
       </View>
 
-      <SectionLabel>Your profiles</SectionLabel>
-
-      <QueryState
-        pending={patients.isPending}
-        error={patients.error}
-        isEmpty={patients.isSuccess && patients.data.length === 0}
-        emptyIcon="users"
-        emptyText="No profiles yet. Add yourself first."
-        onRetry={() => void patients.refetch()}
-      />
-
-      {patients.data?.map((p) => (
-        <View key={p.id} style={styles.row}>
-          <Avatar name={p.name} />
-          <View style={styles.rowText}>
-            <Text style={styles.rowName}>{p.name}</Text>
-            <Text style={styles.muted}>{label(p.relation)}</Text>
-          </View>
-          <Pressable
-            onPress={() => removePatient.mutate(p.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${p.name}`}
-            hitSlop={8}
-            {...pressable(theme.radius.full)}
-          >
-            <View style={styles.remove}>
-              <Icon name="trash-2" size={18} color={theme.color.danger.fg} />
+      {patients.data && patients.data.length > 0 ? (
+        <ListGroup inset={66}>
+          {patients.data.map((p) => (
+            <View key={p.id} style={styles.row}>
+              <Avatar name={p.name} size={36} />
+              <View style={styles.rowText}>
+                <Text style={styles.rowName}>{p.name}</Text>
+                <Text style={styles.rowMeta}>{label(p.relation)}</Text>
+              </View>
+              <Pressable
+                onPress={() => removePatient.mutate(p.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${p.name}`}
+                hitSlop={8}
+                {...pressable(theme.radius.full)}
+              >
+                <View style={styles.remove}>
+                  <Icon name="trash-2" size={17} color={theme.color.danger.fg} />
+                </View>
+              </Pressable>
             </View>
-          </Pressable>
-        </View>
-      ))}
+          ))}
+        </ListGroup>
+      ) : (
+        <QueryState
+          pending={patients.isPending}
+          error={patients.error}
+          isEmpty={patients.isSuccess && patients.data.length === 0}
+          emptyText="No profiles yet. Add yourself first."
+          onRetry={() => void patients.refetch()}
+        />
+      )}
+
+      <Hairline style={styles.footRule} />
+      <Text style={styles.footnote}>
+        A profile is who a booking is for. Every token you hold names one of these people.
+      </Text>
     </ScrollView>
   );
 }
@@ -166,46 +174,50 @@ function label(relation: PatientRelation): string {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: theme.color.canvas },
-  content: { padding: theme.space[4], gap: theme.space[3], paddingBottom: theme.space[8] },
-  card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.space[4],
-    gap: theme.space[3],
-    ...theme.elevation.sm,
-  },
-  label: { ...theme.font.label, color: theme.color.text },
+  content: { paddingHorizontal: theme.gutter, paddingTop: 22, paddingBottom: theme.space[8] },
+
+  label: { ...theme.font.overline, color: theme.color.inkTertiary, textTransform: 'uppercase' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.space[2] },
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.space[1],
-    // 36 tall inside a row that keeps 44px of tappable area via the parent padding.
-    height: 36,
-    paddingHorizontal: theme.space[3],
+    // 34 tall inside a row that keeps 44pt of tappable area via the parent padding.
+    height: 34,
+    paddingHorizontal: 14,
     borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    backgroundColor: theme.color.surface,
+    justifyContent: 'center',
+    backgroundColor: theme.color.fillSecondary,
   },
-  chipSelected: { backgroundColor: theme.color.primary, borderColor: theme.color.primary },
-  chipText: { ...theme.font.label, color: theme.color.text },
+  // Ink fill, white label - the same relationship the primary button has, at chip
+  // size. A border-only selected state was invisible on a white card.
+  chipSelected: { backgroundColor: theme.color.ink },
+  chipText: {
+    ...theme.font.caption,
+    fontSize: 14,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: '500',
+    color: theme.color.ink,
+  },
   chipTextSelected: { color: '#FFFFFF' },
+
+  section: { paddingTop: 30, paddingBottom: 10 },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.space[3],
-    minHeight: 64,
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.lg,
-    paddingHorizontal: theme.space[4],
-    paddingVertical: theme.space[3],
-    ...theme.elevation.sm,
+    minHeight: 60,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
   },
   rowText: { flex: 1, gap: 2 },
-  rowName: { ...theme.font.h3, color: theme.color.text },
-  muted: { ...theme.font.body, color: theme.color.textMuted },
+  rowName: {
+    fontSize: 16,
+    lineHeight: 21,
+    letterSpacing: -0.4,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: '500',
+    color: theme.color.ink,
+  },
+  rowMeta: { ...theme.font.caption, color: theme.color.inkTertiary },
   remove: {
     width: 44,
     height: 44,
@@ -213,4 +225,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: theme.radius.full,
   },
+
+  footRule: { marginTop: 30 },
+  footnote: { ...theme.font.caption, color: theme.color.inkTertiary, marginTop: theme.space[4] },
 });
