@@ -22,7 +22,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   // were entitled to do.
   const links = (
     [
-      { href: '/', label: 'Overview', icon: 'overview', roles: ['ADMIN', 'RECEPTION', 'DOCTOR'] },
+      { href: '/overview', label: 'Overview', icon: 'overview', roles: ['ADMIN', 'RECEPTION', 'DOCTOR'] },
       { href: '/queue', label: 'Queue', icon: 'queue', roles: ['ADMIN', 'RECEPTION', 'DOCTOR'] },
       { href: '/config', label: 'Configuration', icon: 'config', roles: ['ADMIN'] },
     ] as const

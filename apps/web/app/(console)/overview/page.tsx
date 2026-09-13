@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { Doctor, OPDSession, Paginated } from '@opd/contracts';
-import { apiGet } from '../../lib/api';
-import { getMe } from '../../lib/tenant';
-import { Icon } from '../../components/icon';
+import { apiGet } from '../../../lib/api';
+import { getMe } from '../../../lib/tenant';
+import { Icon } from '../../../components/icon';
 import {
   Badge,
   Card,
@@ -14,8 +14,8 @@ import {
   th,
   table,
   tr,
-} from '../../components/ui';
-import { SessionStatusBadge, SESSION_FINISHED, istDateLabel, istToday, istTime } from './queue/ui';
+} from '../../../components/ui';
+import { SessionStatusBadge, SESSION_FINISHED, istDateLabel, istToday, istTime } from '../queue/ui';
 
 /**
  * The overview - **what is happening in this hospital right now**, rather than a

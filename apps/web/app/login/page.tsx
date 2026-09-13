@@ -27,7 +27,7 @@ export default function LoginPage() {
       // page into a Suspense boundary just to prerender a static login form.
       const next = new URLSearchParams(window.location.search).get('next');
       // Full navigation, not router.push: middleware must see the new cookies.
-      window.location.href = next?.startsWith('/') ? next : '/';
+      window.location.href = next?.startsWith('/') && next !== '/' ? next : '/overview';
       return;
     }
 

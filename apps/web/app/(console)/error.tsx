@@ -37,7 +37,7 @@ export default function ConsoleError({
           <button type="button" onClick={reset} className={btn('primary')}>
             Try again
           </button>
-          <a href="/" className={btn('quiet')}>
+          <a href="/overview" className={btn('quiet')}>
             Back to overview
           </a>
         </>

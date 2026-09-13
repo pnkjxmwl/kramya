@@ -17,7 +17,7 @@ export default function ConsoleNotFound() {
       icon="search"
       title="Page not found"
       actions={
-        <Link href="/" className={btn('primary')}>
+        <Link href="/overview" className={btn('primary')}>
           Back to overview
         </Link>
       }

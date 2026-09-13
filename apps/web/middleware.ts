@@ -66,10 +66,20 @@ function isExpiringSoon(token: string, skewSeconds = 60): boolean {
 }
 
 export const config = {
-  // Everything under (console) is protected. /login, /accept-invite, /api/auth/*
-  // and static assets must stay reachable or the redirect would loop.
-  //
-  // /accept-invite is public by necessity: an invitee has no session yet, and the
-  // token in the URL is the only thing that identifies them.
-  matcher: ['/((?!login|accept-invite|api/auth|_next/static|_next/image|favicon.ico).*)'],
+  /*
+    Everything under (console) is protected. /login, /accept-invite, /api/auth/* and
+    static assets must stay reachable or the redirect would loop.
+
+    /accept-invite is public by necessity: an invitee has no session yet, and the
+    token in the URL is the only thing that identifies them.
+
+    **The bare `/` is now public too, and it is listed separately because a negative
+    lookahead cannot express it.** The path after the leading slash is the empty
+    string there, which matches `(?!login|...).*` no matter what is in the group - so
+    the marketing page would have been bounced to /login by the same rule that
+    protects the board. The console's own landing screen moved to /overview.
+  */
+  matcher: [
+    '/((?!login|accept-invite|api/auth|_next/static|_next/image|favicon.ico|$).*)',
+  ],
 };

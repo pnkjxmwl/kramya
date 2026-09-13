@@ -8641,3 +8641,81 @@ is no flag-day cutover.
 **Consequence for testing:** the new package id means the Kramya build installs
 ALONGSIDE the old app rather than upgrading it. Uninstall "OPD Queue" when the first
 Kramya APK lands.
+
+---
+
+## 2026-09-13 · A public landing page, on a branch (`feat/landing-page`)
+
+**On a branch**, like the animation work, because the user wants the option to walk
+away. `main` stays at `b7cf0b0`.
+
+Four questions were asked before any code, because each answer changed the job:
+audience **hospitals** (the buyer signs, the patient downloads - one page cannot
+persuade both), location **inside `apps/web` at `/`** (one Vercel project, one
+domain), scope **landing only** (the console keeps its teal), and the app CTA
+**email capture**.
+
+### `/` was not free, and that was the real work
+
+`apps/web/app/(console)/page.tsx` already owned `/` - a substantial Overview
+dashboard. A second root page is a Next.js route collision, so the console's landing
+screen moved to **`/overview`** and five call sites moved with it: the console nav,
+`error.tsx`, `not-found.tsx`, both `redirect('/')` calls in `lib/tenant.ts`, and
+login's post-sign-in default.
+
+**The middleware needed a change a negative lookahead cannot express.** Its matcher is
+`/((?!login|accept-invite|...).*)`, and for the bare `/` the string after the slash is
+EMPTY - which matches `.*` whatever is in the lookahead. So the marketing page would
+have been redirected to `/login` by the same rule that protects the board. Adding `$`
+to the alternation excludes exactly the root and nothing else.
+
+Proved against a real `next start` rather than reasoned about:
+
+| Route | |
+|---|---|
+| `/` | **200**, no redirect |
+| `/overview` | 307 → `/login?next=%2Foverview` |
+| `/queue` | 307 → `/login?next=%2Fqueue` |
+| `/login` | 200 |
+
+### Design decisions worth defending
+
+**A `brand` colour group was ADDED to `tailwind.config.ts` rather than the existing
+tokens being edited.** Kramya's identity is the ink system the app was redrawn onto
+and the black K of the logo; the console is still teal and stays teal. Keeping them as
+separate groups means the public page can be premium with zero risk of moving a colour
+a receptionist stares at for a whole shift.
+
+**The hero is the product, drawn in HTML.** Every queue vendor's site opens on a stock
+photograph of a smiling receptionist. This one opens on an actual token card - the bar
+strip, the two honest counts, the ETA window - at the size a phone draws it. It is the
+one image a competitor cannot copy without building the thing first, and every number
+on it is one the product genuinely produces.
+
+**No invented statistics.** No "40% less crowding". Every pre-pilot number like that
+is made up and a hospital administrator has read a hundred of them. The page says what
+the product does differently instead.
+
+**A whole section answers the first objection**: "so people with the app skip the
+line?" - one queue, the server decides, everything audited. That is worth more to this
+buyer than another feature grid.
+
+**The logo is inline SVG, not the PNG.** 40KB of raster for a 22px mark is the wrong
+trade at the top of every page, and the monoline K is four strokes.
+
+### The one thing that is deliberately not what was asked
+
+The app CTA was chosen as **email capture**, and it ships as a `mailto:`. The API has
+no waitlist table and no endpoint, and the agreed scope was the landing page only - so
+the alternative was a styled input that silently dropped what people typed, which
+would be the worst element on the page. The button opens a real message to a real
+person, which loses nothing.
+
+Upgrading it is small and separate: one Prisma model, one public rate-limited POST,
+one server action here. **`CONTACT` is a placeholder** (`hello@kramya.app`) and is a
+named constant at the bottom of the file for that reason - it must be real before this
+is pointed at a domain.
+
+**Verified:** typecheck, lint and build clean; route table shows `/` as static (174 B)
+and `/overview` as dynamic; the four redirect behaviours above measured on a running
+server. Not looked at in a browser by a human.

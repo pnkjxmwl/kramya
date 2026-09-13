@@ -33,6 +33,33 @@ export default {
         accent: '#14B8A6',
 
         /**
+         * The BRAND palette - the marketing surface only, never the console.
+         *
+         * Kramya's identity is the ink system the patient app was redrawn onto in
+         * September (`apps/mobile/theme.ts`) and the black K of the logo. The console
+         * above is still teal, deliberately: restyling it is a separate job and none
+         * of its screens have been looked at since that redesign.
+         *
+         * Kept as its own group rather than by editing the tokens above, so the
+         * public page can be premium without any risk of moving a colour a
+         * receptionist stares at for a whole shift.
+         *
+         * The greens are the handoff's own success pair, used here for one thing
+         * only: something that is live.
+         */
+        brand: {
+          ink: '#0B0B0C',
+          soft: '#48484A',
+          muted: '#8A8A8E',
+          faint: '#C6C6CA',
+          canvas: '#F7F7F8',
+          line: 'rgba(10,10,12,0.09)',
+          fill: 'rgba(10,10,12,0.045)',
+          live: '#1F9D62',
+          'live-ink': '#1F7A4D',
+        },
+
+        /**
          * Four surfaces, not two.
          *
          * The console used `canvas` for the page, the sidebar, every table hover,
