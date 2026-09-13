@@ -59,7 +59,7 @@ export default function AcceptInvitePage() {
       intro="Choose a password to finish setting up your account."
       footer={
         <>
-          If you already have an OPD Console password, it stays as it is — accepting only adds this
+          If you already have a Kramya password, it stays as it is — accepting only adds this
           hospital to your account.
         </>
       }

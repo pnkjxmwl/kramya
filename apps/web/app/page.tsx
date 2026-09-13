@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { Mark } from '../components/mark';
 import { QueueDemo, Reveal } from './reveal';
+import { WaitingRoom } from './waiting-room';
 
 /**
  * The public landing page - the only page on this domain a signed-out visitor sees.
@@ -54,10 +55,23 @@ export const viewport: Viewport = {
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-brand-canvas font-sans text-brand-ink antialiased">
-      <Header />
-      <main>
+    // `landing-root` is not styled itself - it is the hook `html:has(.landing-root)`
+    // in globals.css uses to drop the scrollbar on this page and nowhere else.
+    <div className="landing-root min-h-screen bg-brand-canvas font-sans text-brand-ink antialiased">
+      {/*
+        Header and hero share one ink block.
+
+        The page used to open on the same pale canvas as everything below it, so the
+        first screenful had no more presence than the footer. Opening dark and landing
+        on light is the oldest trick in a premium marketing page for a reason: the fold
+        becomes an object rather than the top of a scroll, and it carries the same
+        language as the sign-in screen, which is the next thing a hospital sees.
+      */}
+      <div className="bg-brand-ink">
+        <Header />
         <Hero />
+      </div>
+      <main>
         <Proof />
         <HowItWorks />
         <ForStaff />
@@ -73,28 +87,34 @@ export default function Landing() {
 
 function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-brand-line bg-brand-canvas/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Kramya home">
+    // Not sticky. A dark bar following you down a light page is a strip of the hero
+    // that refused to leave; the way back up is the browser's own scroll.
+    <header className="relative z-20">
+      <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-6">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 text-white transition-opacity hover:opacity-75"
+          aria-label="Kramya home"
+        >
           <Mark />
           <span className="text-[17px] font-semibold tracking-[-0.4px]">Kramya</span>
         </Link>
-        <nav className="flex items-center gap-1.5">
+        <nav className="flex items-center gap-1">
           <Link
             href="/demo"
-            className="hidden rounded-xl px-4 py-2 text-[14px] font-medium text-brand-soft transition-colors hover:bg-brand-fill hover:text-brand-ink sm:block"
+            className="hidden rounded-xl px-4 py-2 text-[14px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:block"
           >
             Demo
           </Link>
           <Link
             href="/login"
-            className="rounded-xl px-4 py-2 text-[14px] font-medium text-brand-soft transition-colors hover:bg-brand-fill hover:text-brand-ink"
+            className="rounded-xl px-4 py-2 text-[14px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
             Staff sign-in
           </Link>
           <a
             href={DEMO_MAILTO}
-            className="rounded-xl bg-brand-ink px-4 py-2 text-[14px] font-medium text-white transition-opacity hover:opacity-85"
+            className="ml-1 rounded-xl bg-white px-4 py-2 text-[14px] font-medium text-brand-ink transition-opacity hover:opacity-85"
           >
             Book a demo
           </a>
@@ -106,122 +126,118 @@ function Header() {
 
 /* -------------------------------------------------------------------- hero */
 
+/**
+ * Sentence left, room right.
+ *
+ * Four folds got tried. Copy beside a product screenshot; a centred headline over a
+ * glowing card - the composition every AI-assisted page converges on; then the drawing
+ * beneath the words, and behind them. The last two failed the same way: a background
+ * has to be faint enough to read through, which makes it a texture, and it gets
+ * covered by the very sentence it sits under.
+ *
+ * So it is a column of its own. What keeps this from being the first, generic version
+ * is what is IN the right-hand column - not a screenshot of a dashboard, but a room
+ * that draws itself and empties while you read the claim that it will.
+ *
+ * **The headline no longer describes the picture.** "Your waiting room, mostly empty"
+ * said in words exactly what the chairs say in lines, so one of them was redundant.
+ * The drawing shows the room; the sentence says where those people went.
+ */
 function Hero() {
   return (
-    <section className="mx-auto max-w-6xl px-6 pb-24 pt-20 sm:pt-28">
-      <div className="grid items-center gap-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-        <div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-brand-fill px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[1.2px] text-brand-soft">
-            OPD queue management
-          </span>
+    <section className="relative overflow-hidden">
+      <div className="mx-auto max-w-6xl px-6 pb-16 pt-14 sm:pt-20">
+        {/*
+          Words left, room right - and the room is an ELEMENT now, not a background.
 
-          {/* The whole pitch, in one sentence, at a size that admits it is the pitch. */}
-          <h1 className="mt-7 max-w-[15ch] text-balance text-[44px] font-semibold leading-[1.04] tracking-[-1.8px] sm:text-[60px] sm:tracking-[-2.6px]">
-            Your waiting room, mostly empty.
-          </h1>
+          It spent two versions as a layer behind the text, which meant it had to be
+          faint enough to read through and kept getting covered by the very words it
+          was under. Beside the sentence instead of beneath it, it needs no apology:
+          at 50% it is a drawing somebody is meant to look at.
 
-          <p className="mt-6 max-w-[52ch] text-[17px] leading-[1.6] text-brand-soft">
-            Patients join your OPD queue from home, watch their place move in real time,
-            and arrive when their turn is near. The queue still runs exactly as your
-            reception runs it — there is just nobody sitting in it.
-          </p>
+          The right column is the only thing in the fold that bleeds. Cutting the room
+          off at the viewport edge says it continues, which is the point - it is a
+          room, not a picture of one.
+        */}
+        <div className="grid items-center gap-y-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-x-12">
+          <div>
+            {/* A rule and a label, not a pill. A bordered rounded-full chip is the
+                default badge every page opens with; a hairline running out of the
+                text is the same information set like an editorial standfirst - and
+                it rhymes with the line art rather than fighting it. */}
+            <span className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[1.6px] text-white/45">
+              <span aria-hidden="true" className="h-px w-9 bg-white/25" />
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-live" />
+              OPD queue management
+            </span>
 
-          {/* The demo leads, not the mailto. Someone who can see the board working in
-              one click is a better lead than someone asked to compose an email first. */}
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link
-              href="/demo"
-              className="rounded-2xl bg-brand-ink px-6 py-3.5 text-[15px] font-medium text-white transition-opacity hover:opacity-85"
-            >
-              See the console
-            </Link>
-            <a
-              href={DEMO_MAILTO}
-              className="rounded-2xl bg-brand-fill px-6 py-3.5 text-[15px] font-medium text-brand-ink transition-colors hover:bg-brand-line"
-            >
-              Book a demo
-            </a>
+            {/*
+              Two sentences, two lines, no cleverness.
+
+              The drawing carries the feeling - a room emptying - so the words do not
+              have to. Earlier versions tried: "Your waiting room, mostly empty" said
+              in words what the chairs already say in lines, and "The waiting happens
+              at home" was a turn of phrase where a plain fact reads better.
+
+              The second line is the half a hospital cares about. "Queue from home" on
+              its own is a patient convenience; "walk in on time" is the thing that
+              empties a corridor, so it gets the white.
+            */}
+            <h1 className="mt-7 text-balance text-[44px] font-semibold leading-[1.04] tracking-[-2px] text-white sm:text-[64px] sm:tracking-[-3px]">
+              <span className="type-outline">Queue from home.</span>
+              <br />
+              Walk in on time.
+            </h1>
+
+            <p className="mt-7 max-w-[44ch] text-[17px] leading-[1.65] text-white/60">
+              Your OPD runs exactly as it does today — same queue, same order, same
+              desk. Patients simply stop spending the morning in a corridor to hold
+              their place.
+            </p>
+
+            {/* The demo leads, not the mailto: somebody who can see the board working
+                in one click is a better lead than somebody asked to write an email. */}
+            {/*
+              One filled button and one underlined link, not two buttons.
+
+              Two equally-weighted pills is the default, and it makes a visitor choose
+              between them before they know what either does. The demo is the thing
+              worth clicking, so it is the only object; "Book a demo" is a sentence you
+              can read past. The arrow moves on hover - the one piece of motion in the
+              fold that responds to a person rather than a timer.
+            */}
+            <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
+              <Link
+                href="/demo"
+                className="group inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[15px] font-medium text-brand-ink transition-opacity hover:opacity-85"
+              >
+                See the console
+                <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
+                  →
+                </span>
+              </Link>
+              <a
+                href={DEMO_MAILTO}
+                className="text-[15px] font-medium text-white/70 underline decoration-white/25 underline-offset-[6px] transition-colors hover:text-white hover:decoration-white/60"
+              >
+                Book a demo
+              </a>
+            </div>
+
+            <p className="mt-6 text-[13px] text-white/35">
+              No sign-in needed — the demo runs on sample data.
+            </p>
           </div>
 
-          <p className="mt-5 text-[13px] text-brand-muted">
-            No sign-in needed — it runs on sample data. Onboarding is white-glove: we set
-            your departments, doctors and schedules up with you.
-          </p>
+          <div
+            aria-hidden="true"
+            className="h-[240px] text-white/50 sm:h-[300px] lg:-mr-[16vw] lg:h-[360px]"
+          >
+            <WaitingRoom />
+          </div>
         </div>
-
-        <QueueCard />
       </div>
     </section>
-  );
-}
-
-/**
- * The hero image, which is not an image.
- *
- * This is the app's own token card - the bar strip, the two honest counts, the ETA
- * window - rendered in HTML at the size a phone draws it. Every number on it is one
- * the product genuinely produces; none is invented for the page.
- */
-function QueueCard() {
-  return (
-    <div className="relative">
-      <div className="rounded-[28px] bg-white p-7 shadow-[0_1px_2px_rgba(11,12,13,0.05),0_24px_60px_rgba(11,12,13,0.10)]">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[1.4px] text-brand-live-ink">
-            You&rsquo;re in the queue
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-live" />
-            <span className="text-[12px] font-semibold text-brand-live-ink">Live</span>
-          </span>
-        </div>
-
-        <div className="mt-3 text-[56px] font-semibold leading-none tracking-[-2.8px] tabular-nums">
-          G012
-        </div>
-        <p className="mt-2 text-[14px] text-brand-soft">Aarav · Dr Nikhil Save · General Medicine</p>
-
-        {/* Four seen, three ahead, then you. The light-bar count always equals the
-            stated number - that agreement is the whole reason the strip is readable
-            at a glance instead of being a sparkline. */}
-        <div className="mt-7 flex items-end gap-[5px]" aria-hidden="true">
-          {[0, 1, 2, 3].map((i) => (
-            <span key={`seen-${i}`} className="h-[15px] w-[6px] rounded-full bg-brand-ink/80" />
-          ))}
-          {[0, 1, 2].map((i) => (
-            <span key={`wait-${i}`} className="h-[11px] w-[6px] rounded-full bg-brand-faint" />
-          ))}
-          <span className="h-[30px] w-[6px] rounded-full bg-brand-ink" />
-        </div>
-
-        <div className="mt-3.5 flex items-center justify-between text-[13px] text-brand-muted">
-          <span>
-            <strong className="font-semibold text-brand-ink">3</strong> ahead of you
-          </span>
-          <span>
-            Seen <strong className="font-semibold text-brand-ink">11:40 – 12:05</strong>
-          </span>
-        </div>
-
-        <div className="mt-6 space-y-0 border-t border-brand-line pt-1">
-          <Row label="Now serving" value="G009" />
-          <Row label="Reach hospital by" value="11:30 AM" />
-        </div>
-      </div>
-
-      <p className="mt-4 text-center text-[12px] text-brand-muted">
-        What a patient sees while they wait at home.
-      </p>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between border-b border-brand-line py-3 last:border-0 text-[14px]">
-      <span className="text-brand-muted">{label}</span>
-      <span className="font-medium tabular-nums">{value}</span>
-    </div>
   );
 }
 
@@ -346,22 +362,53 @@ function ForStaff() {
  * app skip the line?". Answering it early, in the product's own terms, is worth more
  * than another feature grid.
  */
+/**
+ * The objection, answered - and not as three cards in a row.
+ *
+ * It was a generic eyebrow ("The part that matters" - which says nothing) over three
+ * equal bordered boxes, which is the layout every SaaS page uses for every trio of
+ * anything. Three boxes side by side also flatten these into peers, and they are not:
+ * the first is a promise, the second is why the promise holds, and the third is how
+ * you would catch us breaking it. That is a sequence, so it is set as one.
+ *
+ * Sticky statement on the left, hairline-separated answers on the right. No boxes -
+ * on a page that already has a token card and a board, three more rounded rectangles
+ * is the point at which everything starts looking like a card.
+ */
 function Fairness() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24">
-      <Reveal>
-        <SectionLabel>The part that matters</SectionLabel>
-        <h2 className="mt-4 max-w-[22ch] text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[42px] sm:tracking-[-1.8px]">
-          Nobody skips the line.
-        </h2>
-      </Reveal>
+    <section className="border-y border-brand-line bg-white py-24">
+      <div className="mx-auto grid max-w-6xl gap-12 px-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-20">
+        <Reveal>
+          <div className="lg:sticky lg:top-16">
+            <SectionLabel>The first question we get</SectionLabel>
+            <h2 className="mt-4 text-balance text-[34px] font-semibold leading-[1.1] tracking-[-1.4px] sm:text-[46px] sm:tracking-[-2px]">
+              &ldquo;So people with the app skip the line?&rdquo;
+            </h2>
+            <p className="mt-6 max-w-[42ch] text-[17px] leading-[1.65] text-brand-soft">
+              No. Booking from home buys you the right to wait somewhere else — never an
+              earlier turn. Here is what that rests on.
+            </p>
+          </div>
+        </Reveal>
 
-      <div className="mt-12 grid gap-9 sm:grid-cols-3">
-        {FACTS.map((f, i) => (
-          <Reveal key={f.title} delay={i * 90}>
-            <Fact title={f.title} body={f.body} />
-          </Reveal>
-        ))}
+        <dl className="flex flex-col">
+          {FACTS.map((f, i) => (
+            <Reveal key={f.title} delay={i * 90}>
+              <div className="border-t border-brand-line py-8 first:border-t-0 first:pt-0 lg:py-9">
+                <dt className="flex items-baseline gap-4">
+                  <span className="text-[12px] font-semibold tabular-nums tracking-[1px] text-brand-faint">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span className="text-[21px] font-semibold tracking-[-0.6px]">{f.title}</span>
+                </dt>
+                <dd className="mt-3 pl-[28px] text-[16px] leading-[1.65] text-brand-soft">
+                  {f.body}
+                </dd>
+              </div>
+            </Reveal>
+          ))}
+        </dl>
       </div>
     </section>
   );
@@ -382,14 +429,8 @@ const FACTS = [
   },
 ];
 
-function Fact({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-3xl border border-brand-line bg-white p-7">
-      <h3 className="text-[18px] font-semibold tracking-[-0.4px]">{title}</h3>
-      <p className="mt-3 text-[15px] leading-[1.6] text-brand-soft">{body}</p>
-    </div>
-  );
-}
+/* `Fact` is gone with the card layout it existed for - the answers are a definition
+   list now, set inline in Fairness, because a <dt>/<dd> pair is what they are. */
 
 /* -------------------------------------------------------------- patient app */
 

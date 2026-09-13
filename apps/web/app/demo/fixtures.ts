@@ -20,12 +20,21 @@
  * once or twice, generate these from a recorded API response instead.
  */
 
-export type DemoStatus =
-  | 'CHECKED_IN'
-  | 'CONFIRMED'
-  | 'IN_CONSULTATION'
-  | 'COMPLETED'
-  | 'NO_SHOW';
+import type { QueueEntryStatus, SessionEta } from '@opd/contracts';
+
+/**
+ * The statuses are the CONTRACT's, not a demo enum.
+ *
+ * `QueueEntryStatus` from `@opd/contracts` is what the console's own `StatusPill`
+ * and `statusLabel` take, so typing the fixtures against it lets the demo render the
+ * real components instead of lookalikes - and makes the compiler complain the day a
+ * status is added or renamed, which is exactly the drift a fixture file otherwise
+ * hides.
+ */
+export type DemoStatus = Extract<
+  QueueEntryStatus,
+  'CHECKED_IN' | 'CONFIRMED' | 'IN_CONSULTATION' | 'COMPLETED'
+>;
 
 export interface DemoEntry {
   id: string;
@@ -36,6 +45,36 @@ export interface DemoEntry {
   status: DemoStatus;
   /** Minutes since they checked in; null when they have not arrived. */
   waitingMins: number | null;
+}
+
+/**
+ * The pace panel's data, shaped as the real `SessionEta`.
+ *
+ * A function rather than a constant because two of its fields are absolute
+ * timestamps: the window a joiner would be quoted. Baked at build time they would
+ * read "seen 11:40" at three in the morning - the same fixture-ageing that made the
+ * mobile demo sessions expire overnight. Computed on mount, they are always sensible.
+ *
+ * The values themselves are chosen to show the panel doing its most interesting
+ * work: a pace measured from TODAY rather than a seed, and a dead time that has been
+ * measured rather than assumed, because those are the two cases where the panel says
+ * something a receptionist could not have guessed.
+ */
+export function demoEta(now: Date = new Date()): SessionEta {
+  const from = new Date(now.getTime() + 34 * 60_000);
+  const to = new Date(now.getTime() + 58 * 60_000);
+  return {
+    sessionId: '00000000-0000-4000-8000-000000000000',
+    expectedConsultMins: 9,
+    basis: 'TODAY',
+    sampleSize: 12,
+    runningBehind: false,
+    deadTimeMins: 3,
+    deadTimeBasis: 'MEASURED',
+    deadTimeSamples: 11,
+    joinNowEtaFrom: from.toISOString(),
+    joinNowEtaTo: to.toISOString(),
+  };
 }
 
 export const HOSPITAL = {
@@ -70,13 +109,15 @@ export const INITIAL_QUEUE: DemoEntry[] = [
 /** Somebody to register when the visitor presses "Add walk-in". */
 export const NEXT_WALK_IN = { patient: 'Nikhil Save', token: 'G010' };
 
-export const STATUS_LABEL: Record<DemoStatus, string> = {
-  CHECKED_IN: 'Checked in',
-  CONFIRMED: 'Booked',
-  IN_CONSULTATION: 'With doctor',
-  COMPLETED: 'Seen',
-  NO_SHOW: 'No-show',
-};
+/*
+  There is deliberately no STATUS_LABEL here any more.
+
+  The first version carried its own map of status -> words, which meant the demo could
+  call something "Seen" while the console called it "Completed". The board now renders
+  `StatusPill` from `(console)/queue/ui`, which owns that vocabulary - so the labels
+  cannot disagree, and a status renamed in the contract breaks the build here rather
+  than quietly showing a stale word to a prospect.
+*/
 
 /**
  * Admin-side fixtures: today's programme, the shape the Overview screen shows.
