@@ -129,7 +129,7 @@ export default async function Overview() {
               <Link
                 key={session.id}
                 href={`/queue/${session.id}`}
-                className="group flex flex-col rounded-lg border border-teal-200 bg-surface p-4 shadow-xs ring-1 ring-teal-100 transition-colors hover:border-teal-300 hover:bg-teal-50/40"
+                className="group flex flex-col rounded-lg border border-brand-200 bg-surface p-4 shadow-xs ring-1 ring-brand-100 transition-colors hover:border-brand-300 hover:bg-brand-50/40"
               >
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0 truncate text-h3 text-ink">
@@ -223,7 +223,7 @@ export default async function Overview() {
                 <span className="min-w-0 truncate text-body font-medium text-ink">
                   {m.hospitalName}
                 </span>
-                <Badge tone={m.hospitalId === active.hospitalId ? 'teal' : 'neutral'}>
+                <Badge tone={m.hospitalId === active.hospitalId ? 'brand' : 'neutral'}>
                   {m.role}
                 </Badge>
               </li>

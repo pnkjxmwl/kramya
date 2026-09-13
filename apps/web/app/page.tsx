@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
+import { Mark } from '../components/mark';
+import { QueueDemo, Reveal } from './reveal';
 
 /**
  * The public landing page - the only page on this domain a signed-out visitor sees.
@@ -9,17 +11,23 @@ import Link from 'next/link';
  * to write one that does both produces a page that persuades neither. The patient
  * app gets one honest section near the end and nothing more.
  *
- * **It is on the brand palette, not the console's.** Kramya is the ink system the
- * patient app was redrawn onto and the black K of the logo. The console behind
- * /login is still teal, and stays teal - restyling it is its own job.
+ * **It is on the brand palette, and so is the console now.** Kramya is the ink system
+ * the patient app was redrawn onto and the black K of the logo; the console behind
+ * /login moved onto the same palette in the same pass. It keeps its own tighter type
+ * scale and spacing, which is a deliberate divergence recorded in docs/Design.md 3 -
+ * a receptionist reads it on a monitor for a whole shift, and the phone's roomier
+ * scale would waste a third of the screen.
  *
  * **The hero is the product, drawn.** Every queue company's site opens on a stock
  * photograph of a smiling receptionist. This one opens on an actual queue: the same
  * bar strip the app draws, the same two honest numbers, the same token. It is the one
  * image no competitor can copy without building the thing first.
  *
- * Server component throughout. There is no interactivity on this page that needs a
- * client bundle - the one form is a mailto, for the reason given at its call site.
+ * **Server component except for the motion.** `./reveal` is the only `'use client'`
+ * boundary, and it exists for two browser APIs - IntersectionObserver and
+ * matchMedia - not for a framework. Everything above renders on the server and ships
+ * no JavaScript; the CTAs are anchors, and the waitlist is a mailto for the reason
+ * given at its call site.
  */
 
 export const metadata: Metadata = {
@@ -73,6 +81,12 @@ function Header() {
         </Link>
         <nav className="flex items-center gap-1.5">
           <Link
+            href="/demo"
+            className="hidden rounded-xl px-4 py-2 text-[14px] font-medium text-brand-soft transition-colors hover:bg-brand-fill hover:text-brand-ink sm:block"
+          >
+            Demo
+          </Link>
+          <Link
             href="/login"
             className="rounded-xl px-4 py-2 text-[14px] font-medium text-brand-soft transition-colors hover:bg-brand-fill hover:text-brand-ink"
           >
@@ -87,26 +101,6 @@ function Header() {
         </nav>
       </div>
     </header>
-  );
-}
-
-/**
- * The logo, as an inline SVG rather than the PNG in apps/mobile/assets.
- *
- * A 40KB raster for a 22px mark is the wrong trade at the top of every page, and the
- * monoline K is four strokes. This is those four strokes.
- */
-function Mark({ className = 'h-[22px] w-[22px]' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="none">
-      <path
-        d="M6 3v18M6 12.5L17.5 3M6 12.5L17.5 21"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 
@@ -132,24 +126,26 @@ function Hero() {
             reception runs it — there is just nobody sitting in it.
           </p>
 
+          {/* The demo leads, not the mailto. Someone who can see the board working in
+              one click is a better lead than someone asked to compose an email first. */}
           <div className="mt-9 flex flex-wrap items-center gap-3">
+            <Link
+              href="/demo"
+              className="rounded-2xl bg-brand-ink px-6 py-3.5 text-[15px] font-medium text-white transition-opacity hover:opacity-85"
+            >
+              See the console
+            </Link>
             <a
               href={DEMO_MAILTO}
-              className="rounded-2xl bg-brand-ink px-6 py-3.5 text-[15px] font-medium text-white transition-opacity hover:opacity-85"
+              className="rounded-2xl bg-brand-fill px-6 py-3.5 text-[15px] font-medium text-brand-ink transition-colors hover:bg-brand-line"
             >
               Book a demo
             </a>
-            <Link
-              href="/login"
-              className="rounded-2xl bg-brand-fill px-6 py-3.5 text-[15px] font-medium text-brand-ink transition-colors hover:bg-brand-line"
-            >
-              Staff sign-in
-            </Link>
           </div>
 
           <p className="mt-5 text-[13px] text-brand-muted">
-            Onboarding is white-glove. We set your departments, doctors and schedules up
-            with you.
+            No sign-in needed — it runs on sample data. Onboarding is white-glove: we set
+            your departments, doctors and schedules up with you.
           </p>
         </div>
 
@@ -242,7 +238,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function Proof() {
   return (
     <section className="border-y border-brand-line bg-white py-24">
-      <div className="mx-auto max-w-3xl px-6 text-center">
+      <Reveal className="mx-auto max-w-3xl px-6 text-center">
         <p className="text-balance text-[28px] font-semibold leading-[1.25] tracking-[-1px] sm:text-[36px] sm:tracking-[-1.4px]">
           A token is a promise about <em className="not-italic text-brand-muted">when</em>, not a
           licence to sit in a corridor for three hours.
@@ -252,7 +248,7 @@ function Proof() {
           everybody arrives at opening and waits. Kramya computes that time continuously
           from the queue as it actually moves, and tells the patient when to leave home.
         </p>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -260,44 +256,26 @@ function Proof() {
 /* ------------------------------------------------------------- how it works */
 
 function HowItWorks() {
-  const steps = [
-    {
-      n: '01',
-      title: 'They join from home',
-      body: 'A patient finds your hospital, picks the department and the doctor, and takes a token — from wherever they are. Fees are collected at booking.',
-    },
-    {
-      n: '02',
-      title: 'They watch it move',
-      body: 'Their place and their expected window update live as your clinic runs. When the doctor is running late, the estimate moves with them rather than pretending.',
-    },
-    {
-      n: '03',
-      title: 'They arrive near their turn',
-      body: 'A notification tells them when to set off, and again when two tokens remain. Reception scans a QR at the door and they are checked in.',
-    },
-  ];
-
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>How it works</SectionLabel>
-      <h2 className="mt-4 max-w-[20ch] text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[42px] sm:tracking-[-1.8px]">
-        Three things change. Nothing else has to.
-      </h2>
+      <Reveal>
+        <SectionLabel>How it works</SectionLabel>
+        <h2 className="mt-4 max-w-[20ch] text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[42px] sm:tracking-[-1.8px]">
+          Watch a queue actually move.
+        </h2>
+        <p className="mt-5 max-w-[52ch] text-[16px] leading-[1.65] text-brand-soft">
+          This is the patient&rsquo;s screen, running. Nothing here is a mockup of a
+          feature we are planning — it is the card the app draws, with the numbers the
+          queue engine produces.
+        </p>
+      </Reveal>
 
-      {/* Numbered because these genuinely are a sequence - a patient does them in
-          this order and cannot do them in another. */}
-      <ol className="mt-14 grid gap-10 sm:grid-cols-3 sm:gap-8">
-        {steps.map((s) => (
-          <li key={s.n}>
-            <span className="text-[12px] font-semibold tabular-nums tracking-[1px] text-brand-faint">
-              {s.n}
-            </span>
-            <h3 className="mt-3 text-[19px] font-semibold tracking-[-0.5px]">{s.title}</h3>
-            <p className="mt-2.5 text-[15px] leading-[1.6] text-brand-soft">{s.body}</p>
-          </li>
-        ))}
-      </ol>
+      {/* The demonstration replaces what used to be three paragraphs describing it.
+          A queue is a thing that moves, and three static bullets about movement is
+          the one format guaranteed not to convey it. */}
+      <Reveal delay={120} className="mt-14">
+        <QueueDemo />
+      </Reveal>
     </section>
   );
 }
@@ -328,7 +306,7 @@ function ForStaff() {
     <section className="border-y border-brand-line bg-white py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid gap-14 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          <div>
+          <Reveal>
             <SectionLabel>For your staff</SectionLabel>
             <h2 className="mt-4 text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[40px] sm:tracking-[-1.6px]">
               The desk keeps working the way the desk works.
@@ -343,14 +321,14 @@ function ForStaff() {
             >
               Staff sign-in
             </Link>
-          </div>
+          </Reveal>
 
           <dl className="grid gap-x-10 gap-y-9 sm:grid-cols-2">
-            {items.map((it) => (
-              <div key={it.title}>
+            {items.map((it, i) => (
+              <Reveal key={it.title} delay={i * 70}>
                 <dt className="text-[17px] font-semibold tracking-[-0.4px]">{it.title}</dt>
                 <dd className="mt-2 text-[15px] leading-[1.6] text-brand-soft">{it.body}</dd>
-              </div>
+              </Reveal>
             ))}
           </dl>
         </div>
@@ -371,28 +349,38 @@ function ForStaff() {
 function Fairness() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>The part that matters</SectionLabel>
-      <h2 className="mt-4 max-w-[22ch] text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[42px] sm:tracking-[-1.8px]">
-        Nobody skips the line.
-      </h2>
+      <Reveal>
+        <SectionLabel>The part that matters</SectionLabel>
+        <h2 className="mt-4 max-w-[22ch] text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[42px] sm:tracking-[-1.8px]">
+          Nobody skips the line.
+        </h2>
+      </Reveal>
 
       <div className="mt-12 grid gap-9 sm:grid-cols-3">
-        <Fact
-          title="One queue, not two"
-          body="Online bookings and walk-ins sit in the same line, in token order. Booking from home buys you the right to wait somewhere else — not an earlier turn."
-        />
-        <Fact
-          title="The server decides, always"
-          body="No phone and no browser can change a queue. Every call, check-in and cancellation is a command the backend validates, inside a lock, or refuses."
-        />
-        <Fact
-          title="Every change is on the record"
-          body="Priority insertions, no-shows and refunds all write an audit entry with who did it and why. Accountability is a feature, not a log file."
-        />
+        {FACTS.map((f, i) => (
+          <Reveal key={f.title} delay={i * 90}>
+            <Fact title={f.title} body={f.body} />
+          </Reveal>
+        ))}
       </div>
     </section>
   );
 }
+
+const FACTS = [
+  {
+    title: 'One queue, not two',
+    body: 'Online bookings and walk-ins sit in the same line, in token order. Booking from home buys you the right to wait somewhere else — not an earlier turn.',
+  },
+  {
+    title: 'The server decides, always',
+    body: 'No phone and no browser can change a queue. Every call, check-in and cancellation is a command the backend validates, inside a lock, or refuses.',
+  },
+  {
+    title: 'Every change is on the record',
+    body: 'Priority insertions, no-shows and refunds all write an audit entry with who did it and why. Accountability is a feature, not a log file.',
+  },
+];
 
 function Fact({ title, body }: { title: string; body: string }) {
   return (

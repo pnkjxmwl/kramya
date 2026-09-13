@@ -5,7 +5,7 @@ import { Icon, type IconName } from './icon';
  * accepting a staff invitation.
  *
  * **They looked like two different products.** Sign-in was a card with 40px controls
- * and a teal focus ring; the invite page was bare type on white with 48px controls,
+ * and an ink focus ring; the invite page was bare type on white with 48px controls,
  * 6px radii and a different ring. Both are the first screen a new hospital's staff
  * ever see, and the first thing that makes software feel unfinished is a front door
  * that does not match the room behind it.

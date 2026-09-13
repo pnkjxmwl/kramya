@@ -48,7 +48,7 @@ const SIZE: Record<Size, string> = {
  */
 const VARIANT: Record<Variant, string> = {
   primary:
-    'bg-primary text-white shadow-xs hover:bg-teal-800 active:bg-teal-900 ' +
+    'bg-primary text-white shadow-xs hover:bg-brand-800 active:bg-brand-900 ' +
     'disabled:bg-line disabled:text-ink-disabled disabled:shadow-none',
   quiet:
     'border border-line bg-surface text-ink shadow-xs hover:border-line-strong hover:bg-hover ' +
@@ -202,7 +202,7 @@ function CardHeader({
  * The standard surface: a hairline, a 14px radius and the faintest possible lift.
  *
  * `tone="accent"` marks the one card on a screen that IS the screen - the board's
- * "Now with" - with a teal edge rather than a bigger shadow. On a page of nine
+ * "Now with" - with an ink edge rather than a bigger shadow. On a page of nine
  * cards, shadow is not a hierarchy, it is weather.
  */
 export function Card({
@@ -224,7 +224,7 @@ export function Card({
     <section
       className={
         'rounded-lg border bg-surface shadow-xs ' +
-        (tone === 'accent' ? 'border-teal-200 ring-1 ring-teal-100' : 'border-line') +
+        (tone === 'accent' ? 'border-brand-200 ring-1 ring-brand-100' : 'border-line') +
         ' ' +
         className
       }
@@ -427,7 +427,7 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
 
 const BADGE = {
   neutral: 'bg-sunken text-ink-muted ring-line',
-  teal: 'bg-teal-50 text-teal-800 ring-teal-200',
+  brand: 'bg-brand-50 text-brand-800 ring-brand-200',
   success: 'bg-success-bg text-success ring-success-line',
   warning: 'bg-warning-bg text-warning ring-warning-line',
   danger: 'bg-danger-bg text-danger ring-danger-line',

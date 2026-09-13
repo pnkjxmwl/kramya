@@ -170,7 +170,7 @@ export default async function SchedulesPage({
                     </p>
                   </div>
 
-                  <Badge tone={schedule.weekday === null ? 'info' : 'teal'} icon="calendar">
+                  <Badge tone={schedule.weekday === null ? 'info' : 'brand'} icon="calendar">
                     {schedule.weekday === null
                       ? (schedule.date ?? 'One-off')
                       : `Every ${WEEKDAYS[schedule.weekday]}`}

@@ -17,20 +17,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        teal: {
-          50: '#F0FDFA',
-          100: '#CCFBF1',
-          200: '#99F6E4',
-          300: '#5EEAD4',
-          400: '#2DD4BF',
-          500: '#14B8A6',
-          600: '#0D9488',
-          700: '#0E7C7B',
-          800: '#115E59',
-          900: '#134E4A',
-        },
-        primary: '#0E7C7B',
-        accent: '#14B8A6',
+        /**
+         * The console's own ramp, now neutral rather than teal.
+         *
+         * It kept the numeric shape (50 -> 900) on purpose: the console used
+         * `teal-50` for a selected row's tint, `teal-200` for its border and
+         * `teal-800` for its text, and those relationships are correct - only the hue
+         * was. Renaming the scale rather than recolouring it in place means no file
+         * is left calling something "teal" that renders black.
+         */
+        /**
+         * `primary` and `accent` keep their names and change their values.
+         *
+         * They are semantic, not colour-named - "the colour of the thing you act on"
+         * - so pointing them at ink is a one-line change that moves every button,
+         * every active nav item and every focus ring at once. A token called
+         * `primary` was always the right abstraction; it was just pointed at teal.
+         */
+        primary: '#0B0B0C',
+        accent: '#0B0B0C',
 
         /**
          * The BRAND palette - the marketing surface only, never the console.
@@ -48,6 +53,7 @@ export default {
          * only: something that is live.
          */
         brand: {
+          // Named keys - the marketing page reads these.
           ink: '#0B0B0C',
           soft: '#48484A',
           muted: '#8A8A8E',
@@ -57,6 +63,24 @@ export default {
           fill: 'rgba(10,10,12,0.045)',
           live: '#1F9D62',
           'live-ink': '#1F7A4D',
+
+          /*
+            Numeric ramp - the CONSOLE reads these, and it is the same scale the teal
+            one had so the relationships it encodes survive: 50 tints a selected row,
+            200 borders it, 800 sets its text. One group rather than two, because a
+            second `brand:` key in this object would silently overwrite the first and
+            take the marketing page's colours with it.
+          */
+          50: '#F2F2F3',
+          100: '#E7E7E9',
+          200: '#D6D6DA',
+          300: '#C6C6CA',
+          400: '#9A9AA0',
+          500: '#6E6E75',
+          600: '#48484A',
+          700: '#2E2E32',
+          800: '#1A1A1D',
+          900: '#0B0B0C',
         },
 
         /**
@@ -70,21 +94,26 @@ export default {
          * tint. They are close together on purpose - a console is not a landing
          * page - but they are no longer the same value.
          */
-        canvas: '#F7FAFC',
+        /*
+          Neutral, not slate. These were blue-tinted greys chosen to sit under teal;
+          under ink they read as a faint cast on every surface. The four-surface
+          structure above is unchanged and still correct - only the hue is gone.
+        */
+        canvas: '#F7F7F8',
         surface: '#FFFFFF',
-        sunken: '#F1F5F9',
-        hover: '#F8FAFC',
+        sunken: '#F1F1F3',
+        hover: '#FAFAFB',
 
         ink: {
-          DEFAULT: '#0F172A',
-          soft: '#334155',
-          muted: '#64748B',
-          disabled: '#94A3B8',
+          DEFAULT: '#0B0B0C',
+          soft: '#48484A',
+          muted: '#8A8A8E',
+          disabled: '#B0B0B6',
         },
         line: {
-          DEFAULT: '#E2E8F0',
-          soft: '#EEF2F6',
-          strong: '#CBD5E1',
+          DEFAULT: '#E3E3E6',
+          soft: '#EDEDEF',
+          strong: '#C6C6CA',
         },
 
         // Semantic - docs/Design.md 2.3. `line` is the hairline that goes with the

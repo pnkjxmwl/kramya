@@ -8719,3 +8719,85 @@ is pointed at a domain.
 **Verified:** typecheck, lint and build clean; route table shows `/` as static (174 B)
 and `/overview` as dynamic; the four redirect behaviours above measured on a running
 server. Not looked at in a browser by a human.
+
+**Continued on `feat/landing-page`:** the real logo, the console on ink, the animated
+flow, and a no-login demo.
+
+**The logo was wrong and is now right.** The first landing page carried a hand-drawn
+three-stroke K; the supplied artwork is a single outlined path. `components/mark.tsx`
+inlines the real one (viewBox 2120x1860) and takes `currentColor`, so one component
+serves the ink header and the white mark on the dark section. The C2PA provenance
+metadata is stripped - 7.7KB of base64 describing how the artwork was generated, which
+has no business in a page bundle. A logo that is nearly the logo is worse than none.
+
+**The console moved to ink, palette only.** Its type scale and every layout are
+untouched, because the density divergence in docs/Design.md 3 was deliberate: a
+receptionist reads it on a monitor for a whole shift, and the phone's roomier scale
+would waste a third of the screen.
+
+The move was three edits and 23 mechanical ones. `primary` and `accent` KEPT their
+names and changed their values - they were always semantic ("the colour of the thing
+you act on"), just pointed at teal - so every button, active nav item and focus ring
+moved in one line. The `teal` scale became a neutral `brand` ramp of the same numeric
+shape, because the relationships it encoded were right and only the hue was wrong: 50
+tints a selected row, 200 borders it, 800 sets its text. The slate-blue greys went
+true neutral.
+
+**Near-miss worth recording:** the config briefly had TWO `brand:` keys - the named
+one the marketing page reads and the numeric one the console reads. The second would
+have silently overwritten the first and taken every landing-page colour with it. They
+are one group now.
+
+`globals.css` also called `theme('colors.teal.100')`, which would have failed the
+build the moment the scale was renamed. Caught by grepping for the token name rather
+than by trusting the class-name sweep.
+
+### The animation explains rather than decorates
+
+"How it works" was three paragraphs describing movement - the one format guaranteed
+not to convey it. It is now a queue that advances: a bar leaves, 3 ahead becomes 2 and
+then called, the window narrows, G009 becomes G012.
+
+**IntersectionObserver and CSS, not a library.** The behaviour is "tell me when this
+is on screen", which is one browser API and about fifteen lines; `framer-motion` is
+40KB gzipped on a page whose entire job is loading fast for a stranger.
+
+**It advances on a timer, not on scroll position.** Tying it to scroll would let a
+visitor drag a queue BACKWARDS, which is the one thing this product can never do.
+
+`prefers-reduced-motion` jumps to the end state rather than animating faster. Someone
+who asked their OS for less motion usually did so because motion makes them ill.
+
+### The demo is fake, and says so at the top
+
+`/demo` shows the reception board and the administrator view with no account. Every
+figure is a fixture in `app/demo/fixtures.ts`: **no API call, no session, no tenant.**
+Grepped to confirm - there is no `fetch` anywhere under `app/demo/`.
+
+That was the whole reason for choosing fake data over a real read-only tenant, which
+would have needed a public path through `JwtGuard -> RolesGuard -> TenantGuard` - a
+hole in the one pipeline docs/CLAUDE.md 8 says must never have one. Not worth it to
+avoid a fixture file.
+
+**The ORDER the buttons enforce is real**, and that is the part worth demonstrating:
+you cannot call anyone while a patient is in the room, and you cannot call somebody
+who has not arrived. A demo that let you break the queue engine's rules would teach
+the wrong thing about the product.
+
+A banner says it is a demonstration with sample data, in plain words, at the top. A
+demo that looks exactly like the product and does not admit it is how a vendor gets
+distrusted the first time a buyer finds out.
+
+**The middleware needed `demo` added to its exclusion list** - the same trap as `/`.
+That matcher protects everything not explicitly named, so the page built for people
+without accounts would have redirected them to a login screen. Verified on a running
+server rather than reasoned about:
+
+| Public | | Protected | |
+|---|---|---|---|
+| `/` | 200 | `/overview` | 307 → /login |
+| `/demo` | 200 | `/queue` | 307 → /login |
+| `/login` | 200 | `/config` | 307 → /login |
+
+**Not done:** none of this has been looked at in a browser by a human, and `CONTACT`
+in page.tsx is still the placeholder `hello@kramya.app`.

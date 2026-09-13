@@ -75,12 +75,12 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
             className={
               'group relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-label transition-colors duration-100 ' +
               (active
-                ? 'bg-teal-50 font-semibold text-primary'
+                ? 'bg-brand-50 font-semibold text-primary'
                 : 'text-ink-muted hover:bg-sunken hover:text-ink')
             }
           >
             {/*
-              A 2px marker on the active item, not colour alone. Teal-on-pale-teal is
+              A 2px marker on the active item, not colour alone. Ink-on-pale-ink is
               a 2.4:1 difference against the inactive grey; the bar is what a person
               who cannot separate those two actually reads (docs/Design.md 8).
             */}
