@@ -21,8 +21,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'OPD Console', template: '%s · OPD Console' },
-  description: 'Doctor, staff and admin console for the OPD queue platform',
+  // "Kramya Console", not "Kramya" - the tab belongs to the staff tool, and the
+  // patient app of the same name is a different product to the person reading it.
+  title: { default: 'Kramya Console', template: '%s · Kramya Console' },
+  description: 'Doctor, staff and admin console for Kramya',
   // The console holds patient names. It has no business in a search index.
   robots: { index: false, follow: false },
 };

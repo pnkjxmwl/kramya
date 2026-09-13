@@ -1,7 +1,11 @@
-# OPD Queue Platform — Agent Guardrails
+# Kramya — Agent Guardrails
 
-A multi-tenant OPD (out-patient) queue platform for Indian hospitals. Patients join a doctor's live
-queue remotely, watch a dynamic ETA, and arrive only when their turn is near.
+**Kramya** (from Sanskrit क्रम, *order / sequence*) is a multi-tenant OPD (out-patient) queue
+platform for Indian hospitals. Patients join a doctor's live queue remotely, watch a dynamic ETA,
+and arrive only when their turn is near.
+
+The product was called **OPD Queue** until 2026-09-13. That name survives in `docs/PROGRESS.md`,
+which is append-only, and in the EAS slug — both deliberately. See the rename entry in the log.
 
 **The queue is the product.** Everything else supports it.
 
