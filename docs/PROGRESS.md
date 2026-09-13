@@ -9097,3 +9097,47 @@ No push has been delivered to a device. The build wiring is proven and the routi
 tested; delivery is not. Turning it on needs two things only the account holder can do -
 registering `com.kramya.native` in project `opd-queue-b047e`, and generating a service
 account key - both written up in `apps/native/README.md`, "Turning push on".
+
+## 2026-09-13 · The repo and the deployed web app are called Kramya now
+
+Naming catch-up, after the product was renamed in the morning. **The two entries above
+that name `opd-queue-platform-web-blue.vercel.app` are left exactly as they were** - they
+recorded what was true on 2026-09-08, and this log is append-only (docs/Rules.md 16).
+
+| | before | after |
+|---|---|---|
+| GitHub | `pnkjxmwl/opd-queue-platform` | `pnkjxmwl/kramya` |
+| Web app | `opd-queue-platform-web-blue.vercel.app` | `kramya.vercel.app` |
+
+Both old URLs still work. GitHub redirects renamed repositories, so existing clones and
+`git push` keep working untouched; Vercel 307s the old domain to the new one, verified
+rather than assumed.
+
+### Renaming a Vercel project does NOT move its domain
+
+The advice given first was wrong: rename the project and the `.vercel.app` URL follows. It
+does not - the auto-assigned domain is a separate object that stays attached, and after
+the rename the site was still only reachable on the old address while seven guessed
+`kramya-*` patterns all 404'd.
+
+The step that actually works, and works whether or not the project was renamed:
+**Settings -> Domains -> Add Domain -> `kramya.vercel.app`.** No DNS needed for a
+vercel.app subdomain.
+
+### Verified on the new domain rather than assumed
+
+`<title>Kramya</title>`, the hero copy, `/icon.png` and `/apple-icon.png` at 200 (so the
+favicon-through-the-middleware fix survives), `/demo` public at 200, and `/overview` still
+307ing to the login. A domain change is exactly the kind of thing that quietly re-breaks a
+middleware matcher, so it was re-checked rather than trusted.
+
+### Not done
+
+The local folder is still `C:\Projects\New folder`. It cannot be renamed from a session
+whose shell is inside it - Windows locks the directory - so it is left for a terminal
+outside the project: `mv "New folder" kramya && cd kramya && pnpm install`. The reinstall
+matters because pnpm's store links are absolute. Nothing in any source file references
+the folder name.
+
+`kramya.app` is still not owned, and `CONTACT` in apps/web/app/page.tsx is still the
+placeholder `hello@kramya.app`. Buying the domain would make the vercel.app name moot.
