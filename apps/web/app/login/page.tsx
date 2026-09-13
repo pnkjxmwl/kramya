@@ -39,7 +39,7 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Sign in"
-      intro="Run your hospital’s OPD queue."
+      intro="Run your hospital’s OPD queue on Kramya."
       footer={
         <>
           Invited by an administrator? Use the single-use link they sent you — it sets your password

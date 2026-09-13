@@ -8571,3 +8571,73 @@ lint clean.
 Render the app sees `undefined` and shows every hospital as closed. Contract and
 backend must land before the client is exercised - docs/CLAUDE.md 11's merge order,
 and here they ship in one push, so the window is just the deploy.
+
+---
+
+## 2026-09-13 · The product is now Kramya
+
+**Named.** क्रम (*kram*, order/sequence) → **Kramya**. It is what the product actually
+decides: who goes next, fairly. Chosen after QCare and Onturn both turned out to be
+taken - both dictionary-English compounds, which is a space that was exhausted years
+ago, and the reason the search moved to coined and vernacular words instead.
+
+Searched before committing to it, which is how "Pravah" was eliminated (Star Pravah is
+a major Marathi channel, and the pilot is Mumbai) and how "Kram" was downgraded
+(Kramah Software, Bengaluru, is one letter away). This is collision-avoidance and NOT
+trademark clearance - Classes 9/42/44 on the Indian registry still need a real search.
+
+### Done now because the window was closing
+
+`com.opdqueue.app` was the Android package and iOS bundle id, and **a bundle id is
+frozen the moment an app is published to a store**. `P10-MOB-01` is still `◐` with
+TestFlight and Play internal deliberately not done, so this cost ten minutes today and
+would have cost the install base later.
+
+| | |
+|---|---|
+| `name` | OPD Queue → **Kramya** |
+| `scheme` | opdqueue → **kramya** |
+| bundle id / package | com.opdqueue.app → **com.kramya.app**, both platforms |
+| console `<title>` | OPD Console → **Kramya Console** |
+| root `package.json` | opd-queue-platform → **kramya** |
+
+### The icon, and why the supplied file was not used as-is
+
+The zip held a monoline **K** at 537x655 within a 1024 canvas - but sitting **31px
+right and 25px below centre**, reaching 865px down. Android's adaptive safe zone is the
+centre 66%, whose lower edge is 850. **The mark would have been clipped by any circular
+launcher**, and that is invisible until it is on a home screen.
+
+All three assets were regenerated from the 2048 source with `sharp`, re-centred off the
+TRIMMED mark so the source drift does not survive:
+
+- `icon.png` - 64% tall, **flattened to RGB**: iOS forbids an alpha channel and renders
+  a transparent icon black.
+- `adaptive-icon.png` - 54% tall, transparent. Measured half-extent 277px against a
+  338px safe radius: clears, with room.
+- `splash-icon.png` - 46% tall, on white. White because the mark is black; the ink
+  background this app otherwise uses would have made it invisible.
+
+### The rename would have broken the Android build, loudly
+
+`google-services.json` binds a package name, and it held only `com.opdqueue.app`. The
+Google Services Gradle plugin fails the build with "No matching client found" - which
+is the good failure, not a silent one. Flagged before changing anything; the user added
+the new Android app in Firebase and the replacement file carries **both** clients in
+project `opd-queue-b047e`, so the old APK keeps working alongside the new one and there
+is no flag-day cutover.
+
+### Two deliberate holdouts
+
+- **The EAS `slug` stays `opd-queue`.** It is the identifier EAS matches against the
+  project registered for this `projectId`; changing it without renaming the project on
+  expo.dev makes the next build fail. It is never user-visible. Worth doing, but as its
+  own step with the dashboard rename beside it.
+- **`docs/PROGRESS.md` was not swept.** Rules.md 16 makes this file append-only, and
+  renaming the product throughout the history would be exactly the "edit a past entry
+  to look right in hindsight" that the rule forbids. Every entry above this one says
+  OPD Queue because that is what it was called when it was written.
+
+**Consequence for testing:** the new package id means the Kramya build installs
+ALONGSIDE the old app rather than upgrading it. Uninstall "OPD Queue" when the first
+Kramya APK lands.
