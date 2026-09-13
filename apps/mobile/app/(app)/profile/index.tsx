@@ -44,15 +44,33 @@ export default function Profile() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.identity}>
-          <Avatar name={self?.name ?? me.data?.email ?? '?'} size={76} />
-          <Text style={styles.name} numberOfLines={1}>
-            {self?.name ?? 'Your account'}
-          </Text>
-          <Text style={styles.email} numberOfLines={1}>
-            {me.data?.email ?? ' '}
-          </Text>
-        </View>
+        {/*
+          One unit, not three stacked pieces.
+
+          It was a 76pt avatar with the name and the email centred under it - three
+          separate objects floating on the canvas while every other element on the
+          screen sat on a white surface. Grouping them into a single row on that same
+          surface is the shape iOS uses at the top of Settings, and it gives the
+          screen one thing to start with instead of three.
+
+          **No chevron, and not pressable.** The iOS row it borrows from opens an
+          account detail screen; this app has none, and a row that looks tappable and
+          goes nowhere is a defect already fixed twice in this codebase. It is a
+          header that happens to live in a group.
+        */}
+        <ListGroup>
+          <View style={styles.identity}>
+            <Avatar name={self?.name ?? me.data?.email ?? '?'} size={54} />
+            <View style={styles.identityText}>
+              <Text style={styles.name} numberOfLines={1}>
+                {self?.name ?? 'Your account'}
+              </Text>
+              <Text style={styles.email} numberOfLines={1}>
+                {me.data?.email ?? ' '}
+              </Text>
+            </View>
+          </View>
+        </ListGroup>
 
         <QueryState pending={me.isPending} error={me.error} onRetry={() => void me.refetch()} />
 
@@ -133,8 +151,25 @@ const styles = StyleSheet.create({
 
   // No screen title. The name IS the title - a "Profile" heading above someone's own
   // name is the app narrating itself.
-  identity: { alignItems: 'center', gap: 3 },
-  name: { ...theme.font.h2, color: theme.color.ink, marginTop: theme.space[4] },
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  identityText: { flex: 1, gap: 2 },
+  // 19, not the h2's 25. The name is still the loudest thing on the screen, but it
+  // now shares a row with the avatar rather than sitting alone under it, and at
+  // display size it overpowered the group it lives in.
+  name: {
+    fontSize: 19,
+    lineHeight: 24,
+    letterSpacing: -0.5,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: '600',
+    color: theme.color.ink,
+  },
   email: { ...theme.font.caption, color: theme.color.inkTertiary },
 
   label: { paddingTop: 30, paddingBottom: 10 },
