@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      A bare platform theme, not a Material one.
+
+      Every pixel of this app is drawn by core/Theme.kt, which mirrors
+      apps/mobile/theme.ts. A Material parent would put its own colours behind dialogs
+      and the window background and quietly diverge from the RN app.
+
+      `NoActionBar` because the app draws its own bars - the same reason
+      apps/mobile/app/(app)/_layout.tsx sets `headerShown: false` at the root.
+
+      Light only: app.json pins `userInterfaceStyle: "light"` and the ink system has no
+      dark palette. Forcing it here means a phone in dark mode gets the same app.
+    -->
+    <style name="Theme.Kramya" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/canvas</item>
+        <item name="android:statusBarColor">@color/canvas</item>
+        <item name="android:navigationBarColor">@color/canvas</item>
+        <!-- StatusBar style="dark" in app/_layout.tsx: dark glyphs on the light bar. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

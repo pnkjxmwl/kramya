@@ -1663,6 +1663,18 @@ false starts, is in `docs/PROGRESS.md`.
   typechecks and lints clean, and the console walkthrough cannot run without two live
   servers and a seeded database. Every defect in Phases 5 and 6 was found by a person
   looking at a screen; nothing about this session changes that.
+- ☐ **A second patient client exists, and nobody has looked at it either.**
+  `apps/native` is a Kotlin/Compose re-implementation of all fifteen mobile screens,
+  built 2026-09-13 beside `apps/mobile` rather than replacing it (`com.kramya.native`,
+  so both install on one phone). It compiles, builds a signed 10.2 MB release APK and
+  passes 46 JVM tests covering the query cache, the refresh single-flight, IST
+  formatting and the Razorpay checkout options. **No screen has been rendered.**
+  See `apps/native/PARITY.md` for the file-by-file audit.
+- ☐ **Push reaches both clients, and has never been delivered to a device.** `apps/api`
+  gained `FcmClient` and `PushRouter` beside `ExpoClient`, behind the `ExpoApi` interface
+  that module already exposed — `NotificationsService` changed by one line and all 28 of
+  its e2e tests pass unmodified. Dormant until `FIREBASE_SERVICE_ACCOUNT` is set and a
+  `google-services.json` is added; see `apps/native/README.md`, "Turning push on".
 - ☐ **A console upload path and object storage** for photos. `photoUrl` is seeded.
 - ☐ **`with-servers.mjs`**: verify a live server rather than an open port, and clean up
   its fixture sessions. Stale servers and 69 accumulated fixtures produced three false

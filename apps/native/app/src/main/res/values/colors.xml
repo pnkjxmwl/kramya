@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- app.json: android.adaptiveIcon.backgroundColor -->
+    <color name="launcher_background">#FFFFFF</color>
+    <!-- theme.ts: color.canvas. The window ground, so a cold start does not flash white
+         under a canvas-coloured app. -->
+    <color name="canvas">#F7F7F8</color>
+</resources>

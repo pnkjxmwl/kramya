@@ -8801,3 +8801,299 @@ server rather than reasoned about:
 
 **Not done:** none of this has been looked at in a browser by a human, and `CONTACT`
 in page.tsx is still the placeholder `hello@kramya.app`.
+
+---
+
+## 2026-09-13 · A native Android client, beside the Expo one (`native/android-port`)
+
+A second patient client at `apps/native`: Kotlin + Jetpack Compose, built to behave
+identically to `apps/mobile`. **Nothing in `apps/mobile`, `apps/api` or
+`packages/contracts` is touched.** The RN app stays the reference; the native one is
+measured against it.
+
+Phases 0-4 are done and green: scaffold, design system, contract mirrors, the network
+layer, and the shared components. 39 JVM tests pass. No screen has been rendered by
+anybody - see the honesty note at the bottom.
+
+### Four decisions taken before any code
+
+| | |
+|---|---|
+| `applicationId` | `com.kramya.native`, labelled **Kramya Native** - so it installs *beside* the Expo build and the two can be compared screen for screen |
+| Push | **Skipped.** `apps/api/.../expo.client.ts` calls `Expo.isExpoPushToken(token)` and marks anything else `deviceGone`. A native app gets an FCM token, which that check discards - so parity here is impossible without changing the API, which was out of scope |
+| Razorpay | **WebView Checkout**, identical to `join.tsx` - same HTML, `redirect: true`, same `callbackUrl` interception, same "the server decides" polling. The native SDK is a different flow whose netbanking behaviour would have to be re-earned from scratch |
+| Verification | Compile + JVM tests only. No device, no emulator |
+
+### Kotlin block comments NEST, and it cost an hour
+
+`settings.gradle.kts` opened with a block comment explaining the pnpm layout, which
+said the workspace "globs `apps/*`". That slash-star **opened a nested comment** -
+Kotlin nests block comments, unlike Java - so the closing star-slash shut only the
+inner one and the entire `pluginManagement` block was swallowed as comment text.
+
+Gradle does not report that as an error. It falls back to the default plugin
+repository and then reports AGP as *missing*, listing a repository set that pointedly
+excludes everything the file declares:
+
+```
+Plugin [id: 'com.android.application', version: '8.11.1'] was not found
+  Searched in the following repositories:
+    Gradle Central Plugin Repository
+```
+
+Every instinct says "the repository declaration is wrong". It was not; it had ceased
+to exist. Two wrong fixes were tried first - removing the `includeGroupByRegex`
+content filters (a real second bug: the backslashes there had been mangled too), and
+re-running with `--no-daemon` (a real third one: the daemon had cached the failure).
+The file now uses line comments and says why.
+
+Found by bisecting: a minimal settings file worked, so blocks were added back one at a
+time until it broke.
+
+### `local.properties` needs forward slashes
+
+`sdk.dir=C:\Users\panka\...` silently became `C:UserspankaAppData...`. Java's
+properties parser treats `\U`, `\A` and `\L` as unknown escapes and drops the
+backslash, and the only symptom is
+`java.io.IOException: The filename, directory name, or volume label syntax is incorrect`
+from a task with no path in its name. Forward slashes are unambiguous.
+
+### The port's real work is the query cache, not the screens
+
+Every screen's behaviour IS TanStack Query's behaviour - which request fires, when a
+skeleton shows, whether pull-to-refresh spins, how a socket event reaches a screen.
+`net/Query.kt` reproduces the parts fifteen screens depend on: path-as-key including
+the query string, in-flight dedupe, `staleTime` 30s, `retry: 1`, predicate-scoped
+invalidation, and `isPending`/`isFetching`/`isSuccess` as distinct signals.
+
+It was written and tested **before any UI**, because getting it subtly wrong makes
+fifteen screens subtly wrong at once and none of them looks like this file.
+
+`repeatOnLifecycle(RESUMED)` around the poll loop gives
+`refetchIntervalInBackground: false` for free - the loop is cancelled when the app
+leaves the foreground, rather than being guarded by a flag somebody can forget.
+
+### Two seams added purely to make the dangerous code testable
+
+`TokenStorage` is an interface with one production implementation, which normally
+earns nothing. It earns its place here: `AuthStore`'s single-flight rotation is what
+stops a burst of simultaneous 401s from killing the refresh-token family and signing a
+patient out mid-queue, and `EncryptedSharedPreferences` needs a real Context - so
+without the seam that logic could not be tested on the JVM at all.
+
+`Api.baseUrl` is a `var` for the same reason, and is the only mutable global in the
+app. Nothing in the app writes it.
+
+The test that matters: **eight simultaneous 401s produce exactly one refresh.** That
+bug is invisible in manual testing - you have to be unlucky, and it only bites after
+fifteen minutes.
+
+`lib/auth.tsx` shares one in-flight Promise because JavaScript has no lock. Kotlin
+does, so the rotation holds a `Mutex` across the whole exchange and every other caller
+re-checks the token after acquiring it. Fewer moving parts, same guarantee.
+
+### Where Compose is simply better, and where it is worse
+
+**Better, and taken:** the photo scrim is a `Brush.verticalGradient` rather than
+`lib/ui.tsx`'s `react-native-svg` workaround (RN has no gradient, and a stack of
+translucent Views banded visibly against a sky). Enum `when` with no `else` fails to
+COMPILE on an unhandled status, where `visits.tsx`'s `Record<>` map renders
+`undefined` at runtime. Inter resolves by weight, so the belt-and-braces
+`fontWeight`-beside-`fontFamily` in `theme.ts` is unnecessary here.
+
+**Worse, and worked around:** Compose cannot count its children, so `ListGroup` takes
+an explicit row builder where `lib/ui.tsx` uses `Children.toArray` - same result, and
+it still puts hairlines strictly *between* rows. Compose also measures line boxes
+differently from RN, so every type token sets
+`LineHeightStyle(Center, Trim.None)` + `includeFontPadding = false`; without it the
+same numbers put text high in its line, visible wherever two sizes share a row.
+
+**A divergence that had to be pinned:** `format.ts` calls `toLocaleString()` with no
+locale, which on Hermes groups in threes. A device set to `en-IN` has full ICU and
+would render `₹10,00,000` where the RN app renders `₹1,000,000`. `Locale.US` is
+pinned, and a test sets the default locale to `en-IN` and to Germany to prove the fee
+string cannot drift between the two apps on one phone.
+
+### Not done, and not to be read as done
+
+- **No screen has been rendered.** Fonts, glyphs, gradients, shadows, insets, scroll,
+  keyboard and touch targets are all unproven. Compilation proves types, not pixels.
+- The socket has never talked to a real server; the Razorpay WebView has never met
+  real Checkout.
+- Phases 5-10 (navigation, all fifteen screens, the payment flow, the parity audit)
+  are not started.
+- Enum decoding is strict: a value the API adds and this app has not been rebuilt for
+  throws at parse time rather than rendering blank. Both contracts enums say additions
+  are deliberate, so this is a coordinated change either way - recorded in PARITY.md.
+
+## 2026-09-13 · The native Android client is complete and builds an APK
+
+Phases 5-10 of the port. All fifteen screens, the navigation graph, the payment WebView
+and the parity audit. `apps/native/PARITY.md` is the file-by-file comparison;
+`apps/native/README.md` is how to build it.
+
+**46 JVM tests pass. No screen has been rendered by anybody.** That is not a hedge - it is
+the honest state, repeated at the top of both of those files.
+
+| | |
+|---|---|
+| Release APK | 10.2 MB, `com.kramya.native`, "Kramya Native" |
+| Signing | debug key, deliberately - an unsigned release APK will not install |
+| Baked API | `https://opd-api-koes.onrender.com`, verified by reading the dex |
+| Cleartext | absent from release, present in debug only |
+
+### Every API path and every interval was compared, not assumed
+
+Both trees were grepped and the lists diffed. All eighteen paths match, including the two
+`/doctors` query strings that differ **from each other** in the RN app - Discover builds
+`city=X` then `&limit=`, the Doctors screen builds `city=X&` then `limit=`. Tidying those
+into one helper would have merged two cache entries the RN app keeps separate.
+
+Same for timings: staleTime 30s, retry 1, confirm poll 2s, confirm timeout 90s, visits
+poll 15s, fallback poll 90s, page 50, bar cap 14. All identical.
+
+`encodeQuery` reproduces `encodeURIComponent` exactly - `%20` for space, `!'()~`
+unescaped - because the path IS the cache key, and a different encoding is a different key.
+
+### Three bugs that compile cleanly and fail only at runtime
+
+These are the entries worth keeping.
+
+**`Dp.Hairline` is `Dp(0f)`.** It means "the thinnest line the platform can draw" to APIs
+that stroke, like `Modifier.border`. Given to `height()` it means zero. Every separator in
+the app - every grouped list, every rule under a nav bar - was invisible, and nothing
+anywhere would have said so. Now computed from the density as one physical pixel, which is
+what `StyleSheet.hairlineWidth` is.
+
+**Coil 3 registers no network fetcher on its own.** Without wiring one, every `AsyncImage`
+fails - and it fails SILENTLY to a state that looks deliberate, because `Photo` is designed
+so a missing image shows initials. A hospital with a perfectly good photograph would simply
+never show it, on every screen, with nothing in the logs. Now wired to the app's one
+OkHttpClient so images share its connection pool.
+
+**Negative padding throws.** `Modifier.padding(horizontal = -20.dp)` compiles and raises at
+runtime. It had been used to pull the patient picker out to the card's edges, copying the
+RN negative margin - on the payment screen, which is the worst place to learn this. The
+card is now drawn with padding applied per-part instead.
+
+### The observer registry had a leak, found by reading rather than by failing
+
+`QueryClient.observe` took a mutex, so a screen had to register from a coroutine - and a
+screen disposed before that coroutine ran left an observer behind forever, still costing a
+request on every socket event. It is an ordinary function over a `ConcurrentHashMap` now:
+`computeIfAbsent` is atomic, which is exactly and only what the dedupe needs.
+
+### The payment page got its own tests, because it was earned in blood
+
+`CheckoutHtmlTest` asserts `redirect: true` (the reason netbanking reaches the bank at
+all), that `callback_url` comes from the server verbatim, that **no amount is ever sent**,
+and that a hospital name containing `</script>` cannot break out of the script block -
+`JSONObject` escapes it, string concatenation would not.
+
+The WebView flow was kept rather than swapping to the native Razorpay SDK. apps/mobile
+uses a WebView because Expo Go cannot load a native module; that constraint does not apply
+here, and the flow was kept anyway. The behaviour around netbanking, UPI intent and
+redirect mode was established against real payments, and the native SDK is a different
+flow whose equivalents would all have to be re-earned.
+
+### One divergence reproduced on purpose, against instinct
+
+Tapping Join on a department card lands in the **Visits** tab, so Back returns to My Visits
+rather than to the card you tapped. That is what expo-router does - a route belongs to one
+tab - and `navigateAcrossTabs` reproduces it. Returning to the card would have been nicer
+and would have been a divergence.
+
+### Still absent
+
+- **Push.** The API sends only via Expo Push; a native app gets an FCM token, which
+  `Expo.isExpoPushToken` discards. Needs a change outside `apps/native`.
+- **Autofill hints** on the sign-in fields - the RN `Field` passes `autoComplete` and this
+  one does not, so password managers will not offer to fill.
+- Anything visual. Fonts, glyphs, gradients, shadows, insets, scroll, keyboard and touch
+  targets are all unproven until the APK is run.
+
+## 2026-09-13 · Push, for both clients, through one interface
+
+The native client can now receive the same nine notifications the Expo one does. Written
+on both sides, and **dormant until credentials exist** - `FIREBASE_SERVICE_ACCOUNT` is
+unset and no `google-services.json` is committed, so nothing touches Firebase and the Expo
+path is byte-for-byte unchanged.
+
+### The seam was already there, and it was left there on purpose
+
+`expo.client.ts` defines `ExpoApi` - `configured` plus `send(PushMessage[]) →
+PushResult[]` - with a comment saying it is *"kept on the interface so a deployment could
+still turn sending off by swapping the provider."* That is exactly what happened.
+
+- `fcm.client.ts` - `FcmClient implements ExpoApi`, via firebase-admin.
+- `push.router.ts` - `PushRouter implements ExpoApi`, partitions by token and fans out.
+- `notifications.service.ts` - **one line changed**: it injects the interface now.
+
+Everything else in that module - the PENDING row written before the send, the dedupe, the
+sweeper, the `deviceGone` pruning, the "reaching one device is delivered" arithmetic - is
+untouched. **All 28 existing notification e2e tests pass unmodified**, because they
+override `ExpoClient` and the router receives it through `inject`.
+
+### The token's SHAPE is the discriminator, not `platform`
+
+`PushToken.platform` says "android" for both apps. The token format says which service
+knows about the device, which is the actual question. It also means no migration and no
+contract change: `RegisterPushTokenRequest` already takes any opaque 10-255 char string,
+and an FCM token is ~163.
+
+### Two failure modes the router exists to prevent
+
+**Pruning a live device.** Before this, a native token went to the Expo SDK, failed its
+format check, came back `deviceGone`, and the existing pruning disabled the row. The
+patient would have registered successfully and then received nothing, for ever, with a
+`disabledAt` column as the only evidence.
+
+**One provider's outage taking the other down.** A patient holds tokens for BOTH apps right
+now - the native build is installed beside the Expo one for comparison. `Promise.allSettled`,
+and a provider that throws still yields one result per token with `deviceGone: false`: a
+transient fault must never cause permanent damage.
+
+Seven unit tests, including "never prunes a device because its provider threw".
+
+### The google-services plugin cannot be applied unconditionally
+
+It **fails the build** when `google-services.json` is absent, so applying it outright would
+mean nobody can build `apps/native` at all until someone has been through the Firebase
+console. It is applied only when the file is present, and `BuildConfig.PUSH_ENABLED`
+carries that fact into the runtime.
+
+A placeholder config was deliberately NOT committed: `mobilesdk_app_id` is a real
+identifier only Firebase issues, and a fake one produces a build that LOOKS configured and
+silently delivers nothing - strictly worse than not having it.
+
+The switch-on path was proven rather than assumed: a probe config was dropped in, the
+plugin applied, `PUSH_ENABLED` flipped to true, the Firebase resources generated - then the
+probe was deleted.
+
+### That probe found a real trap
+
+`processDebugGoogleServices FAILED: No matching client found for package name
+'com.kramya.native.debug'`. The debug build had `applicationIdSuffix = ".debug"`, so the
+plugin demanded a SECOND Firebase registration - a baffling first error to meet immediately
+after setting Firebase up, and one that would have landed on whoever did the console work
+rather than on whoever wrote this.
+
+The suffix is gone. It only ever separated this app from its own release build; the thing
+it needs to sit beside is the EXPO app, which is a different package already. Both variants
+are debug-signed, so one replaces the other cleanly, and `versionNameSuffix` still tells
+them apart in Profile > Version.
+
+### A gitignore decision, made and then reversed
+
+`google-services.json` was briefly added to `.gitignore` on instinct. Wrong: it carries no
+secret (the key is restricted by package name and signing certificate), Google documents it
+as safe to commit, and **apps/mobile already commits its own**. Ignoring it would mean push
+silently switching itself off on every machine except the one it was set up on - the worst
+of both worlds. The ignore file now carries a note saying so.
+
+### Still unverified
+
+No push has been delivered to a device. The build wiring is proven and the routing is
+tested; delivery is not. Turning it on needs two things only the account holder can do -
+registering `com.kramya.native` in project `opd-queue-b047e`, and generating a service
+account key - both written up in `apps/native/README.md`, "Turning push on".

@@ -1,0 +1,12 @@
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+
+# NOTE: app/google-services.json is deliberately NOT ignored.
+#
+# It carries no secret - the API key in it is restricted by package name and signing
+# certificate, Google documents it as safe to commit, and apps/mobile already commits
+# its own. Ignoring it would mean push silently switches itself off on every machine
+# except the one it was set up on, which is the worst of both worlds.

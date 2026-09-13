@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      DEBUG ONLY. Merged into debug builds and never into release.
+
+      A debug build points at http://10.0.2.2:3000 (gradle.properties: apiUrlDebug), and
+      Android has blocked cleartext HTTP by default since API 28 - so without this every
+      request to a local API fails with a bare "CLEARTEXT communication not permitted",
+      which reads like a server problem rather than a platform policy.
+
+      The release build talks to https and never gets this flag, so production traffic
+      cannot silently fall back to plaintext.
+    -->
+    <application
+        android:usesCleartextTraffic="true"
+        tools:targetApi="28" />
+</manifest>

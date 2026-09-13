@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { NotificationType, RegisterPushTokenRequest } from '@opd/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isUniqueViolation } from '../../common/prisma-errors';
-import { ExpoClient } from './expo.client';
+import type { ExpoApi } from './expo.client';
+import { PUSH_CLIENT } from './push.token';
 import { render } from './templates';
 
 /**
@@ -29,7 +30,15 @@ export class NotificationsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly expo: ExpoClient,
+    /*
+      The INTERFACE, not a provider.
+
+      It was `ExpoClient` until a second patient client appeared holding FCM tokens rather
+      than Expo ones. Nothing in this file changed except this line: `PushRouter` sends
+      each message through whichever service knows about that device, and hands back the
+      same PushResult[] - including the `deviceGone` flag the pruning below depends on.
+    */
+    @Inject(PUSH_CLIENT) private readonly expo: ExpoApi,
   ) {}
 
   // -------------------------------------------------------------------------
