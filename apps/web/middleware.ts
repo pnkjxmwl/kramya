@@ -85,7 +85,17 @@ export const config = {
     every number on those screens is a hardcoded fixture in the page, there is no
     API call, no session and no tenant - see app/demo/fixtures.ts.
   */
+  /*
+    `icon.png` and `apple-icon.png` are listed because they are ROUTES.
+
+    Next generates them from `app/icon.png` and `app/apple-icon.png` and serves them
+    at the top level - not from `_next/static` - so the exclusion for `favicon.ico`
+    did not cover them and the browser's request for the tab icon was answered with a
+    307 to /login. Caught by fetching it against the deployed site rather than by
+    looking at the page, because a missing favicon is silent: the tab just keeps the
+    browser's default and nothing errors.
+  */
   matcher: [
-    '/((?!login|accept-invite|demo|api/auth|_next/static|_next/image|favicon.ico|$).*)',
+    '/((?!login|accept-invite|demo|api/auth|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|$).*)',
   ],
 };
