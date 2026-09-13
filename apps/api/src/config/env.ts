@@ -116,6 +116,19 @@ export const EnvSchema = z.object({
    * so a contributor with no Expo account can run everything else.
    */
   EXPO_ACCESS_TOKEN: z.string().default(''),
+
+  /**
+   * Firebase service-account JSON, base64-encoded, for pushing to the NATIVE Android
+   * client (`apps/native`). Empty disables FCM sending and nothing else: the API still
+   * boots, still records every notification, and still reaches every Expo device.
+   *
+   * **Base64 rather than raw JSON** because the credential contains newlines inside
+   * `private_key`, and every hosting panel mangles those differently - Render included.
+   * One opaque string cannot be mangled.
+   *
+   * Firebase console -> Project settings -> Service accounts -> Generate new private key.
+   */
+  FIREBASE_SERVICE_ACCOUNT: z.string().default(''),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
