@@ -71,11 +71,12 @@
 ## 4. Repository Structure (monorepo)
 
 ```
-opd-queue-platform/
+kramya/
 ├── apps/
 │   ├── api/                # NestJS backend (the core)
 │   ├── web/                # Next.js console (doctor + staff + admin)
-│   └── mobile/             # Expo React Native patient app
+│   ├── mobile/             # Expo React Native patient app
+│   └── native/             # Kotlin/Compose patient app — a second client, same screens
 ├── packages/
 │   ├── contracts/          # Zod schemas, DTOs, enums — the shared API contract
 │   └── config/             # shared tsconfig, eslint, prettier

@@ -58,7 +58,10 @@ one. Prefer the standard library, then an already-installed dep, then the smalle
 ```
 apps/api        NestJS backend  — the modular monolith (the only thing that runs on a server)
 apps/web        Next.js console — doctor + staff + admin
-apps/mobile     Expo app        — patients
+apps/mobile     Expo app        — patients (the REFERENCE client)
+apps/native     Android app     — patients, Kotlin/Compose. A second client of the same
+                                  screens; `apps/mobile` is the reference and this is
+                                  measured against it (apps/native/PARITY.md)
 packages/contracts   Zod schemas, DTOs, enums — THE shared API contract
 packages/config      shared tsconfig / eslint / prettier
 ```
@@ -169,7 +172,7 @@ packages/config      shared tsconfig / eslint / prettier
 1. **Contract-first.** Do not start implementation (Wave 2) until the phase's `packages/contracts` +
    Prisma schema (Wave 1) are locked and merged.
 2. **Own exactly one directory.** Never edit another agent's files. Safe fan-out:
-   `apps/api ∥ apps/web ∥ apps/mobile`.
+   `apps/api ∥ apps/web ∥ apps/mobile ∥ apps/native`.
 3. **Do not touch `packages/contracts` mid-wave.** If the contract is wrong, **stop and raise it** — never
    patch a local copy or diverge the shape of shared data.
 4. **One worktree/branch per agent:** `phaseN/<stream>-<short-desc>`. Merge order:
