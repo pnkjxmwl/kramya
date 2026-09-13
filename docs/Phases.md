@@ -1663,8 +1663,9 @@ false starts, is in `docs/PROGRESS.md`.
   typechecks and lints clean, and the console walkthrough cannot run without two live
   servers and a seeded database. Every defect in Phases 5 and 6 was found by a person
   looking at a screen; nothing about this session changes that.
-- ☐ **A second patient client exists, and nobody has looked at it either.**
-  `apps/native` is a Kotlin/Compose re-implementation of all fifteen mobile screens,
+- ☐ **A second patient client exists, and nobody has looked at it either.** Merged to
+  `main` 2026-09-13 behind a green gate (16/16 turbo tasks, 387 API tests, 46 native JVM
+  tests). `apps/native` is a Kotlin/Compose re-implementation of all fifteen mobile screens,
   built 2026-09-13 beside `apps/mobile` rather than replacing it (`com.kramya.native`,
   so both install on one phone). It compiles, builds a signed 10.2 MB release APK and
   passes 46 JVM tests covering the query cache, the refresh single-flight, IST

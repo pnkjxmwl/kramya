@@ -9169,3 +9169,56 @@ public and worth renaming; a backend hostname is visible only in a dashboard.
 **The right fix, deferred:** a custom domain on Render (`api.kramya.app`) once
 `kramya.app` is owned. That gives a permanent address that survives any later rename, and
 renaming the service now would mean doing the same work twice.
+
+## 2026-09-13 · Merging the native client, and three things the gate caught
+
+The native client and the FCM sender are on `main` and deployed. Gate before merging:
+**16/16 turbo tasks, 387 API tests, 46 native JVM tests.** Three problems surfaced between
+"the code works" and "it is on main", none of which any amount of writing code would have
+found.
+
+### A green that was not green
+
+The first gate run was launched as `turbo ... | tail -40`, and the task reported **exit
+code 0**. It had failed. A pipeline exits with the status of its LAST command, so `tail`'s
+success masked turbo's failure completely.
+
+It was caught only by reading the output instead of trusting the code - `Failed:
+@opd/api#test` was sitting in the text under a green exit status. One more step of
+convenience and a red build would have been merged to `main` on the strength of a number
+that meant nothing.
+
+Re-run as `set -o pipefail`, redirecting to a file, and echoing `TURBO_EXIT=$?` explicitly.
+
+### What it had actually caught: an env var that would have deployed dead
+
+`env.test.ts` asserts that every variable in `env.ts` also appears in `turbo.json`'s
+`globalPassThroughEnv`. `FIREBASE_SERVICE_ACCOUNT` had been added to one and not the other.
+
+Turbo 2 runs tasks in a FILTERED environment and strips anything undeclared, so the API
+would have deployed, booted, found no credential, set `FcmClient.configured = false` and
+pushed nothing - **with the variable sitting correctly configured in Render the whole
+time.** The debugging would have started at Firebase and never reached here.
+
+Invisible locally, because `loadEnvFile()` reads `apps/api/.env` directly and bypasses
+Turbo entirely. That is exactly the failure `turbo.json`'s own comment records being bitten
+by once already; the test exists because of it, and it worked.
+
+### `gradlew` went in non-executable
+
+Committed as `100644`. Git on Windows does not set the executable bit, so nobody on Linux
+or in CI could have run the Android build at all - `permission denied` on the wrapper, from
+a fresh clone, for a build that works perfectly on the machine it was written on.
+
+`git update-index --chmod=+x apps/native/gradlew`, amended before the push.
+
+### Also worth keeping: ripgrep respects .gitignore
+
+Sweeping for references to the old Vercel URL, `rg` reported only documentation hits. A
+slower, dumber `grep -r` that had been left running and written off as redundant found one
+more: `CONSOLE_URL` in `.env.staging-demo`, which `rg` had skipped **because the file is
+gitignored**.
+
+The fast tool was wrong in a way that looks exactly like being right - an empty result. Use
+`rg --no-ignore --hidden` when the question is "does this string exist anywhere", rather
+than "does this string exist in tracked code".
