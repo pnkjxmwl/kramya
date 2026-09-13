@@ -25,7 +25,7 @@ import { HOSPITAL } from './fixtures';
  */
 
 export const metadata: Metadata = {
-  title: 'Kramya — see the console, no sign-in',
+  // No `title` - see app/layout.tsx. Every tab reads "Kramya".
   description:
     'A working demonstration of the Kramya console with sample data. Call the next patient, check someone in, register a walk-in — no account needed.',
   robots: { index: true, follow: true },

@@ -21,10 +21,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  // "Kramya Console", not "Kramya" - the tab belongs to the staff tool, and the
-  // patient app of the same name is a different product to the person reading it.
-  title: { default: 'Kramya Console', template: '%s · Kramya Console' },
-  description: 'Doctor, staff and admin console for Kramya',
+  /*
+    Just the name, with no template.
+
+    A plain string rather than `{ default, template }` on purpose: a template would
+    let any page append a suffix and the tab would drift back to "Something · Kramya"
+    the first time a page set its own title. One string, every tab, every route.
+
+    **The SEO cost is real and accepted.** `<title>` is the headline a search result
+    shows, so "Kramya" ranks for the word "Kramya" and nothing else - a page titled
+    for what it does would be found by hospitals looking for OPD queue software. The
+    `description` below still supplies the snippet under that headline. Worth
+    revisiting if this ever needs to be found rather than sent to people.
+  */
+  title: 'Kramya',
+  description:
+    'Kramya turns a hospital OPD into a live queue patients can join from home — they watch their place move and arrive when their turn is near.',
   // The console holds patient names. It has no business in a search index.
   robots: { index: false, follow: false },
 };

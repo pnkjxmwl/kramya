@@ -32,7 +32,8 @@ import { WaitingRoom } from './waiting-room';
  */
 
 export const metadata: Metadata = {
-  title: 'Kramya — the queue your patients wait in from home',
+  // No `title` - the root layout's plain "Kramya" governs every tab. Setting one
+  // here is what would put a suffix back in the tab bar.
   description:
     'Kramya turns a hospital OPD into a live queue patients can join remotely. They watch their place move and arrive when their turn is near, so your waiting room stops being the waiting room.',
   // Overrides the root layout's `index: false`. That default is right for the
