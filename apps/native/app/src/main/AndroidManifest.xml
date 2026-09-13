@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The whole app is a network client. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Read by the socket and by the query layer's "you appear to be offline" path. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Android 13+ requires an explicit grant before ANY notification is shown. Declining is
+      a supported outcome: the queue still works, the socket still updates every screen.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".KramyaApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.Kramya">
+
+        <!--
+          One activity.
+
+          expo-router runs the whole app inside a single Android activity and swaps
+          React trees; navigation-compose does the same with composables. Matching that
+          keeps the back-button and task-switching behaviour identical, which a
+          multi-activity design would not.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Kramya">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              app.json: "scheme": "kramya". Registered so the two apps are reachable the
+              same way; nothing in the patient app produces such a link today.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kramya" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Push. Inert unless a google-services.json was present at build time - see
+          app/build.gradle.kts and README.md, "Turning push on".
+        -->
+        <service
+            android:name=".push.KramyaMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
+          The channel the SYSTEM uses when it renders a notification itself - which is what
+          happens when the app is not running, and is the case this feature exists for.
+          The server names this same id in its FCM payload; naming a channel that does not
+          exist means Android shows NOTHING on API 26+, with no error anywhere.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="queue" />
+    </application>
+</manifest>
