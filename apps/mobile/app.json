@@ -1,19 +1,29 @@
 {
   "expo": {
-    "name": "OPD Queue",
+    "name": "Kramya",
     "slug": "opd-queue",
     "version": "0.0.1",
     "orientation": "portrait",
-    "scheme": "opdqueue",
+    "scheme": "kramya",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.opdqueue.app"
+      "bundleIdentifier": "com.kramya.app"
     },
     "android": {
-      "package": "com.opdqueue.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.kramya.app",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
     "plugins": [
       "expo-router",

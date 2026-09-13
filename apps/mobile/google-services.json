@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:563385723318:android:3fe124db40ce269f76b917",
+        "android_client_info": {
+          "package_name": "com.kramya.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBoOT2ylKcG1b6r7ONT-Oas7CkRdduZvNw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:563385723318:android:4efce1900af4076676b917",
         "android_client_info": {
           "package_name": "com.opdqueue.app"
