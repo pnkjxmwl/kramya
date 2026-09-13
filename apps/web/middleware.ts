@@ -66,10 +66,26 @@ function isExpiringSoon(token: string, skewSeconds = 60): boolean {
 }
 
 export const config = {
-  // Everything under (console) is protected. /login, /accept-invite, /api/auth/*
-  // and static assets must stay reachable or the redirect would loop.
-  //
-  // /accept-invite is public by necessity: an invitee has no session yet, and the
-  // token in the URL is the only thing that identifies them.
-  matcher: ['/((?!login|accept-invite|api/auth|_next/static|_next/image|favicon.ico).*)'],
+  /*
+    Everything under (console) is protected. /login, /accept-invite, /api/auth/* and
+    static assets must stay reachable or the redirect would loop.
+
+    /accept-invite is public by necessity: an invitee has no session yet, and the
+    token in the URL is the only thing that identifies them.
+
+    **The bare `/` is now public too, and it is listed separately because a negative
+    lookahead cannot express it.** The path after the leading slash is the empty
+    string there, which matches `(?!login|...).*` no matter what is in the group - so
+    the marketing page would have been bounced to /login by the same rule that
+    protects the board. The console's own landing screen moved to /overview.
+
+    **`demo` is public by design and must stay that way.** The whole point of it is
+    that a hospital can see the console working without an account, so anything that
+    sends it to /login defeats it. It is safe to expose because it touches nothing:
+    every number on those screens is a hardcoded fixture in the page, there is no
+    API call, no session and no tenant - see app/demo/fixtures.ts.
+  */
+  matcher: [
+    '/((?!login|accept-invite|demo|api/auth|_next/static|_next/image|favicon.ico|$).*)',
+  ],
 };

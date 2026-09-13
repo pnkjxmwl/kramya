@@ -85,7 +85,7 @@ export default async function CheckInPage({
             <Badge tone={outstanding > 0 ? 'info' : 'success'} icon={outstanding > 0 ? 'home' : 'check'}>
               {outstanding} still to arrive
             </Badge>
-            <Badge tone="teal" icon="check-circle">
+            <Badge tone="brand" icon="check-circle">
               {alreadyHere.length} here
             </Badge>
           </div>

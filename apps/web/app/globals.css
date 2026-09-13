@@ -24,7 +24,7 @@
   /**
    * ONE focus ring for the whole console, on `:focus-visible` only.
    *
-   * Every screen used to bring its own - `ring-teal-100` here, `ring-teal-200`
+   * Every screen used to bring its own - `ring-brand-100` here, `ring-brand-200`
    * there, `ring-accent` on the invite page - and all of them fired on mouse clicks
    * too, so pressing a button left a halo behind on it. Keyboard users got an
    * inconsistent ring and mouse users got one they never asked for. This is the
@@ -57,8 +57,8 @@
   }
 
   ::selection {
-    background: theme('colors.teal.100');
-    color: theme('colors.teal.900');
+    background: theme('colors.brand.100');
+    color: theme('colors.brand.900');
   }
 
   /**
@@ -109,4 +109,127 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* --------------------------------------------------------------------------
+   The waiting-room illustration (app/waiting-room.tsx).
+
+   Kept here rather than inline because `stroke-dashoffset` keyframes cannot be
+   expressed as Tailwind utilities, and because the drawing and the emptying are
+   one sequence whose timing only makes sense read together.
+
+   `--len` is a single generous dash length rather than a per-path measurement:
+   every path in that drawing is well under 600 units, so one value over-covers
+   all of them and saves a getTotalLength() pass on mount. The cost is that
+   shorter paths finish drawing early, which reads as a quicker pen, not a fault.
+-------------------------------------------------------------------------- */
+@keyframes wr-draw {
+  from { stroke-dashoffset: 600; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes wr-sit {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Leaving is a fade and a small rise - somebody standing up and walking off,
+   suggested rather than animated literally. */
+@keyframes wr-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-14px); }
+}
+
+.wr-line {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+}
+.wr-person {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Before it scrolls into view: nothing is drawn. */
+.wr-idle .wr-line { stroke-dashoffset: 600; }
+.wr-idle .wr-person { opacity: 0; }
+
+/* The sequence: lines draw, people sit, then five of the six leave. */
+.wr-play .wr-line {
+  animation: wr-draw 1.1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.wr-play .wr-d0 { animation-delay: 0s; }
+.wr-play .wr-d1 { animation-delay: 0.12s; }
+.wr-play .wr-d2 { animation-delay: 0.24s; }
+.wr-play .wr-d3 { animation-delay: 0.36s; }
+.wr-play .wr-d4 { animation-delay: 0.48s; }
+
+.wr-play .wr-person {
+  animation: wr-sit 0.45s ease-out forwards;
+  animation-delay: 1.1s;
+}
+.wr-play .wr-leave-0 { animation: wr-sit 0.45s ease-out 1.10s forwards, wr-leave 0.7s ease-in 2.0s forwards; }
+.wr-play .wr-leave-1 { animation: wr-sit 0.45s ease-out 1.18s forwards, wr-leave 0.7s ease-in 2.5s forwards; }
+.wr-play .wr-leave-2 { animation: wr-sit 0.45s ease-out 1.26s forwards, wr-leave 0.7s ease-in 3.0s forwards; }
+.wr-play .wr-leave-3 { animation: wr-sit 0.45s ease-out 1.34s forwards, wr-leave 0.7s ease-in 3.5s forwards; }
+.wr-play .wr-leave-4 { animation: wr-sit 0.45s ease-out 1.42s forwards, wr-leave 0.7s ease-in 4.0s forwards; }
+
+/* Reduced motion: the final frame, drawn and already empty but for one. */
+.wr-still .wr-line { stroke-dashoffset: 0; }
+.wr-still .wr-person { opacity: 1; }
+.wr-still .wr-leave-0,
+.wr-still .wr-leave-1,
+.wr-still .wr-leave-2,
+.wr-still .wr-leave-3,
+.wr-still .wr-leave-4 { opacity: 0; }
+
+/* --------------------------------------------------------------------------
+   Outlined display type, for the hero's first line.
+
+   The artwork beside it is line art, so the type is drawn the same way: line
+   one is a stroked outline, line two is solid. It ties the two halves of the
+   fold into one language instead of "a headline, and separately a picture".
+
+   **The @supports guard is load-bearing, not caution.** The effect needs
+   `color: transparent` plus a stroke - and in a browser without
+   -webkit-text-stroke that pair leaves an invisible headline, which is the
+   worst possible failure for the first line on the page. Unsupported browsers
+   get a dimmed solid fill instead, which is what the previous version looked
+   like anyway.
+-------------------------------------------------------------------------- */
+.type-outline {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+@supports (-webkit-text-stroke: 1px white) {
+  .type-outline {
+    color: transparent;
+    -webkit-text-stroke: 1.4px rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   No scrollbar on the marketing page - and ONLY there.
+
+   Windows paints a permanent 10px slab down the right edge, which on a page
+   whose whole job is looking considered is a grey seam nobody chose. macOS
+   overlays and hides its own, so this is a Windows/Linux problem that a Mac
+   never shows you.
+
+   **Scoped with `:has()`, so the console keeps its scrollbar.** A receptionist
+   reading a long queue needs to know how far down the list they are and needs
+   something to drag; a visitor reading six marketing sections does not. If a
+   browser lacks `:has()` the selector simply never matches and the scrollbar
+   stays - which is the safe way round.
+
+   The page still scrolls by every other means: wheel, trackpad, touch, space,
+   Page Down, arrow keys, and find-in-page. Only the painted bar is gone.
+-------------------------------------------------------------------------- */
+html:has(.landing-root) {
+  scrollbar-width: none;
+}
+
+html:has(.landing-root)::-webkit-scrollbar,
+html:has(.landing-root) body::-webkit-scrollbar {
+  display: none;
 }

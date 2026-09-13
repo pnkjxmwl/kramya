@@ -35,7 +35,7 @@ export const getMe = cache(async (): Promise<MeResponse> => apiGet<MeResponse>('
 export const requireAdminHospital = cache(async (): Promise<{ id: string; name: string }> => {
   const me = await getMe();
   const active = me.memberships.find((m) => m.status === 'ACTIVE' && m.role === 'ADMIN');
-  if (!active) redirect('/');
+  if (!active) redirect('/overview');
   return { id: active.hospitalId, name: active.hospitalName };
 });
 
@@ -61,7 +61,7 @@ export const requireStaffHospital = cache(
   }> => {
     const me = await getMe();
     const active = me.memberships.find((m) => m.status === 'ACTIVE');
-    if (!active) redirect('/');
+    if (!active) redirect('/overview');
     return {
       id: active.hospitalId,
       name: active.hospitalName,

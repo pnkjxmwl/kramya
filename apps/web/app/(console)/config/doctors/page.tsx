@@ -157,7 +157,7 @@ export default async function DoctorsPage({
             {page.items.map((doctor) => (
               <li key={doctor.id} className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-teal-50 text-caption font-semibold text-teal-800">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-caption font-semibold text-brand-800">
                     {initials(doctor.name)}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -172,7 +172,7 @@ export default async function DoctorsPage({
                   </div>
 
                   {doctor.hasLogin ? (
-                    <Badge tone="teal" icon="check-circle">
+                    <Badge tone="brand" icon="check-circle">
                       Has a login
                     </Badge>
                   ) : (
@@ -296,7 +296,7 @@ export default async function DoctorsPage({
   );
 }
 
-/** docs/Design.md 10: initials on teal, the stand-in for a photo the console has not got. */
+/** docs/Design.md 10: initials on an ink tint, the stand-in for a photo the console has not got. */
 function initials(name: string): string {
   return (
     name

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
+import { Mark } from '../../components/mark';
 import { Icon, type IconName } from '../../components/icon';
 import { btn } from '../../components/ui';
 
@@ -43,19 +44,35 @@ const isActive = (pathname: string, href: string): boolean =>
   // `/` is a prefix of every route and would otherwise light up permanently.
   href === '/' ? pathname === '/' : pathname.startsWith(href);
 
-function Brand({ compact = false }: { compact?: boolean }) {
+/**
+ * The real mark, not initials in a box - and it is a link.
+ *
+ * "OQ" on a tinted square was a stand-in from before the product had a name or a
+ * logo. It now has both, and the console is the surface a hospital's staff look at
+ * for a whole shift - the one place the brand most needs to be itself rather than a
+ * placeholder. The mark carries its own shape, so it does not need the rounded tile
+ * the initials needed to look deliberate; `Mark` takes `currentColor`, hence
+ * `text-ink`.
+ *
+ * **Where it goes depends on who is looking, which is why `href` is a prop.** People
+ * expect a wordmark in the top-left to be the way home, and "home" is not the same
+ * place for everyone: a signed-in receptionist wants the board, and a visitor on the
+ * demo or the sign-in screen wants the site. Hardcoding `/` here would send staff out
+ * of the console a dozen times a shift; hardcoding `/overview` would send a
+ * signed-out visitor into the middleware and back to /login.
+ */
+function Brand({ compact = false, href }: { compact?: boolean; href: string }) {
   return (
-    <span className="flex items-center gap-2.5">
-      <span
-        aria-hidden="true"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary text-caption font-bold tracking-tight text-white shadow-xs"
-      >
-        OQ
-      </span>
+    <Link
+      href={href}
+      className="flex items-center gap-2.5 rounded-md transition-opacity hover:opacity-70"
+      aria-label="Kramya home"
+    >
+      <Mark className="h-[22px] w-[22px] shrink-0 text-ink" />
       <span className={'text-label font-semibold tracking-tight text-ink' + (compact ? ' sr-only sm:not-sr-only' : '')}>
-        OPD Console
+        Kramya
       </span>
-    </span>
+    </Link>
   );
 }
 
@@ -75,12 +92,12 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
             className={
               'group relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-label transition-colors duration-100 ' +
               (active
-                ? 'bg-teal-50 font-semibold text-primary'
+                ? 'bg-brand-50 font-semibold text-primary'
                 : 'text-ink-muted hover:bg-sunken hover:text-ink')
             }
           >
             {/*
-              A 2px marker on the active item, not colour alone. Teal-on-pale-teal is
+              A 2px marker on the active item, not colour alone. Ink-on-pale-ink is
               a 2.4:1 difference against the inactive grey; the bar is what a person
               who cannot separate those two actually reads (docs/Design.md 8).
             */}
@@ -142,7 +159,20 @@ function SignOut({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function ConsoleChrome({ links, viewer }: { links: NavLink[]; viewer: Viewer }) {
+export function ConsoleChrome({
+  links,
+  viewer,
+  /**
+   * Where the wordmark leads. Defaults to the console, because that is who mounts
+   * this component in every case but one - the public demo, which passes the site
+   * root so a visitor with no session is not bounced to /login by their own logo.
+   */
+  homeHref = '/overview',
+}: {
+  links: NavLink[];
+  viewer: Viewer;
+  homeHref?: string;
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const drawerId = useId();
@@ -172,7 +202,7 @@ export function ConsoleChrome({ links, viewer }: { links: NavLink[]; viewer: Vie
       ------------------------------------------------------------------- */}
       <aside className="hidden w-[240px] shrink-0 flex-col border-r border-line bg-surface lg:flex">
         <div className="px-4 py-4">
-          <Brand />
+          <Brand href={homeHref} />
         </div>
         <div className="border-y border-line-soft bg-canvas px-4 py-3">
           <Identity viewer={viewer} />
@@ -200,7 +230,7 @@ export function ConsoleChrome({ links, viewer }: { links: NavLink[]; viewer: Vie
         >
           <Icon name="menu" className="h-[18px] w-[18px]" title="Open navigation" />
         </button>
-        <Brand compact />
+        <Brand compact href={homeHref} />
         <span className="ml-auto min-w-0 truncate text-caption text-ink-muted">
           {viewer.hospitalName ?? 'No active hospital'}
         </span>
@@ -219,7 +249,7 @@ export function ConsoleChrome({ links, viewer }: { links: NavLink[]; viewer: Vie
             className="absolute inset-y-0 left-0 flex w-[264px] max-w-[85vw] animate-fade-up flex-col border-r border-line bg-surface shadow-lg"
           >
             <div className="flex items-center justify-between px-4 py-3.5">
-              <Brand />
+              <Brand href={homeHref} />
               <button type="button" onClick={() => setOpen(false)} className={btn('ghost', 'sm') + ' w-7 px-0'}>
                 <Icon name="x" className="h-4 w-4" title="Close navigation" />
               </button>
