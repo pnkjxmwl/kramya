@@ -9141,3 +9141,31 @@ the folder name.
 
 `kramya.app` is still not owned, and `CONTACT` in apps/web/app/page.tsx is still the
 placeholder `hello@kramya.app`. Buying the domain would make the vercel.app name moot.
+
+## 2026-09-13 · Render was deliberately NOT renamed
+
+Asked for, and argued against. Recording the reason so it is not re-litigated.
+
+Renaming a Render service releases its `.onrender.com` hostname with **no redirect** -
+unlike the GitHub rename (redirects) and the Vercel domain (307s) done the same day. And
+unlike those two, this hostname is not cosmetic. It is compiled into artefacts:
+
+| | |
+|---|---|
+| `apps/native/gradle.properties` | baked into the release APK |
+| `apps/mobile/eas.json` | baked into the Expo APK already on a phone |
+| Razorpay dashboard | the webhook URL |
+| Vercel env | the console's `API_URL` / `NEXT_PUBLIC_API_URL` |
+
+The webhook is the one that matters. It is live and correct right now - an unsigned POST
+to `/webhooks/razorpay` returns 400 - and it is the ONLY path that issues a token
+(docs/Rules.md 1.4). Point it at a released hostname and a payment takes money while the
+patient's token never appears, which is precisely the failure the whole payment design
+exists to prevent.
+
+Weighed against that: nobody sees this URL. The repo name and `kramya.vercel.app` are
+public and worth renaming; a backend hostname is visible only in a dashboard.
+
+**The right fix, deferred:** a custom domain on Render (`api.kramya.app`) once
+`kramya.app` is owned. That gives a permanent address that survives any later rename, and
+renaming the service now would mean doing the same work twice.

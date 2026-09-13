@@ -1675,6 +1675,12 @@ false starts, is in `docs/PROGRESS.md`.
   that module already exposed — `NotificationsService` changed by one line and all 28 of
   its e2e tests pass unmodified. Dormant until `FIREBASE_SERVICE_ACCOUNT` is set and a
   `google-services.json` is added; see `apps/native/README.md`, "Turning push on".
+- ☐ **The API is still on `opd-api-koes.onrender.com`, and renaming it is the wrong
+  fix.** Render does not redirect a renamed service - the old hostname is released - and
+  that hostname is compiled into both APKs (`apps/native/gradle.properties`,
+  `apps/mobile/eas.json`) and registered as the Razorpay webhook. Renaming would take
+  money and issue no token until the webhook was repointed. The right move is a custom
+  domain (`api.kramya.app`) once the domain is owned, which then never changes again.
 - ☐ **A console upload path and object storage** for photos. `photoUrl` is seeded.
 - ☐ **`with-servers.mjs`**: verify a live server rather than an open port, and clean up
   its fixture sessions. Stale servers and 69 accumulated fixtures produced three false
