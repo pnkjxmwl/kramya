@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 
 /**
@@ -17,6 +17,19 @@ import './globals.css';
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
+  display: 'swap',
+});
+
+/*
+  The display accent on the public pages (tailwind `font-serif`). One weight, both
+  styles - it is only ever a word or two in a headline, so it is not worth more
+  bytes than that. `display: swap` so a slow font never hides a headline.
+*/
+const serif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  variable: '--font-serif',
   display: 'swap',
 });
 
@@ -53,7 +66,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${serif.variable}`}>
       {/*
         `suppressHydrationWarning` is here for the browser, not for us.
 

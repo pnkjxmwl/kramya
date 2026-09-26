@@ -9306,3 +9306,56 @@ error level, sent to Sentry. Malformed JSON echoed the parser's sentence with it
 Nest discards the original error and rethrows `new BadRequestException(err.message)`; nothing
 in this API throws a bare one, so a 400 arriving there is always the parser and gets our own
 sentence.
+
+## 2026-09-26 · The web surface, redesigned: the token as a ticket, the day as a timeline
+
+The brief was "it doesn't look good - make it premium, with motion, and not like AI slop".
+Before touching anything, every screen was captured signed in against a seeded API (16
+page × viewport pairs), so each change was judged against a picture rather than memory.
+
+### What was actually wrong, beyond taste
+
+- **The board was 533px wide on a 390px phone.** Below `lg` the grid had no column
+  template, so its implicit `auto` column grew to its widest row. On the real console and
+  the demo alike. `grid-cols-[minmax(0,1fr)]` fixes it; every key page now checks clean
+  for horizontal overflow at 390px.
+- **The most important fact on the board had the least weight.** "Now with" was a card
+  like the pace panel under it, token at 17px. It is now a ticket (ink stub, 56px token,
+  notched tear line) with the full call order beneath it.
+- **Forty links on a twenty-row queue.** Each row carried open "Priority" and red "Cancel
+  booking" disclosures. They sit behind one ⋯ popover per row now; the forms are unchanged.
+- **The token card in the "Up next" list was being cut off** by the left column's own
+  height cap - a flex child with `overflow-hidden` may shrink. `shrink-0`.
+- **`text-muted` does not exist** - the board's clinical note rendered unstyled.
+- **The last teal:** the focus shadow (1.9:1, failing 3:1) and slate-tinted card shadows.
+- **The tailwind config contradicted itself** ("the console above is still teal").
+- **The demo had drifted from the product** - tables where the board has lists. Both now
+  render the same `Stage` / `RosterShell` / `UpNext` components.
+- **On a phone, pace and session controls sat between the patient being seen and the
+  waiting list.** The left column dissolves below `lg` (`max-lg:contents`) and orders
+  stage → rosters → controls.
+
+### Decided, and rejected
+
+- *Decided:* an animated hero scene (a desk calling people in, in sync with one patient's
+  phone counting down to "Time to leave") instead of the line drawing, which moved down to
+  the "a token is a promise" section it illustrates. The sign-in panel reuses the same
+  scene instead of a static copy that was being clipped at the panel edge.
+  *Rejected:* a screenshot of the console - stale the day the console changes, blurry
+  everywhere but one DPR; the landing page's console preview is live markup instead.
+- *Decided:* one italic serif word per public headline (Instrument Serif via next/font, no
+  new npm dependency). *Rejected:* gradient text, glow blobs, glassmorphism cards - the
+  tells of a generated page; the texture is a masked ledger grid.
+- *Decided:* the overview as a day timeline plus live cards with session progress.
+  *Rejected:* adding per-session waiting counts to the real overview - N extra queue
+  fetches per render; the demo shows them only because its fixture has them.
+- *Kept:* "Call next" as the button label. It briefly read "Call B004"; the stub already
+  names who that is, and the label is the command's name in the docs and the walkthrough.
+
+### Verified
+
+Web typecheck, lint and production build clean; the console walkthrough (a real API, real
+forms pressed) **72/72** - it caught the "Call next" relabel and an "Up next" list that
+started at the second patient, both fixed rather than the test edited. The walkthrough
+reads Postgres through `docker exec`; in a container without Docker it was run with a
+scratch shim forwarding the same `psql` call, which changes nothing it asserts.

@@ -3,19 +3,16 @@ import type { Doctor, OPDSession, Paginated } from '@opd/contracts';
 import { apiGet } from '../../../lib/api';
 import { getMe } from '../../../lib/tenant';
 import { Icon } from '../../../components/icon';
+import { Badge, Card, EmptyState, PageHeader, btn } from '../../../components/ui';
 import {
-  Badge,
-  Card,
-  EmptyState,
-  PageHeader,
-  TableCard,
-  btn,
-  td,
-  th,
-  table,
-  tr,
-} from '../../../components/ui';
-import { SessionStatusBadge, SESSION_FINISHED, istDateLabel, istToday, istTime } from '../queue/ui';
+  SessionStatusBadge,
+  SESSION_FINISHED,
+  istDateLabel,
+  istMinutes,
+  istToday,
+  istTime,
+} from '../queue/ui';
+import { DayTimeline, LiveSessionCard, StatStrip, type TimelineKind } from './parts';
 
 /**
  * The overview - **what is happening in this hospital right now**, rather than a
@@ -33,7 +30,8 @@ import { SessionStatusBadge, SESSION_FINISHED, istDateLabel, istToday, istTime }
  */
 
 const NEXT_STEP: Record<string, string> = {
-  ADMIN: 'Run a session from the board, or set up departments, doctors, schedules and queue rules under Configuration.',
+  ADMIN:
+    'Run a session from the board, or set up departments, doctors, schedules and queue rules under Configuration.',
   DOCTOR: 'Open your session to call the next patient and run consultations.',
   RECEPTION: 'Open a session to check patients in and register walk-ins.',
 };
@@ -68,7 +66,9 @@ export default async function Overview() {
 
   const date = istToday();
   const [page, doctors] = await Promise.all([
-    apiGet<Paginated<OPDSession>>(`/hospitals/${active.hospitalId}/sessions?date=${date}&limit=100`),
+    apiGet<Paginated<OPDSession>>(
+      `/hospitals/${active.hospitalId}/sessions?date=${date}&limit=100`,
+    ),
     apiGet<Paginated<Doctor>>(`/hospitals/${active.hospitalId}/doctors?limit=100`),
   ]);
 
@@ -87,6 +87,7 @@ export default async function Overview() {
     (s) => s.status === 'SCHEDULED' || s.status === 'OPEN_FOR_REGISTRATION',
   );
   const done = sessions.filter((s) => SESSION_FINISHED.includes(s.status));
+  const nowMin = istMinutes(new Date());
 
   return (
     <>
@@ -107,59 +108,62 @@ export default async function Overview() {
       />
 
       {/*
-        Three counts, not a chart. The question at 9am is "is anything running yet",
-        and a number answers it in less time than a bar does.
+        Counts, not a chart. The question at 9am is "is anything running yet", and a
+        number answers it in less time than a bar does.
       */}
-      <dl className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="Running now" value={running.length} icon="activity" tone="success" />
-        <Tile label="Still to start" value={upcoming.length} icon="clock" />
-        <Tile label="Finished" value={done.length} icon="check" />
-        <Tile
-          label={active.role === 'DOCTOR' ? 'Your sessions' : 'Doctors listed'}
-          value={active.role === 'DOCTOR' ? sessions.length : doctors.total}
-          icon="users"
-        />
-      </dl>
+      <StatStrip
+        items={[
+          { label: 'Running now', value: running.length, icon: 'activity', live: true },
+          { label: 'Still to start', value: upcoming.length, icon: 'clock' },
+          { label: 'Finished', value: done.length, icon: 'check' },
+          {
+            label: active.role === 'DOCTOR' ? 'Your sessions' : 'Doctors listed',
+            value: active.role === 'DOCTOR' ? sessions.length : doctors.total,
+            icon: 'users',
+          },
+        ]}
+      />
 
       {running.length > 0 && (
-        <div className="mb-5">
-          <h2 className="mb-2.5 text-eyebrow uppercase text-ink-muted">In progress</h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <section aria-labelledby="live-now" className="mb-7">
+          <h2 id="live-now" className="mb-3 text-eyebrow uppercase text-ink-muted">
+            Live now
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {running.map((session) => (
-              <Link
+              <LiveSessionCard
                 key={session.id}
                 href={`/queue/${session.id}`}
-                className="group flex flex-col rounded-lg border border-brand-200 bg-surface p-4 shadow-xs ring-1 ring-brand-100 transition-colors hover:border-brand-300 hover:bg-brand-50/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="min-w-0 truncate text-h3 text-ink">
-                    {doctorName.get(session.currentProviderDoctorId) ?? 'Unknown doctor'}
-                  </span>
-                  <SessionStatusBadge status={session.status} />
-                </div>
-                <span className="mt-1 text-caption tabular-nums text-ink-muted">
-                  {istTime(session.scheduledStart)}–{istTime(session.scheduledEnd)}
-                  {session.pausedAt !== null && ' · paused'}
-                </span>
-                <span className="mt-3 inline-flex items-center gap-1 text-label font-semibold text-primary">
-                  Open board
-                  <Icon
-                    name="arrow-right"
-                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                  />
-                </span>
-              </Link>
+                doctor={doctorName.get(session.currentProviderDoctorId) ?? 'Unknown doctor'}
+                sub={session.pausedAt !== null ? 'Queue paused' : undefined}
+                windowLabel={`${istTime(session.scheduledStart)}–${istTime(session.scheduledEnd)}`}
+                startMin={istMinutes(session.scheduledStart)}
+                endMin={istMinutes(session.scheduledEnd)}
+                nowMin={nowMin}
+              />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
-        <TableCard
-          title={active.role === 'DOCTOR' ? 'Your sessions today' : "Today's sessions"}
-          description={`${sessions.length} on ${istDateLabel(date)}`}
-        >
-          {sessions.length === 0 ? (
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <DayTimeline
+          title={active.role === 'DOCTOR' ? 'Your sessions today' : 'Today’s sessions'}
+          description={`${sessions.length} session${sessions.length === 1 ? '' : 's'} · ${istDateLabel(date)} · times in IST`}
+          nowMin={nowMin}
+          rows={[...sessions]
+            .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart))
+            .map((session) => ({
+              key: session.id,
+              href: SESSION_FINISHED.includes(session.status) ? null : `/queue/${session.id}`,
+              doctor: doctorName.get(session.currentProviderDoctorId) ?? 'Unknown doctor',
+              windowLabel: `${istTime(session.scheduledStart)}–${istTime(session.scheduledEnd)}`,
+              startMin: istMinutes(session.scheduledStart),
+              endMin: istMinutes(session.scheduledEnd),
+              kind: KIND[session.status] ?? 'scheduled',
+              badge: <SessionStatusBadge status={session.status} />,
+            }))}
+          empty={
             <EmptyState
               icon="calendar"
               title="Nothing scheduled today"
@@ -176,50 +180,16 @@ export default async function Overview() {
                 ? 'Sessions are generated from the weekly schedules, or added one at a time.'
                 : 'An administrator generates the day’s sessions from the schedules.'}
             </EmptyState>
-          ) : (
-            <table className={table}>
-              <thead>
-                <tr>
-                  <th className={th}>Doctor</th>
-                  <th className={th}>Window</th>
-                  <th className={th}>Status</th>
-                  <th className={th}>
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((session) => (
-                  <tr key={session.id} className={tr}>
-                    <td className={td + ' font-medium'}>
-                      {doctorName.get(session.currentProviderDoctorId) ?? 'Unknown doctor'}
-                    </td>
-                    <td className={td + ' whitespace-nowrap tabular-nums text-ink-muted'}>
-                      {istTime(session.scheduledStart)}–{istTime(session.scheduledEnd)}
-                    </td>
-                    <td className={td}>
-                      <SessionStatusBadge status={session.status} />
-                    </td>
-                    <td className={td + ' text-right'}>
-                      {SESSION_FINISHED.includes(session.status) ? (
-                        <span className="text-caption text-ink-disabled">Finished</span>
-                      ) : (
-                        <Link className={btn('quiet', 'sm')} href={`/queue/${session.id}`}>
-                          Open board
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </TableCard>
+          }
+        />
 
         <Card title="Your access" description="Where this account can act">
           <ul className="flex flex-col divide-y divide-line-soft">
             {me.memberships.map((m) => (
-              <li key={m.hospitalId} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <li
+                key={m.hospitalId}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+              >
                 <span className="min-w-0 truncate text-body font-medium text-ink">
                   {m.hospitalName}
                 </span>
@@ -238,31 +208,12 @@ export default async function Overview() {
   );
 }
 
-/**
- * One count. Tabular, so a row of them stays aligned as the numbers change under a
- * `router.refresh()` rather than shuffling sideways.
- */
-function Tile({
-  label,
-  value,
-  icon,
-  tone = 'neutral',
-}: {
-  label: string;
-  value: number;
-  icon: 'activity' | 'clock' | 'check' | 'users';
-  tone?: 'neutral' | 'success';
-}) {
-  return (
-    <div className="rounded-lg border border-line bg-surface p-3.5 shadow-xs">
-      <dt className="flex items-center gap-1.5 text-eyebrow uppercase text-ink-muted">
-        <Icon
-          name={icon}
-          className={'h-3.5 w-3.5 ' + (tone === 'success' && value > 0 ? 'text-success' : '')}
-        />
-        {label}
-      </dt>
-      <dd className="mt-1.5 text-display tabular-nums leading-none text-ink">{value}</dd>
-    </div>
-  );
-}
+/** How a session status is drawn on the timeline - the badge beside it carries the words. */
+const KIND: Record<string, TimelineKind> = {
+  ACTIVE: 'running',
+  OPEN_FOR_REGISTRATION: 'open',
+  SCHEDULED: 'scheduled',
+  COMPLETED: 'finished',
+  ENDED_EARLY: 'finished',
+  CANCELLED: 'cancelled',
+};

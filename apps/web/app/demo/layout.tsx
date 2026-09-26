@@ -66,6 +66,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
           // The site root, not /overview: a visitor here has no session, and the
           // wordmark is the most-clicked way out of any product tour.
           homeHref="/"
+          clock={false}
           viewer={{
             email: 'demo@kramya.app',
             hospitalName: HOSPITAL.name,
@@ -74,7 +75,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
         />
 
         <main className="min-w-0 flex-1 lg:overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <div className="enter mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
             {children}
           </div>
         </main>
