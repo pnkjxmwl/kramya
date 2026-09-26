@@ -84,6 +84,21 @@ export const EnvSchema = z.object({
    */
   PUBLIC_BASE_URL: z.string().default(''),
 
+  /**
+   * How many reverse proxies sit between the internet and this process.
+   *
+   * Express's `req.ip` is the TCP peer unless told otherwise, and behind Render's
+   * load balancer that peer is the balancer. The rate limiter keys on `req.ip`, so
+   * with 0 here every patient on the platform shared ONE bucket: eleven logins in a
+   * minute from anywhere in India locked out the twelfth person everywhere.
+   *
+   * A hop COUNT rather than `true`: `true` believes the leftmost X-Forwarded-For
+   * entry, which the caller writes, so anyone could mint a fresh bucket per request.
+   * With a count, Express takes the address the N-th proxy saw, which the caller
+   * cannot forge. Render is one hop. 0 locally, where nothing is in front.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+
   /// How long an unpaid reservation holds its slot. Ten minutes is comfortably more
   /// than a UPI round trip on a bad connection and short enough that an abandoned
   /// checkout does not block a real patient for the rest of the clinic.

@@ -195,6 +195,9 @@ const ENTRY_TRANSITIONS: Record<
    * that leaves a TERMINAL state, so it is named, audited under its own action, and
    * impossible to reach by accident - a manually cancelled entry cannot be
    * resurrected by a stray webhook just because the status happens to match.
+   * (This table cannot tell those two CANCELLEDs apart; `whyPaymentCannotBook` in
+   * commands/confirm-payment.ts does, from the cancellation event, and is what
+   * actually keeps that promise.)
    *
    * The rule it implements: the webhook wins. The money moved and the token number
    * was never handed to anyone else, so giving the slot back is a status change.

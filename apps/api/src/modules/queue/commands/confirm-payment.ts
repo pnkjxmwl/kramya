@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { nextEntryStatus } from '../state-machine';
+import { HOLDS_A_SLOT, nextEntryStatus } from '../state-machine';
 import type { CommandContext, QueueEntryRow } from '../queue.service';
 
 const ENTRY_INCLUDE = { patient: { select: { id: true, name: true } } } as const;
@@ -73,4 +73,62 @@ export async function applyPaymentConfirmation(
   });
 
   return updated;
+}
+
+/**
+ * Why a captured payment must NOT become (or revive) a booking - or null when it may.
+ *
+ * Asked under the session lock, before `applyPaymentConfirmation`, by the one
+ * caller that turns money into tokens. A non-null answer means the caller refunds
+ * the capture in full instead. Both rules are "would join have allowed this?",
+ * asked again at the moment the money lands:
+ *
+ * **A person withdrew it.** `REINSTATE` exists for the hold that LAPSED while the
+ * patient was paying - the webhook wins that race, because nobody decided anything.
+ * It never existed for a booking a patient or the desk cancelled on purpose. The
+ * state machine's own comment promised "a manually cancelled entry cannot be
+ * resurrected by a stray webhook", and nothing enforced it: a patient who cancelled
+ * an unpaid hold and whose UPI debit then went through got the booking back, now
+ * cancellable only at the late-cancellation tier. Worse, a REPLAYED capture for a
+ * booking already cancelled and refunded revived it, and the patient kept both the
+ * refund and the token. The cancellation event says which command did it.
+ *
+ * **They already hold a place.** Join refuses a second booking with
+ * `AlreadyInQueue`, but only while the first hold is live. Once it has expired (and
+ * before the sweeper gets to it) a fresh join opens a second hold with its own
+ * order - and both orders stay payable. Pay the old checkout still open in one tab
+ * and the new one in another, and the same patient held two tokens.
+ */
+export async function whyPaymentCannotBook(
+  ctx: CommandContext,
+  entry: QueueEntryRow,
+): Promise<string | null> {
+  if (entry.status === 'CANCELLED') {
+    const cancellation = await ctx.tx.queueEvent.findFirst({
+      where: { entryId: entry.id, type: 'ENTRY_CANCELLED' },
+      orderBy: { createdAt: 'desc' },
+      select: { metadata: true },
+    });
+    const via = (cancellation?.metadata as { via?: unknown } | null)?.via;
+    if (via !== 'EXPIRE_RESERVATION') {
+      return 'The booking was cancelled before the payment arrived';
+    }
+  }
+
+  const other = await ctx.tx.queueEntry.findFirst({
+    where: {
+      sessionId: entry.sessionId,
+      patientId: entry.patientId,
+      id: { not: entry.id },
+      // Every place join would have refused a second booking for. A RESERVED hold is
+      // not a booking - whichever of two holds is paid first wins.
+      status: { in: HOLDS_A_SLOT.filter((s) => s !== 'RESERVED') },
+    },
+    select: { tokenLabel: true },
+  });
+  if (other !== null) {
+    return `This patient already holds ${other.tokenLabel} in this session`;
+  }
+
+  return null;
 }

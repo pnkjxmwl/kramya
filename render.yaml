@@ -88,6 +88,10 @@ services:
         value: production
       - key: LOG_LEVEL
         value: info
+      # Render's load balancer is one proxy hop. Without this every client shares
+      # the rate limiter's bucket, because req.ip is the balancer (env.ts).
+      - key: TRUST_PROXY_HOPS
+        value: '1'
 
       # PORT is injected by Render; env.ts reads it and main.ts listens on it.
 

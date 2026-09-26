@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { applyHttpSettings } from '../src/common/http-settings';
 import { CurrentHospital, Roles } from '../src/common/decorators';
 import type { TenantContext } from '../src/common/auth-context';
 
@@ -38,6 +39,8 @@ class TestAppModule {}
  */
 export async function createTestApp(
   overrides: { provide: unknown; useValue: unknown }[] = [],
+  /** Proxies to trust, as TRUST_PROXY_HOPS does in main.ts. 0 = nothing in front. */
+  opts: { trustProxyHops?: number } = {},
 ): Promise<{
   app: INestApplication;
   prisma: PrismaService;
@@ -50,6 +53,8 @@ export async function createTestApp(
   // rawBody: true to match main.ts - without it the webhook signature test would
   // exercise a code path that does not exist in production.
   const app = moduleRef.createNestApplication({ rawBody: true });
+  // The same Express settings main.ts applies, so a test sees what production does.
+  applyHttpSettings(app, { trustProxyHops: opts.trustProxyHops ?? 0 });
   app.useGlobalFilters(new AllExceptionsFilter());
   await app.init();
   lastApp = app;
