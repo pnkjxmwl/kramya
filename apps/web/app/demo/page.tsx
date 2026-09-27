@@ -1,31 +1,46 @@
 import Link from 'next/link';
 import { Icon } from '../../components/icon';
+import { Badge, Card, PageHeader, btn } from '../../components/ui';
 import {
-  Badge,
-  Card,
-  PageHeader,
-  TableCard,
-  btn,
-  table,
-  td,
-  th,
-  tr,
-} from '../../components/ui';
+  DayTimeline,
+  LiveSessionCard,
+  StatStrip,
+  type TimelineKind,
+} from '../(console)/overview/parts';
 import { DEMO_DEPARTMENTS, DEMO_SESSIONS, HOSPITAL } from './fixtures';
 
 /**
- * The demo Overview - deliberately the same page as `(console)/overview/page.tsx`,
- * built from the same components, with fixtures where that one has API calls.
- *
- * Kept as a sibling rather than a shared component, because the real one is a server
- * component that calls `getMe()` and `apiGet()` - neither of which a signed-out
- * visitor can do. What IS shared is everything visual: `PageHeader`, `Card`,
- * `TableCard`, `Badge`, `btn`, and the table primitives. A restyle of those reaches
- * this page for free, which is the only kind of drift-proofing available here.
- *
- * The section order matches the real page on purpose - counts, then what is running,
- * then the day's table - so a buyer who later signs in recognises the screen.
+ * The demo's "now". The fixtures describe a morning mid-clinic - two sessions
+ * running, one finished at 11, one starting at 2 - so the clock is pinned to a
+ * moment that story is true at, rather than to the visitor's real time, which
+ * would put the Now line through the middle of the night half the time.
  */
+const DEMO_NOW = 11 * 60 + 20;
+
+/** "10:30 – 13:30" -> minutes since midnight at each end. */
+const minutesOf = (window: string): [number, number] => {
+  const [from = 0, to = 0] = window.split('–').map((part) => {
+    const [h = 0, m = 0] = part.trim().split(':').map(Number);
+    return h * 60 + m;
+  });
+  return [from, to];
+};
+
+/** 13:30 -> "1:30 PM", matching the real console's time format. */
+const clock = (min: number): string => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${h12} ${suffix}` : `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+};
+
+const KIND: Record<string, TimelineKind> = {
+  Running: 'running',
+  Finished: 'finished',
+  'Not started': 'scheduled',
+};
+
 export default function DemoOverview() {
   const running = DEMO_SESSIONS.filter((s) => s.status === 'Running');
   const upcoming = DEMO_SESSIONS.filter((s) => s.status === 'Not started');
@@ -45,100 +60,78 @@ export default function DemoOverview() {
         }
       />
 
-      {/* Three counts, not a chart - the real page's comment, and its reasoning: the
-          question at 9am is "is anything running yet", and a number answers it in
-          less time than a bar does. */}
-      <dl className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="Running now" value={running.length} icon="activity" tone="success" />
-        <Tile label="Still to start" value={upcoming.length} icon="clock" />
-        <Tile label="Finished" value={done.length} icon="check" />
-        <Tile label="Doctors listed" value={6} icon="users" />
-      </dl>
+      <StatStrip
+        items={[
+          { label: 'Running now', value: running.length, icon: 'activity', live: true },
+          { label: 'Still to start', value: upcoming.length, icon: 'clock' },
+          { label: 'Finished', value: done.length, icon: 'check' },
+          { label: 'Doctors listed', value: 6, icon: 'users' },
+        ]}
+      />
 
-      {running.length > 0 && (
-        <div className="mb-5">
-          <h2 className="mb-2.5 text-eyebrow uppercase text-ink-muted">In progress</h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {running.map((session) => (
-              <Link
+      <section aria-labelledby="live-now" className="mb-7">
+        <h2 id="live-now" className="mb-3 text-eyebrow uppercase text-ink-muted">
+          Live now
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {running.map((session) => {
+            const [startMin, endMin] = minutesOf(session.window);
+            return (
+              <LiveSessionCard
                 key={session.doctor}
                 href="/demo/queue"
-                className="group flex flex-col rounded-lg border border-brand-200 bg-surface p-4 shadow-xs ring-1 ring-brand-100 transition-colors hover:border-brand-300 hover:bg-brand-50/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="min-w-0 truncate text-h3 text-ink">{session.doctor}</span>
-                  <Badge tone="success" icon="activity">
-                    In progress
-                  </Badge>
-                </div>
-                <span className="mt-1 text-caption tabular-nums text-ink-muted">
-                  {session.window} · {session.waiting} waiting
-                </span>
-                <span className="mt-3 inline-flex items-center gap-1 text-label font-semibold text-primary">
-                  Open board
-                  <Icon
-                    name="arrow-right"
-                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                  />
-                </span>
-              </Link>
-            ))}
-          </div>
+                doctor={session.doctor}
+                sub={session.dept}
+                windowLabel={`${clock(startMin)}–${clock(endMin)}`}
+                startMin={startMin}
+                endMin={endMin}
+                nowMin={DEMO_NOW}
+                waiting={session.waiting}
+              />
+            );
+          })}
         </div>
-      )}
+      </section>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
-        <TableCard
-          title="Today's sessions"
-          description={`${DEMO_SESSIONS.length} on Friday, 13 September`}
-        >
-          <table className={table}>
-            <thead>
-              <tr>
-                <th className={th}>Doctor</th>
-                <th className={th}>Department</th>
-                <th className={th}>Window</th>
-                <th className={th}>Status</th>
-                <th className={th}>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {DEMO_SESSIONS.map((session) => (
-                <tr key={session.doctor} className={tr}>
-                  <td className={td + ' font-medium'}>{session.doctor}</td>
-                  <td className={td + ' text-ink-muted'}>{session.dept}</td>
-                  <td className={td + ' whitespace-nowrap tabular-nums text-ink-muted'}>
-                    {session.window}
-                  </td>
-                  <td className={td}>
-                    <Badge
-                      tone={
-                        session.status === 'Running'
-                          ? 'success'
-                          : session.status === 'Finished'
-                            ? 'neutral'
-                            : 'info'
-                      }
-                    >
-                      {session.status}
-                    </Badge>
-                  </td>
-                  <td className={td + ' text-right'}>
-                    {session.status === 'Finished' ? (
-                      <span className="text-caption text-ink-disabled">Finished</span>
-                    ) : (
-                      <Link className={btn('quiet', 'sm')} href="/demo/queue">
-                        Open board
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableCard>
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <DayTimeline
+          title="Today’s sessions"
+          description={`${DEMO_SESSIONS.length} sessions · Friday, 13 September · times in IST`}
+          nowMin={DEMO_NOW}
+          rows={DEMO_SESSIONS.map((session) => {
+            const [startMin, endMin] = minutesOf(session.window);
+            return {
+              key: session.doctor,
+              href: session.status === 'Finished' ? null : '/demo/queue',
+              doctor: session.doctor,
+              sub: session.dept,
+              windowLabel: `${clock(startMin)}–${clock(endMin)}`,
+              startMin,
+              endMin,
+              kind: KIND[session.status] ?? 'scheduled',
+              badge: (
+                <Badge
+                  tone={
+                    session.status === 'Running'
+                      ? 'success'
+                      : session.status === 'Finished'
+                        ? 'neutral'
+                        : 'info'
+                  }
+                  icon={
+                    session.status === 'Running'
+                      ? 'activity'
+                      : session.status === 'Finished'
+                        ? 'check'
+                        : 'calendar'
+                  }
+                >
+                  {session.status}
+                </Badge>
+              ),
+            };
+          }).sort((a, b) => a.startMin - b.startMin)}
+        />
 
         <Card title="Departments" description="What this hospital runs">
           <ul className="flex flex-col divide-y divide-line-soft">
@@ -155,38 +148,11 @@ export default function DemoOverview() {
             ))}
           </ul>
           <p className="mt-3 border-t border-line-soft pt-3 text-caption text-ink-muted">
-            Departments, doctors, weekly schedules and queue policy are configured here.
-            We set them up with you during onboarding.
+            Departments, doctors, weekly schedules and queue policy are configured here. We set them
+            up with you during onboarding.
           </p>
         </Card>
       </div>
     </>
-  );
-}
-
-/** The real Overview's tile, copied for the same reason the page is: tabular, so a
- *  row of them stays aligned as the numbers change rather than shuffling sideways. */
-function Tile({
-  label,
-  value,
-  icon,
-  tone = 'neutral',
-}: {
-  label: string;
-  value: number;
-  icon: 'activity' | 'clock' | 'check' | 'users';
-  tone?: 'neutral' | 'success';
-}) {
-  return (
-    <div className="rounded-lg border border-line bg-surface p-3.5 shadow-xs">
-      <dt className="flex items-center gap-1.5 text-eyebrow uppercase text-ink-muted">
-        <Icon
-          name={icon}
-          className={'h-3.5 w-3.5 ' + (tone === 'success' && value > 0 ? 'text-success' : '')}
-        />
-        {label}
-      </dt>
-      <dd className="mt-1.5 text-display tabular-nums leading-none text-ink">{value}</dd>
-    </div>
   );
 }

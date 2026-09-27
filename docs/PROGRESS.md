@@ -9222,3 +9222,140 @@ gitignored**.
 The fast tool was wrong in a way that looks exactly like being right - an empty result. Use
 `rg --no-ignore --hidden` when the question is "does this string exist anywhere", rather
 than "does this string exist in tracked code".
+
+## 2026-09-26 · API audit: five ways money or access went wrong, none of them visible to the suite
+
+A deep read of `apps/api` against a real Postgres and Redis. Baseline **387/387 green**, and
+green was the problem: every issue below sat underneath a passing suite because no test
+asked the question. Each fix landed with a test that **fails on the old code** (checked by
+reverting the source files and re-running; 6 of 7 new payment tests go red), so they are not
+tests written to agree with the fix. After: **398/398**, typecheck and lint clean.
+
+### 1. Rate limiting put the whole platform in one bucket
+
+`main.ts` never set Express's `trust proxy`, so behind Render's load balancer `req.ip` was the
+balancer for every request. The throttler keys on `req.ip`. Eleven logins in a minute, from
+anyone anywhere, and the twelfth person on the platform got a 429. Every rate-limit test talked
+to the API directly, where `req.ip` is correct, and passed.
+
+*Decided:* `TRUST_PROXY_HOPS` (0 locally, 1 in `render.yaml`), a hop **count**. *Rejected:*
+`trust proxy = true`, which believes the leftmost `X-Forwarded-For` entry - the one the caller
+writes - so any client could mint a fresh bucket per request; a test forges that header and
+must still be throttled. The setting moved into `common/http-settings.ts`, applied by both
+`main.ts` and the test bootstrap, because a setting only `main.ts` applies is one no test can see.
+
+**Not fixed, worth knowing:** the console calls the API from Vercel's servers, so staff logins
+are keyed on Vercel's egress IPs, not the receptionist. Forwarding the browser's IP needs a
+second trusted hop that direct callers could then forge; it wants a signed header from the
+console, which is its own piece of work.
+
+### 2. The refund percentages the console configures were never applied
+
+`cancellationRules.noShowRefundPct` and `sessionCancelledRefundPct` (default **100%**) are in
+the contract, in the console's policy form, and in PRD 8.9/8.11. Nothing read them. A doctor
+leaving early sent every paid patient still in the waiting room to RESCHEDULED with no refund,
+whatever the hospital had set.
+
+*Decided:* `QueueService.registerHook` - work another module does inside every command's
+transaction, from what the command recorded, plus an optional post-commit step. Payments
+registers one at boot that refunds ENTRY_NO_SHOW and ENTRY_RESCHEDULED outcomes via the same
+`refundForCancellation` arithmetic the cancel paths use (percentage minus already refunded, so
+it cannot pay twice). End-session, the desk's no-show button and the grace sweeper all reach it
+through one path. *Rejected:* a settlement sweeper - with a 0% policy there is no marker to say
+"settled", so every row is rescanned forever; and the percentage should be the one in force
+when the booking ended, not when a worker got round to it. *Rejected:* importing payments into
+queue - payments already depends on queue, and the module rule says queue must not write
+`Payment`/`Refund` anyway. RESCHEDULED is refunded at the session-cancelled rate whether or not
+the finish was early: paid, came, not seen is that outcome either way.
+
+### 3. A late capture on an ended session could keep the patient's money
+
+Two statements, no transaction: mark SUCCESS, then raise the refund. A crash between them left
+SUCCESS with no refund, and Razorpay's retry then matched the duplicate check - acknowledged,
+money kept, no row anywhere saying it was owed. Two deliveries racing (or the webhook racing
+the reconcile sweeper) each raised a full refund.
+
+*Decided:* `claimCaptureForRefund` - a conditional `updateMany` that only matches an unsettled
+payment, with the refund row in the same transaction. Postgres re-checks the condition after
+waiting out a concurrent writer, so exactly one caller wins. Tested with three concurrent
+deliveries: one REFUND_UPDATED, two DUPLICATE, one refund.
+
+### 4. A payment could revive a booking a person had cancelled
+
+The state machine's comment promised "a manually cancelled entry cannot be resurrected by a
+stray webhook". `REINSTATE: { CANCELLED: 'CONFIRMED' }` allowed exactly that. Two ways in: a
+patient cancels an unpaid hold and the debit lands anyway (the booking returns, now cancellable
+only at the late tier); and a **replayed** capture after cancel-and-refund - the duplicate check
+looked for SUCCESS, the payment was REFUNDED, so the booking was reinstated and the payment
+flipped back to SUCCESS. Refund kept, token kept.
+
+### 5. One patient, two tokens
+
+Join refuses a second booking only while the first hold is live. Once it expires (before the
+sweeper runs) a new join opens a second hold with its own order, and both stay payable.
+
+*Decided for 4 and 5:* `whyPaymentCannotBook` in the queue module, asked under the lock before
+confirming: revive only a hold cancelled by EXPIRE_RESERVATION (read from the cancellation
+event's `via`), and refuse if the patient already holds any non-RESERVED place in the session
+- the same rule join enforces. A refusal refunds in full through the claim above.
+
+### 6. An oversized body answered 500
+
+The body parser's 413 fell through the filter as an unknown error: INTERNAL_ERROR, logged at
+error level, sent to Sentry. Malformed JSON echoed the parser's sentence with its byte offset.
+Nest discards the original error and rethrows `new BadRequestException(err.message)`; nothing
+in this API throws a bare one, so a 400 arriving there is always the parser and gets our own
+sentence.
+
+## 2026-09-26 · The web surface, redesigned: the token as a ticket, the day as a timeline
+
+The brief was "it doesn't look good - make it premium, with motion, and not like AI slop".
+Before touching anything, every screen was captured signed in against a seeded API (16
+page × viewport pairs), so each change was judged against a picture rather than memory.
+
+### What was actually wrong, beyond taste
+
+- **The board was 533px wide on a 390px phone.** Below `lg` the grid had no column
+  template, so its implicit `auto` column grew to its widest row. On the real console and
+  the demo alike. `grid-cols-[minmax(0,1fr)]` fixes it; every key page now checks clean
+  for horizontal overflow at 390px.
+- **The most important fact on the board had the least weight.** "Now with" was a card
+  like the pace panel under it, token at 17px. It is now a ticket (ink stub, 56px token,
+  notched tear line) with the full call order beneath it.
+- **Forty links on a twenty-row queue.** Each row carried open "Priority" and red "Cancel
+  booking" disclosures. They sit behind one ⋯ popover per row now; the forms are unchanged.
+- **The token card in the "Up next" list was being cut off** by the left column's own
+  height cap - a flex child with `overflow-hidden` may shrink. `shrink-0`.
+- **`text-muted` does not exist** - the board's clinical note rendered unstyled.
+- **The last teal:** the focus shadow (1.9:1, failing 3:1) and slate-tinted card shadows.
+- **The tailwind config contradicted itself** ("the console above is still teal").
+- **The demo had drifted from the product** - tables where the board has lists. Both now
+  render the same `Stage` / `RosterShell` / `UpNext` components.
+- **On a phone, pace and session controls sat between the patient being seen and the
+  waiting list.** The left column dissolves below `lg` (`max-lg:contents`) and orders
+  stage → rosters → controls.
+
+### Decided, and rejected
+
+- *Decided:* an animated hero scene (a desk calling people in, in sync with one patient's
+  phone counting down to "Time to leave") instead of the line drawing, which moved down to
+  the "a token is a promise" section it illustrates. The sign-in panel reuses the same
+  scene instead of a static copy that was being clipped at the panel edge.
+  *Rejected:* a screenshot of the console - stale the day the console changes, blurry
+  everywhere but one DPR; the landing page's console preview is live markup instead.
+- *Decided:* one italic serif word per public headline (Instrument Serif via next/font, no
+  new npm dependency). *Rejected:* gradient text, glow blobs, glassmorphism cards - the
+  tells of a generated page; the texture is a masked ledger grid.
+- *Decided:* the overview as a day timeline plus live cards with session progress.
+  *Rejected:* adding per-session waiting counts to the real overview - N extra queue
+  fetches per render; the demo shows them only because its fixture has them.
+- *Kept:* "Call next" as the button label. It briefly read "Call B004"; the stub already
+  names who that is, and the label is the command's name in the docs and the walkthrough.
+
+### Verified
+
+Web typecheck, lint and production build clean; the console walkthrough (a real API, real
+forms pressed) **72/72** - it caught the "Call next" relabel and an "Up next" list that
+started at the second patient, both fixed rather than the test edited. The walkthrough
+reads Postgres through `docker exec`; in a container without Docker it was run with a
+scratch shim forwarding the same `psql` call, which changes nothing it asserts.

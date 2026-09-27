@@ -31,8 +31,8 @@ type Size = 'sm' | 'md' | 'lg';
 
 const SIZE: Record<Size, string> = {
   sm: 'h-7 gap-1.5 rounded-md px-2.5 text-caption',
-  md: 'h-9 gap-2 rounded-md px-3.5 text-label',
-  lg: 'h-11 gap-2 rounded-md px-5 text-body-lg font-semibold',
+  md: 'h-9 gap-2 rounded-lg px-3.5 text-label',
+  lg: 'h-12 gap-2 rounded-xl px-5 text-body-lg font-semibold',
 };
 
 /**
@@ -47,8 +47,11 @@ const SIZE: Record<Size, string> = {
  * and must not be missed: the board's one dominant action, and the auth forms.
  */
 const VARIANT: Record<Variant, string> = {
+  // A bevel, not a flat slab: the top-edge highlight in `shadow-button` is what makes
+  // a near-black fill read as something you press. Hover lifts the fill one step
+  // toward grey rather than darkening a colour that is already nearly black.
   primary:
-    'bg-primary text-white shadow-xs hover:bg-brand-800 active:bg-brand-900 ' +
+    'bg-primary text-white shadow-button hover:bg-brand-700 active:bg-brand-900 ' +
     'disabled:bg-line disabled:text-ink-disabled disabled:shadow-none',
   quiet:
     'border border-line bg-surface text-ink shadow-xs hover:border-line-strong hover:bg-hover ' +
@@ -60,9 +63,15 @@ const VARIANT: Record<Variant, string> = {
     'active:bg-danger-bg disabled:border-line disabled:text-ink-disabled disabled:shadow-none',
 };
 
+/*
+  `active:scale` is the press: 2% for 100ms, so a click on a busy desk is felt as well
+  as seen. Disabled buttons do not move - a control that reacts but does nothing is
+  worse than one that plainly will not.
+*/
 export const btn = (variant: Variant = 'primary', size: Size = 'md'): string =>
   'inline-flex select-none items-center justify-center whitespace-nowrap font-medium ' +
-  'transition-colors duration-100 disabled:cursor-not-allowed ' +
+  'transition-[color,background-color,border-color,box-shadow,transform] duration-100 ' +
+  'active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100 ' +
   SIZE[size] +
   ' ' +
   VARIANT[variant];
@@ -80,9 +89,13 @@ export const buttonDanger = btn('danger');
  * tinted, is distinguishable from an editable one at a glance.
  */
 export const input =
-  'h-9 w-full rounded-md border border-line bg-surface px-2.5 text-body text-ink shadow-xs ' +
-  'transition-colors duration-100 placeholder:text-ink-disabled hover:border-line-strong ' +
-  'focus:border-accent disabled:bg-sunken disabled:text-ink-muted';
+  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-body text-ink shadow-xs ' +
+  'transition-[border-color,box-shadow] duration-100 placeholder:text-ink-disabled hover:border-line-strong ' +
+  // The focus state is the ink border plus a soft 3px halo. The global
+  // :focus-visible outline is switched off HERE ONLY, because on a field it stacked
+  // on top of both and drew a heavy double ring around every input you clicked.
+  'focus:border-ink focus:shadow-[0_0_0_3px_rgba(11,11,12,0.12)] focus-visible:outline-none ' +
+  'disabled:bg-sunken disabled:text-ink-muted';
 
 /**
  * The auth forms' control size, paired with `btn(_, 'lg')`.
@@ -161,7 +174,7 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+    <header className="mb-7 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
         {eyebrow !== undefined && (
           <p className="mb-1.5 text-eyebrow uppercase text-ink-muted">{eyebrow}</p>
@@ -186,7 +199,7 @@ function CardHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-soft px-4 py-3">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-soft px-5 py-3.5">
       <div className="min-w-0">
         <h2 className="truncate text-h3 text-ink">{title}</h2>
         {description !== undefined && (
@@ -223,8 +236,8 @@ export function Card({
   return (
     <section
       className={
-        'rounded-lg border bg-surface shadow-xs ' +
-        (tone === 'accent' ? 'border-brand-200 ring-1 ring-brand-100' : 'border-line') +
+        'rounded-lg border bg-surface ' +
+        (tone === 'accent' ? 'border-line-strong shadow-raised' : 'border-line shadow-xs') +
         ' ' +
         className
       }
@@ -232,7 +245,7 @@ export function Card({
       {title !== undefined && (
         <CardHeader title={title} description={description} actions={actions} />
       )}
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
@@ -278,11 +291,16 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
  * `bg-sunken` rather than `bg-surface`: sticky white over white rows left no edge at
  * all, so the head appeared to dissolve into the first row as it scrolled under.
  */
+/*
+  A head that labels rather than a grey band. The sunken fill made every table open
+  on its heaviest element - a bar of colour above the data - and the eyebrow type
+  already says "this is a label". A hairline is enough.
+*/
 export const th =
-  'sticky top-0 z-10 border-b border-line bg-sunken px-3 py-2 text-left text-eyebrow ' +
-  'uppercase text-ink-muted first:pl-4 last:pr-4';
+  'sticky top-0 z-10 border-b border-line bg-surface px-3 py-2.5 text-left text-eyebrow ' +
+  'uppercase text-ink-muted first:pl-5 last:pr-5';
 
-export const td = 'border-b border-line-soft px-3 py-2.5 text-body text-ink first:pl-4 last:pr-4';
+export const td = 'border-b border-line-soft px-3 py-3 text-body text-ink first:pl-5 last:pr-5';
 
 /** A whole row, so a long table stays readable as the eye travels across it. */
 export const tr = 'transition-colors duration-75 hover:bg-hover';
@@ -426,8 +444,8 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
 // ---------------------------------------------------------------------------
 
 const BADGE = {
-  neutral: 'bg-sunken text-ink-muted ring-line',
-  brand: 'bg-brand-50 text-brand-800 ring-brand-200',
+  neutral: 'bg-sunken text-ink-soft ring-line',
+  brand: 'bg-surface text-ink ring-line-strong',
   success: 'bg-success-bg text-success ring-success-line',
   warning: 'bg-warning-bg text-warning ring-warning-line',
   danger: 'bg-danger-bg text-danger ring-danger-line',
@@ -456,7 +474,7 @@ export function Badge({
   return (
     <span
       className={
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-caption ' +
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-full py-0.5 pl-1.5 pr-2 text-caption ' +
         'font-medium ring-1 ring-inset ' +
         BADGE[tone]
       }
@@ -486,14 +504,19 @@ export function TokenChip({
 }) {
   const scale =
     size === 'lg'
-      ? 'min-w-[4.5rem] px-3 py-1 text-h2'
+      ? 'min-w-[4.5rem] rounded-lg px-3 py-1 text-h2'
       : size === 'sm'
-        ? 'min-w-[3rem] px-1.5 py-0.5 text-caption'
-        : 'min-w-[3.5rem] px-2 py-0.5 text-label';
+        ? 'min-w-[3rem] rounded-md px-1.5 py-0.5 text-caption'
+        : 'min-w-[3.5rem] rounded-md px-2 py-[3px] text-label';
+  /*
+    A keycap: white face, hairline, a darker bottom edge. The token is the one
+    physical object in this system - it is printed, held, read out across a room -
+    so it is the one thing drawn as an object rather than as a label.
+  */
   return (
     <span
       className={
-        'inline-flex items-center justify-center rounded-md border border-line bg-sunken ' +
+        'inline-flex items-center justify-center border border-line bg-surface shadow-keycap ' +
         'font-semibold tabular-nums tracking-tight text-ink ' +
         scale
       }
@@ -556,7 +579,7 @@ export function Disclosure({
         />
         {summary}
       </summary>
-      <div className="mt-2 animate-fade-up rounded-md border border-line bg-hover p-3">
+      <div className="mt-2 animate-fade-up rounded-lg border border-line bg-hover p-3.5">
         {children}
       </div>
     </details>

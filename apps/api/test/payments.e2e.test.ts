@@ -8,6 +8,8 @@ import { RazorpayClient } from '../src/modules/payments/razorpay.client';
 import { ReservationSweeper } from '../src/modules/queue/reservation-sweeper';
 import { QueuePolicyService } from '../src/modules/config/queue-policy.service';
 import { dateColumnFromString, istToday } from '../src/common/ist';
+import { QueueService } from '../src/modules/queue/queue.service';
+import { endSession } from '../src/modules/queue/commands/end-session';
 
 /**
  * P5-BE-01..04 done-when, against a real Postgres.
@@ -516,5 +518,153 @@ describe('join -> pay -> token (Phase 5)', () => {
     await prisma.oPDSession.update({ where: { id: sessionId }, data: { registrationClosedAt: new Date() } });
     const res = await join().expect(409);
     expect(res.body.error.details.reason).toBe('MANUALLY_CLOSED');
+  });
+  // -------------------------------------------------------------------------
+  // Money that arrives when there is no booking left for it to buy
+  // -------------------------------------------------------------------------
+
+  it('refunds, and does not revive, a booking the patient cancelled before the payment landed', async () => {
+    // They tapped Cancel on the unpaid hold; their UPI debit went through anyway.
+    const joined = (await join().expect(201)).body;
+    await request(app.getHttpServer())
+      .post(`/queue-entries/${joined.entry.id}/cancel`)
+      .set(auth(accessToken))
+      .send({ reason: 'Changed my mind' })
+      .expect(201);
+
+    const ack = await postWebhook(capturedBody(joined.razorpayOrderId, 'pay_after_cancel')).expect(201);
+    expect(ack.body.handled).toBe('REFUND_UPDATED');
+
+    const entry = await prisma.queueEntry.findUniqueOrThrow({ where: { id: joined.entry.id } });
+    expect(entry.status).toBe('CANCELLED');
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: joined.entry.id } });
+    expect(payment.status).toBe('REFUNDED');
+    expect(payment.refundedPaise).toBe(FEE_PAISE);
+    expect(razorpay.refunds.map((r) => r.amount)).toEqual([FEE_PAISE]);
+  });
+
+  it('treats a replayed capture after cancel-and-refund as a duplicate, not a new booking', async () => {
+    const joined = (await join().expect(201)).body;
+    const body = capturedBody(joined.razorpayOrderId, 'pay_replayed');
+    await postWebhook(body).expect(201);
+    await request(app.getHttpServer())
+      .post(`/queue-entries/${joined.entry.id}/cancel`)
+      .set(auth(accessToken))
+      .send({ reason: 'Cannot make it' })
+      .expect(201);
+    const refundsAfterCancel = razorpay.refunds.length;
+
+    // Razorpay delivers the same event again. This used to REINSTATE the booking and
+    // overwrite the payment back to SUCCESS: the patient kept the refund AND the token.
+    const ack = await postWebhook(body).expect(201);
+    expect(ack.body.handled).toBe('DUPLICATE');
+
+    expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: joined.entry.id } })).status).toBe('CANCELLED');
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: joined.entry.id } });
+    expect(payment.status).not.toBe('SUCCESS');
+    expect(razorpay.refunds).toHaveLength(refundsAfterCancel);
+  });
+
+  it('refunds a stale second checkout rather than giving one patient two tokens', async () => {
+    // Hold A lapses but the sweeper has not run, so a fresh join opens hold B with its
+    // own order. Both checkouts are still payable.
+    const first = (await join().expect(201)).body;
+    await prisma.queueEntry.update({
+      where: { id: first.entry.id },
+      data: { reservationExpiresAt: new Date(Date.now() - 60_000) },
+    });
+    const second = (await join().expect(201)).body;
+    expect(second.entry.id).not.toBe(first.entry.id);
+
+    await postWebhook(capturedBody(second.razorpayOrderId, 'pay_b')).expect(201);
+    const ack = await postWebhook(capturedBody(first.razorpayOrderId, 'pay_a')).expect(201);
+    expect(ack.body.handled).toBe('REFUND_UPDATED');
+
+    const bookings = await prisma.queueEntry.findMany({
+      where: { sessionId, patientId, status: 'CONFIRMED' },
+    });
+    expect(bookings.map((b) => b.id)).toEqual([second.entry.id]);
+    expect(razorpay.refunds.map((r) => r.amount)).toEqual([FEE_PAISE]);
+  });
+
+  it('refunds a too-late capture exactly once when two deliveries race', async () => {
+    const joined = (await join().expect(201)).body;
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'COMPLETED' } });
+
+    const body = capturedBody(joined.razorpayOrderId, 'pay_raced');
+    const acks = await Promise.all([postWebhook(body), postWebhook(body), postWebhook(body)]);
+    expect(acks.map((a) => a.status)).toEqual([201, 201, 201]);
+    expect(acks.map((a) => a.body.handled).sort()).toEqual(['DUPLICATE', 'DUPLICATE', 'REFUND_UPDATED']);
+
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: joined.entry.id } });
+    expect(payment.refundedPaise).toBe(FEE_PAISE);
+    expect(await prisma.refund.count({ where: { paymentId: payment.id } })).toBe(1);
+    expect(razorpay.refunds).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // The refund a hospital configured for how a paid booking ended
+  // -------------------------------------------------------------------------
+
+  /** A paid booking, then moved to `status` the way the desk or the patient would. */
+  const paidEntry = async (status: 'CONFIRMED' | 'CHECKED_IN', paymentId: string) => {
+    const joined = (await join().expect(201)).body;
+    await postWebhook(capturedBody(joined.razorpayOrderId, paymentId)).expect(201);
+    if (status !== 'CONFIRMED') {
+      await prisma.queueEntry.update({ where: { id: joined.entry.id }, data: { status } });
+    }
+    return joined.entry.id as string;
+  };
+
+  const setRules = async (rules: Record<string, number>) => {
+    await app.get(QueuePolicyService).ensure(hospitalId);
+    const policy = await prisma.queuePolicy.findUniqueOrThrow({ where: { hospitalId } });
+    await prisma.queuePolicy.update({
+      where: { hospitalId },
+      data: { cancellationRules: { ...(policy.cancellationRules as object), ...rules } },
+    });
+  };
+
+  const endIt = () =>
+    endSession(app.get(QueueService), sessionId, { accountId: null, hospitalId, type: 'SYSTEM' }, {});
+
+  it('refunds paid patients left unseen at session end, per sessionCancelledRefundPct', async () => {
+    // The doctor leaves early; this patient paid, came, and was never called.
+    const waiting = await paidEntry('CHECKED_IN', 'pay_waiting');
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE' } });
+
+    await endIt();
+
+    expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: waiting } })).status).toBe('RESCHEDULED');
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: waiting } });
+    // The default is 100%, and the console tells admins so. It used to be 0 in effect.
+    expect(payment.status).toBe('REFUNDED');
+    expect(payment.refundedPaise).toBe(FEE_PAISE);
+    expect(razorpay.refunds.map((r) => r.amount)).toEqual([FEE_PAISE]);
+  });
+
+  it('refunds a paid no-show per noShowRefundPct, and nothing when it is 0', async () => {
+    await setRules({ noShowRefundPct: 40 });
+    const noShow = await paidEntry('CONFIRMED', 'pay_noshow');
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE' } });
+
+    await endIt();
+
+    expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: noShow } })).status).toBe('NO_SHOW');
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: noShow } });
+    expect(payment.status).toBe('PARTIALLY_REFUNDED');
+    expect(payment.refundedPaise).toBe(FEE_PAISE * 0.4);
+    expect(razorpay.refunds.map((r) => r.amount)).toEqual([FEE_PAISE * 0.4]);
+  });
+
+  it('keeps the whole fee for a no-show when the hospital says 0%', async () => {
+    const noShow = await paidEntry('CONFIRMED', 'pay_noshow_zero');
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE' } });
+
+    await endIt();
+
+    expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: noShow } })).status).toBe('NO_SHOW');
+    expect(razorpay.refunds).toHaveLength(0);
+    expect(await prisma.refund.count()).toBe(0);
   });
 });

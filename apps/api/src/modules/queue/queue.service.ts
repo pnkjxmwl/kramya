@@ -135,6 +135,30 @@ export interface CommandContext {
   entryInSession(entryId: string): Promise<QueueEntryRow>;
 }
 
+/**
+ * Work another module must do INSIDE a command's transaction, decided from what the
+ * command recorded - and optionally something to do once it has committed.
+ *
+ * It exists for money. A queue command can end a paid booking (NO_SHOW, or
+ * RESCHEDULED when the session ends), and the refund the hospital configured for
+ * that outcome has to commit with it: a patient must never end up in a terminal
+ * state with their refund unwritten. But the queue module does not own `Payment`
+ * or `Refund` and must not write them (docs/CLAUDE.md 3), and the payments module
+ * already depends on this one, so it cannot be imported from here.
+ *
+ * So payments registers a hook at boot and every command runs it - the same "one
+ * hook, every command" argument as `announce` below. The grace sweeper, the staff
+ * no-show button and end-of-session all reach a refund through one path, and a
+ * command added next year cannot forget to.
+ *
+ * The returned function runs after commit, for anything that talks to a third
+ * party (docs/Rules.md 4). It must not throw; a failure there is logged.
+ */
+export type CommandHook = (
+  ctx: CommandContext,
+  records: readonly RecordInput[],
+) => Promise<(() => Promise<void>) | null>;
+
 export type QueueEntryRow = Prisma.QueueEntryGetPayload<{
   include: { patient: { select: { id: true; name: true } } };
 }>;
@@ -154,12 +178,18 @@ const TRANSACTION_MAX_WAIT_MS = 15_000;
 @Injectable()
 export class QueueService {
   private readonly log = new Logger(QueueService.name);
+  private readonly hooks: CommandHook[] = [];
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly policies: QueuePolicyService,
     private readonly realtime: RealtimeGateway,
   ) {}
+
+  /** See `CommandHook`. Called once per hook, at boot, by the module that owns it. */
+  registerHook(hook: CommandHook): void {
+    this.hooks.push(hook);
+  }
 
   /**
    * Run one domain command against one session.
@@ -190,6 +220,7 @@ export class QueueService {
     // they were called while the database says otherwise.
     let touchedEntryIds: string[] = [];
     let committedVersion = 0;
+    const afterCommit: (() => Promise<void>)[] = [];
 
     const result = await this.prisma.$transaction(
       async (tx) => {
@@ -237,6 +268,13 @@ export class QueueService {
 
         const result = await params.handler(ctx);
 
+        // Inside the transaction and under the lock, after the command has decided
+        // everything it is going to: a hook reads what was recorded and commits with it.
+        for (const hook of this.hooks) {
+          const after = await hook(ctx, records);
+          if (after !== null) afterCommit.push(after);
+        }
+
         // One update: whatever the command changed, plus the version bump it cannot
         // forget because it never writes it.
         await tx.oPDSession.update({
@@ -270,6 +308,15 @@ export class QueueService {
     );
 
     await this.announce(sessionId, committedVersion, touchedEntryIds);
+    for (const after of afterCommit) {
+      try {
+        await after();
+      } catch (error) {
+        // Committed and correct; whatever this was has its own retry (a PENDING
+        // refund row is what the reconcile sweeper looks for).
+        this.log.error({ err: error, sessionId }, 'post-commit hook failed');
+      }
+    }
     return result;
   }
 
