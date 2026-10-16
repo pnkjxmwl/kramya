@@ -13,7 +13,7 @@ real patient/payment data.
   the private Render `DATABASE_URL`; never copy that value into chat, Git, logs, or a
   client-side variable.
 - Redis-compatible Key Value: existing Render `opd-keyvalue` service.
-- Database state at migration: 14 Prisma migrations complete; all application tables empty.
+- Database state: 15 Prisma migrations complete; all application tables empty. The current Render API deployment reports the database and Redis healthy at `/health/ready`.
 
 ## Read-only health checks
 
