@@ -2,6 +2,7 @@ import { parseArgs } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { evaluateForecasts } from './modules/eta/eta.evaluation';
+import { loadRecordedForecasts } from './modules/eta/eta.evaluation.query';
 
 /** Read-only aggregate report; never boots API workers or prints patient identifiers. */
 async function main(): Promise<void> {
@@ -27,34 +28,7 @@ async function main(): Promise<void> {
   }
   const prisma = new PrismaClient();
   try {
-    const rows = await prisma.queueEntry.findMany({
-      where: { hospitalId, session: { scheduledStart: { gte: from, lt: to } } },
-      select: {
-        predictedCallFrom: true,
-        predictedCallTo: true,
-        calledAt: true,
-        consultStartedAt: true,
-        notifications: {
-          where: { type: 'LEAVE_NOW' },
-          orderBy: { createdAt: 'asc' },
-          take: 1,
-          select: { createdAt: true, sentAt: true },
-        },
-      },
-      take: 10_001,
-    });
-    if (rows.length > 10_000)
-      throw new Error('More than 10000 entries; narrow the reporting interval.');
-    const report = evaluateForecasts(
-      rows.map((row) => ({
-        from: row.predictedCallFrom,
-        to: row.predictedCallTo,
-        recordedAt: row.notifications[0]?.createdAt ?? null,
-        submittedAt: row.notifications[0]?.sentAt ?? null,
-        calledAt: row.calledAt,
-        startedAt: row.consultStartedAt,
-      })),
-    );
+    const report = evaluateForecasts(await loadRecordedForecasts(prisma, hospitalId, from, to));
     process.stdout.write(
       JSON.stringify(
         {

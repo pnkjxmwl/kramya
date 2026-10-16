@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { auth, createTestApp, request, resetDb, signup } from './helpers';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { dateColumnFromString, istToday } from '../src/common/ist';
+import { loadRecordedForecasts } from '../src/modules/eta/eta.evaluation.query';
 
 /**
  * P7-BE-03 · the ETA over a real database.
@@ -212,6 +213,42 @@ describe('eta (P7-BE-03)', () => {
     expect(res.body.sampleSize).toBe(0);
     expect(res.body.basis).toBe('SEED');
     expect(res.body.expectedConsultMins).toBe(10);
+  });
+
+  it('grades the first immutable call even after requeue replaces the current call time', async () => {
+    const person = await prisma.patient.create({ data: { name: 'Recalled report fixture' } });
+    const firstCall = new Date(Date.now() - 30 * 60_000);
+    const latestCall = new Date(Date.now() - 5 * 60_000);
+    const entry = await prisma.queueEntry.create({
+      data: {
+        hospitalId,
+        sessionId,
+        patientId: person.id,
+        tokenNumber: 1,
+        tokenLabel: 'A001',
+        type: 'WALK_IN',
+        status: 'CALLED',
+        calledAt: latestCall,
+      },
+    });
+    await prisma.queueEvent.createMany({
+      data: [firstCall, latestCall].map((createdAt) => ({
+        hospitalId,
+        sessionId,
+        entryId: entry.id,
+        type: 'ENTRY_CALLED' as const,
+        actorType: 'SYSTEM' as const,
+        createdAt,
+      })),
+    });
+    const rows = await loadRecordedForecasts(
+      prisma,
+      hospitalId,
+      new Date(Date.now() - 86_400_000),
+      new Date(Date.now() + 86_400_000),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.calledAt).toEqual(firstCall);
   });
 
   it('offers none once the doctor has gone home', async () => {
