@@ -65,13 +65,7 @@ import app.kramya.core.Icons
 import app.kramya.core.Theme
 import coil3.compose.AsyncImage
 
-// The app's primitives, on the ink system in docs/design_handoff_opd_queue/README.md.
-// Mirror of apps/mobile/lib/ui.tsx.
-//
-// Every export keeps its counterpart's shape and behaviour, so a screen ported from
-// there reads the same and comes out looking the same. Where Compose offers a better
-// mechanism than React Native for the same visual result, it is used and said so - the
-// contract being preserved is what appears on the glass, not the implementation.
+// Shared patient-app controls use the design tokens in core/Theme.kt.
 
 /**
  * Press feedback that matches the platform.
@@ -198,7 +192,7 @@ fun Hairline(modifier: Modifier = Modifier) {
 fun initialsOf(name: String): String = name
     .replace(Regex("^Dr\\.?\\s+", RegexOption.IGNORE_CASE), "")
     .split(Regex("\\s+"))
-    .filter { it.isNotEmpty() }
+    .filter { word -> word.any { it.isLetterOrDigit() } }
     .take(2)
     .mapNotNull { it.firstOrNull()?.uppercaseChar() }
     .joinToString("")
@@ -491,7 +485,7 @@ fun Button(
         // Disabled is the neutral fill, never a faded ink - a 40%-opacity black pill
         // still reads as "press me", just badly printed.
         inert -> Theme.Colors.FillSecondary
-        variant == ButtonVariant.Primary -> Theme.Colors.Ink
+        variant == ButtonVariant.Primary -> Theme.Colors.Primary
         variant == ButtonVariant.Danger -> Theme.Colors.Danger.Bg
         variant == ButtonVariant.Ghost -> Color.Transparent
         else -> Theme.Colors.FillSecondary
@@ -509,7 +503,7 @@ fun Button(
         modifier
             .fillMaxWidth()
             .height(52.dp)
-            .pressable(radius = 26.dp, enabled = !inert, onClick = onClick)
+            .pressable(radius = Theme.Radius.Control, enabled = !inert, onClick = onClick)
             .background(fill),
         horizontalArrangement = Arrangement.spacedBy(Theme.Space.x2, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -573,7 +567,7 @@ fun Field(
                 // shadow layer under a focused input, which drops focus, which fires
                 // blur, which removes the elevation - the keyboard opened and shut on a
                 // loop. Even a 0->1 border is suspect on a centred, scrolling form.
-                .background(if (focused) Theme.Colors.FillSecondary else Theme.Colors.FillSubtle)
+                .background(if (focused) Theme.Colors.PrimarySoft else Theme.Colors.FillSubtle)
                 .padding(horizontal = Theme.Space.x4),
             horizontalArrangement = Arrangement.spacedBy(Theme.Space.x2),
             verticalAlignment = Alignment.CenterVertically,
@@ -595,7 +589,7 @@ fun Field(
                         .onFocusChanged { focused = it.isFocused },
                     singleLine = true,
                     textStyle = Theme.Font.BodyLg.copy(color = Theme.Colors.Ink),
-                    cursorBrush = SolidColor(Theme.Colors.Ink),
+                    cursorBrush = SolidColor(Theme.Colors.Primary),
                     visualTransformation =
                         if (secure) PasswordVisualTransformation() else VisualTransformation.None,
                     keyboardOptions = KeyboardOptions(

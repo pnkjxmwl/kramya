@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.draw.shadow
@@ -196,6 +198,8 @@ fun DiscoverScreen(
         ) {
             item(key = "header") {
                 Column {
+                    BasicText("KRAMYA", modifier = Modifier.padding(top = Theme.Space.x3),
+                        style = Theme.Font.Overline.copy(color = Theme.Colors.Primary))
                     Row(
                         Modifier.fillMaxWidth().padding(top = Theme.Space.x2),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -242,7 +246,7 @@ fun DiscoverScreen(
                     }
 
                     BasicText(
-                        "Hospitals",
+                        "Find your clinic",
                         modifier = Modifier.padding(top = Theme.Space.x6),
                         style = Theme.Font.Display.copy(color = Theme.Colors.Ink),
                     )
@@ -250,7 +254,7 @@ fun DiscoverScreen(
                         text = if (searching) {
                             "${hospitals.data?.total ?: 0} matching “$query”"
                         } else {
-                            "$openNow open near you right now"
+                            "$openNow clinics taking registrations"
                         },
                         modifier = Modifier.padding(top = 6.dp),
                         style = Theme.Font.Body.copy(color = Theme.Colors.InkTertiary),
@@ -388,7 +392,7 @@ private fun FeaturedCard(hospital: HospitalCard, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .padding(top = Theme.Space.x6)
-            .height(236.dp)
+            .heightIn(min = 200.dp)
             .shadow(Theme.Elevation.Lg, RoundedCornerShape(Theme.Radius.Hero))
             .clip(RoundedCornerShape(Theme.Radius.Hero))
             .background(Theme.Colors.FillPhoto)
@@ -398,14 +402,14 @@ private fun FeaturedCard(hospital: HospitalCard, onClick: () -> Unit) {
                 onClick = onClick,
             ),
     ) {
-        Photo(
-            uri = hospital.photoUrl,
-            name = hospital.name,
-            modifier = Modifier.fillMaxSize(),
-            radius = Theme.Radius.Hero,
-            initialsSize = 44.dp,
-        )
-        Scrim()
+        if (!hospital.photoUrl.isNullOrBlank()) {
+            Photo(uri = hospital.photoUrl, name = hospital.name, modifier = Modifier.matchParentSize(), radius = Theme.Radius.Hero)
+            Scrim(modifier = Modifier.matchParentSize())
+        } else {
+            Box(Modifier.matchParentSize().background(Brush.linearGradient(listOf(Theme.Colors.BrandLight, Theme.Colors.BrandDeep))))
+            Icon(Icons.ACTIVITY, size = 78.dp, tint = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.align(Alignment.TopEnd).padding(20.dp))
+        }
 
         Column(
             Modifier
@@ -423,11 +427,8 @@ private fun FeaturedCard(hospital: HospitalCard, onClick: () -> Unit) {
             Row(
                 Modifier
                     .clip(RoundedCornerShape(9.dp))
-                    // The handoff blurs what is behind this pill. With no blur available
-                    // the tint has to carry it alone, so it sits a little heavier than the
-                    // specified 20% - at 20% flat, white 11px type over a bright sky is
-                    // unreadable.
-                    .background(Color.White.copy(alpha = 0.26f))
+                    // A dark surface preserves white status text over bright photos.
+                    .background(Theme.Colors.GlassPill)
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,

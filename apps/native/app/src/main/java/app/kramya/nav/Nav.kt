@@ -12,12 +12,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -159,18 +163,19 @@ fun TabBar(navController: NavHostController) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .padding(top = 10.dp, bottom = 8.dp),
+                .height(72.dp)
+                .padding(top = 7.dp, bottom = 7.dp),
         ) {
             Tab.entries.forEach { tab ->
                 val selected = hierarchy?.any { it.route == tab.graph } == true
-                val tint = if (selected) Theme.Colors.Ink else Theme.Colors.InkTertiary
+                val tint = if (selected) Theme.Colors.Primary else Theme.Colors.InkTertiary
 
                 Column(
                     Modifier
                         .weight(1f)
                         .fillMaxSize()
-                        .pressable(radius = 0.dp, role = null) {
+                        .semantics { this.selected = selected }
+                        .pressable(radius = 16.dp, role = Role.Tab, label = tab.label) {
                             /*
                               Visits always opens on the LIST.
 
@@ -189,7 +194,10 @@ fun TabBar(navController: NavHostController) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Top,
                 ) {
-                    Icon(tab.icon, size = 22.dp, tint = tint)
+                    Box(
+                        Modifier.background(if (selected) Theme.Colors.PrimarySoft else Color.Transparent, RoundedCornerShape(18.dp))
+                            .padding(horizontal = 18.dp, vertical = 4.dp),
+                    ) { Icon(tab.icon, size = 24.dp, tint = tint) }
                     BasicText(
                         text = tab.label,
                         modifier = Modifier.padding(top = 4.dp),
@@ -230,7 +238,7 @@ fun NavBar(
     right: (@Composable () -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth().background(Theme.Colors.Bar).statusBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(44.dp)) {
+        Box(Modifier.fillMaxWidth().height(52.dp)) {
             // The title is centred in the BAR, not between the controls, so it does not
             // shift when a right-hand action appears.
             BasicText(

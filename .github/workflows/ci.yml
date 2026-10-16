@@ -84,7 +84,15 @@ jobs:
       - name: Verify Supabase API roles are locked out
         run: psql postgresql://opd:opd_local_dev@localhost:5433/opd -v ON_ERROR_STOP=1 -f apps/api/test/sql/verify-client-role-grants.sql
 
+      - name: Verify restricted runtime database role
+        run: psql postgresql://opd:opd_local_dev@localhost:5433/opd -v ON_ERROR_STOP=1 -f apps/api/test/sql/verify-runtime-role.sql
+
+      - name: Verify role migration needs no superuser owner
+        run: node apps/api/test/sql/runtime-migration-owner.mjs | psql postgresql://opd:opd_local_dev@localhost:5433/opd -v ON_ERROR_STOP=1
+
       - run: pnpm lint
+      - name: Verify backup safety and deployment target checks
+        run: node --test scripts/test/*.test.mjs
       - run: pnpm typecheck
 
       # Build BEFORE seeding and testing, which is a change of order and not just a

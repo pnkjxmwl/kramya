@@ -1,0 +1,53 @@
+name: Migrate and deploy staging
+
+# Activate this path only after the credential/build-command cutover in the runbook.
+# It is manual and main-only; untrusted PR code never receives the database secret.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: kramya-staging-database-deploy
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging-database
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require passing CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT/check-runs" > "$RUNNER_TEMP/checks.json"
+          node -e 'const c=require(process.env.RUNNER_TEMP+"/checks.json").check_runs;for(const n of ["verify","native"]){if(!c.some(x=>x.name===n&&x.conclusion==="success"))throw Error("Passing CI missing: "+n)}'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply additive migrations with the separate owner credential
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          test -n "$DATABASE_URL" || { echo 'Missing staging-database MIGRATION_DATABASE_URL'; exit 1; }
+          node scripts/verify-migration-target.mjs
+          pnpm --filter @opd/api prisma:deploy
+      - name: Deploy the exact migrated commit
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: node scripts/deploy-migrated-commit.mjs

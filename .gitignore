@@ -40,6 +40,9 @@ Thumbs.db
 # test output
 coverage/
 
+# Encrypted database backups and temporary restore files. Keys live separately.
+.backups/
+
 # next generates this on build
 next-env.d.ts
 
