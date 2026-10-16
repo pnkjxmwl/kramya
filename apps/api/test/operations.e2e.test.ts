@@ -8,7 +8,14 @@ import {
   it,
   vi,
 } from "vitest";
-import { auth, createTestApp, request, resetDb, signup } from "./helpers";
+import {
+  auth,
+  createTestApp,
+  request,
+  resetDb,
+  signup,
+  resetThrottle,
+} from "./helpers";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { RazorpayClient } from "../src/modules/payments/razorpay.client";
 import { FcmClient } from "../src/modules/notifications/fcm.client";
@@ -57,6 +64,7 @@ describe("clinic operations permissions", () => {
       .set(auth(admin.accessToken))
       .expect(403);
     expect(preflight).not.toHaveBeenCalled();
+    resetThrottle();
     const status = await request(app.getHttpServer())
       .get(path)
       .set(auth(admin.accessToken))

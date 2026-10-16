@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { bindDatabaseIdentity, databaseScope } from "./database-context";
+import { boundedDatabaseUrl } from "./connection-options";
 
 @Injectable()
 export class PrismaService
@@ -8,7 +9,15 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    super();
+    super(
+      process.env.DATABASE_URL
+        ? {
+            datasources: {
+              db: { url: boundedDatabaseUrl(process.env.DATABASE_URL) },
+            },
+          }
+        : undefined,
+    );
     const transaction = this.$transaction.bind(this);
     const models = new Set(
       Prisma.dmmf.datamodel.models.map(
