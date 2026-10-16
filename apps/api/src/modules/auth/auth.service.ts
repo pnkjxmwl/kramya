@@ -185,7 +185,7 @@ export class AuthService {
    * Exchange a Google ID token for our own tokens. The token is verified against
    * Google's keys server-side - a client-supplied email or subject is never trusted.
    */
-  @DatabaseIdentityFor(() => ({ purpose: "auth" }))
+  @DatabaseIdentityFor(() => ({ purpose: "auth-google" }))
   async google(input: GoogleAuthRequest): Promise<AuthTokens> {
     const audience = env().GOOGLE_CLIENT_IDS;
     if (!audience.length)
@@ -194,7 +194,7 @@ export class AuthService {
     const payload = await this.verifyGoogleToken(input.idToken, audience);
     const sub = payload.sub;
     const email = payload.email.toLowerCase();
-    setDatabaseIdentity({ email });
+    setDatabaseIdentity({ email, googleSub: sub });
 
     // ponytail: read-then-write, not an upsert. Two concurrent first-time logins for
     // the same account would race; the unique constraint rejects the loser and the

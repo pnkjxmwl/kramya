@@ -8,6 +8,7 @@ export interface DatabaseIdentity {
   role?: string;
   purpose?: string;
   email?: string;
+  googleSub?: string;
   refreshHash?: string;
   inviteHash?: string;
   invitationId?: string;
@@ -24,8 +25,16 @@ export function withDatabaseIdentity<T>(
   work: () => T,
 ): T {
   const parent = databaseScope.getStore();
-  if (parent?.transaction && Object.entries(identity).some(([key, value]) => parent.identity[key as keyof DatabaseIdentity] !== value)) {
-    throw new Error('Cannot change database identity inside an existing transaction');
+  if (
+    parent?.transaction &&
+    Object.entries(identity).some(
+      ([key, value]) =>
+        parent.identity[key as keyof DatabaseIdentity] !== value,
+    )
+  ) {
+    throw new Error(
+      "Cannot change database identity inside an existing transaction",
+    );
   }
   return databaseScope.run(
     { ...parent, identity: { ...parent?.identity, ...identity } },
@@ -65,6 +74,7 @@ export async function bindDatabaseIdentity(
     set_config('kramya.role', ${identity.role ?? ""}, true),
     set_config('kramya.purpose', ${identity.purpose ?? ""}, true),
     set_config('kramya.email', ${identity.email ?? ""}, true),
+    set_config('kramya.google_sub', ${identity.googleSub ?? ""}, true),
     set_config('kramya.refresh_hash', ${identity.refreshHash ?? ""}, true),
     set_config('kramya.invite_hash', ${identity.inviteHash ?? ""}, true),
     set_config('kramya.invitation_id', ${identity.invitationId ?? ""}, true),
