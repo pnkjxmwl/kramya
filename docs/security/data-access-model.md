@@ -49,6 +49,10 @@ must retain their current API checks even after database policies are introduced
    TRUNCATE or BYPASSRLS privileges. Keep both credentials in deployment secrets.
    The current Render build runs Prisma migrations using DATABASE_URL, so change the
    deploy path at the same time; swapping only the runtime URI would break migrations.
+   Render service environment variables are also visible at runtime: putting the
+   migration-owner URL beside the runtime URL there would leave the privileged
+   credential available to the API process. Move DDL to a protected migration job
+   with its own secret, and give the Render API only its runtime credential.
 2. Implement trusted database context for every caller. It must include the verified
    account, resolved hospital and operation class. Nest guards, public auth endpoints,
    discovery, WebSocket subscription checks, signed payment webhooks and background
