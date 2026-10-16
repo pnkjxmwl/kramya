@@ -1,3 +1,5 @@
+> Current implementation note (16 October 2026): the patient app is Kotlin-only (`apps/native`). References to the removed Expo app below are historical design context; `apps/native/core/Theme.kt` (under `app/src/main/java/app/kramya`) and native UI components are the current implementation.
+
 # Design
 
 ## OPD Queue Platform — Visual System
@@ -67,13 +69,14 @@
 3. **Status at a glance.** A patient should understand "where am I, when am I seen, what do I do next" in one look.
 4. **Never color alone.** Every status pairs a color with a label + icon (accessibility + clarity).
 5. **One primary action per screen.** Especially the doctor console — the main action is always the largest, most obvious element.
-6. **Honest, gentle language.** ETA is a *window*, not a promise; changes are explained calmly (see §11 Tone).
+6. **Honest, gentle language.** ETA is a _window_, not a promise; changes are explained calmly (see §11 Tone).
 
 ---
 
 ## 2. Color Palette
 
 ### 2.1 Brand — Teal
+
 ```
 teal-50   #F0FDFA
 teal-100  #CCFBF1
@@ -86,11 +89,13 @@ teal-700  #0E7C7B   ← Primary
 teal-800  #115E59
 teal-900  #134E4A
 ```
+
 - **Primary** `#0E7C7B` — primary buttons, active nav, key highlights, links.
 - **Accent** `#14B8A6` — secondary highlights, focus rings, subtle emphasis.
 - **On-primary text** `#FFFFFF`.
 
 ### 2.2 Neutrals — Slate
+
 ```
 slate-50  #F8FAFC
 slate-100 #F1F5F9
@@ -103,12 +108,14 @@ slate-700 #334155
 slate-800 #1E293B
 slate-900 #0F172A   ← Primary text
 ```
+
 - **App background** `#F7FAFC`
 - **Surface / card** `#FFFFFF`
 - **Border / divider** `#E2E8F0`
 - **Text primary** `#0F172A` · **secondary** `#64748B` · **disabled** `#94A3B8`
 
 ### 2.3 Semantic
+
 ```
 Success  text #16A34A   bg #DCFCE7   line #BBF7D0   (positive, in-consultation, paid)
 Warning  text #B45309   bg #FEF3C7   line #FDE68A   (attention, called, delays)
@@ -117,7 +124,7 @@ Info     text #2563EB   bg #DBEAFE   line #BFDBFE   (neutral info, virtual-waiti
 ```
 
 **Warning moved from `#D97706` to `#B45309` (2026-09-05).** The old value is 3.4:1 on
-white: it fails AA for body text, and it was being *used* for body text — the
+white: it fails AA for body text, and it was being _used_ for body text — the
 running-behind sentence on the console's pace panel. The new one is 4.9:1. §8 has
 demanded AA since Phase 1 and one of this table's own values did not meet it.
 
@@ -127,17 +134,17 @@ arbitrary `/20` opacity of its own, and three of them picked different ones.
 
 ### 2.4 Queue-status colors (app-specific — reuse everywhere)
 
-| Status | Meaning | Dot / badge | Text | Icon |
-|---|---|---|---|---|
-| `VIRTUAL_WAITING` | Booked, not arrived | Info blue `#2563EB` / bg `#DBEAFE` | "Waiting" | home |
-| `CHECKED_IN` / `READY` | Present, eligible | Teal `#0E7C7B` / bg `#CCFBF1` | "Checked in" | check-circle |
-| `CALLED` | Your turn — go in | Warning `#D97706` / bg `#FEF3C7` | "Called" | bell |
-| `IN_CONSULTATION` | With the doctor | Success `#16A34A` / bg `#DCFCE7` | "In consultation" | stethoscope |
-| `COMPLETED` | Done | Slate `#64748B` / bg `#F1F5F9` | "Completed" | check |
-| `NO_SHOW` | Missed | Danger `#DC2626` / bg `#FEE2E2` | "No-show" | x-circle |
-| `SKIPPED` | Passed for now | Warning muted `#B45309` / bg `#FEF3C7` | "Skipped" | skip-forward |
-| `CANCELLED` | Cancelled | Slate `#94A3B8` / bg `#F1F5F9` | "Cancelled" | slash |
-| `PRIORITY` / `EMERGENCY` (type) | Escalated | Danger `#DC2626` / bg `#FEE2E2` | "Priority" / "Emergency" | alert-triangle |
+| Status                          | Meaning             | Dot / badge                            | Text                     | Icon           |
+| ------------------------------- | ------------------- | -------------------------------------- | ------------------------ | -------------- |
+| `VIRTUAL_WAITING`               | Booked, not arrived | Info blue `#2563EB` / bg `#DBEAFE`     | "Waiting"                | home           |
+| `CHECKED_IN` / `READY`          | Present, eligible   | Teal `#0E7C7B` / bg `#CCFBF1`          | "Checked in"             | check-circle   |
+| `CALLED`                        | Your turn — go in   | Warning `#D97706` / bg `#FEF3C7`       | "Called"                 | bell           |
+| `IN_CONSULTATION`               | With the doctor     | Success `#16A34A` / bg `#DCFCE7`       | "In consultation"        | stethoscope    |
+| `COMPLETED`                     | Done                | Slate `#64748B` / bg `#F1F5F9`         | "Completed"              | check          |
+| `NO_SHOW`                       | Missed              | Danger `#DC2626` / bg `#FEE2E2`        | "No-show"                | x-circle       |
+| `SKIPPED`                       | Passed for now      | Warning muted `#B45309` / bg `#FEF3C7` | "Skipped"                | skip-forward   |
+| `CANCELLED`                     | Cancelled           | Slate `#94A3B8` / bg `#F1F5F9`         | "Cancelled"              | slash          |
+| `PRIORITY` / `EMERGENCY` (type) | Escalated           | Danger `#DC2626` / bg `#FEE2E2`        | "Priority" / "Emergency" | alert-triangle |
 
 ### 2.5 No gradients
 
@@ -158,7 +165,7 @@ gradient.
 
 > **As built (corrected 2026-09-05):** both clients now load Inter. This note previously said
 > the mobile app shipped the system font on purpose — that was a rationalisation of a bug.
-> `theme.ts` and `tailwind.config.ts` had both *named* Inter since Phase 1 and **neither client
+> `theme.ts` and `tailwind.config.ts` had both _named_ Inter since Phase 1 and **neither client
 > ever loaded the face**, so the console rendered in Segoe UI and the app in Roboto for nine
 > phases while the token table looked correct. Now: `next/font/google` on web,
 > `@expo-google-fonts/inter` via `useFonts` on mobile, gated on the splash that already waits
@@ -169,7 +176,7 @@ gradient.
 > load, Android falls back to the system font at REGULAR WEIGHT EVERYWHERE. No bold headings,
 > no semibold buttons, no weight on a token number. The failure mode of a redundant weight is a
 > slightly heavy glyph; the failure mode of a missing one is an app with no hierarchy at all.
-**Numerals:** use **tabular figures** for token numbers, counts, and times so they don't jitter as they update.
+> **Numerals:** use **tabular figures** for token numbers, counts, and times so they don't jitter as they update.
 
 > **The two mirrors share a palette and a spacing rhythm, not a type scale
 > (2026-09-05).** They are different machines used by different people. The table below
@@ -188,17 +195,17 @@ gradient.
 **`eyebrow` (web) is the `Overline` row below**, named for what it does rather than for
 where it sits, and it is the console's section marker and column head.
 
-| Token | Size / Line | Weight | Use |
-|---|---|---|---|
-| Display | 40 / 48 | 700 | Token number hero, "now serving" number |
-| H1 | 28 / 36 | 700 | Screen titles |
-| H2 | 22 / 30 | 600 | Section headers |
-| H3 | 18 / 26 | 600 | Card titles (doctor name, etc.) |
-| Body-lg | 16 / 24 | 400 | Primary body |
-| Body | 14 / 22 | 400 | Default text |
-| Label | 14 / 20 | 500 | Buttons, field labels |
-| Caption | 12 / 16 | 500 | Meta, timestamps, helper text |
-| Overline | 11 / 16 | 600, tracked +4% | Status tags, small headers (UPPERCASE) |
+| Token    | Size / Line | Weight           | Use                                     |
+| -------- | ----------- | ---------------- | --------------------------------------- |
+| Display  | 40 / 48     | 700              | Token number hero, "now serving" number |
+| H1       | 28 / 36     | 700              | Screen titles                           |
+| H2       | 22 / 30     | 600              | Section headers                         |
+| H3       | 18 / 26     | 600              | Card titles (doctor name, etc.)         |
+| Body-lg  | 16 / 24     | 400              | Primary body                            |
+| Body     | 14 / 22     | 400              | Default text                            |
+| Label    | 14 / 20     | 500              | Buttons, field labels                   |
+| Caption  | 12 / 16     | 500              | Meta, timestamps, helper text           |
+| Overline | 11 / 16     | 600, tracked +4% | Status tags, small headers (UPPERCASE)  |
 
 Rules: max ~2 weights per screen; primary text `slate-900`, secondary `slate-500`; never below 12px.
 
@@ -209,6 +216,7 @@ Rules: max ~2 weights per screen; primary text `slate-900`, secondary `slate-500
 **Spacing scale (4-based):** `4, 8, 12, 16, 20, 24, 32, 40, 48, 64`. Default screen padding 16 (mobile) / 24 (web). Card padding 16–20.
 
 **Radius:**
+
 ```
 xs   4    the focus-ring corner
 sm   6    small chips
@@ -233,6 +241,7 @@ ripple to `md`. So the ripple was clipped to a 10pt corner inside a 12pt button,
 every press in the app. One token, used by both.
 
 **Elevation (soft, low-opacity shadows — never harsh):**
+
 ```
 sm    0 1 2   rgba(15,23,42,0.06)    subtle lift (list rows)
 card  0 2 8   rgba(15,23,42,0.05)    the standard card - PLUS a 1px border
@@ -251,7 +260,7 @@ an inactive status and a loading placeholder were the same colour as the page be
 them. `canvas` #F7FAFC (page) · `surface` #FFFFFF (card) · `sunken` #F1F5F9 (rails,
 table heads, inert pills) · `hover` #F8FAFC (interaction tint).
 
-**`card` is a shadow *and* a hairline border, never one alone.** A shadow this soft
+**`card` is a shadow _and_ a hairline border, never one alone.** A shadow this soft
 disappears against `canvas` on a cheap LCD in daylight; a border alone reads as a
 wireframe. Together they hold an edge in both conditions, which is the whole job of a
 card on a phone that gets used outdoors.
@@ -261,6 +270,7 @@ card on a phone that gets used outdoors.
 ## 5. Components
 
 ### 5.1 Buttons
+
 - **Primary:** teal `#0E7C7B` fill, white text, radius md, height 48 (mobile) / 40 (web). Pressed → `teal-800`. Disabled → `slate-200` bg / `slate-400` text.
 - **Secondary:** white bg, `slate-200` border, `slate-900` text.
 - **Ghost:** transparent, `teal-700` text.
@@ -268,6 +278,7 @@ card on a phone that gets used outdoors.
 - Full-width on mobile primary actions. Min touch target 44×44.
 
 ### 5.2 Cards
+
 White surface, radius lg, shadow md, padding 16–20, 1px `slate-200` border optional for flat sections.
 
 ### 5.2b The token chip — the product's atom
@@ -284,12 +295,15 @@ room. The patient app's token screen is the exception and keeps its own display-
 treatment (§5.6) — there the token is the whole screen, not an item in a list.
 
 ### 5.3 Status badge / pill
+
 Rounded-full, `bg` + `text` from §2.4, 12px overline text, small leading dot or icon. Always includes a label.
 
 ### 5.4 Inputs
+
 Height 48, radius sm, `slate-200` border, `slate-50` or white fill, focus ring `teal-500` 2px. Label above, helper/caption below, error in `#DC2626`.
 
 ### 5.5 Session card (patient discovery — the key browse unit)
+
 ```
 ┌─────────────────────────────────────────────┐
 │ Dr. Sharma                     ● OPEN        │  ← doctor H3 + status pill
@@ -303,8 +317,9 @@ Height 48, radius sm, `slate-200` border, `slate-50` or white fill, focus ring `
 ```
 
 ### 5.10 Home & location (patient — as built in Phase 3)
+
 The patient app is **location-first**: the city is chosen once on a dedicated screen, remembered
-between launches, and home *is* the hospital list for it. `docs/PRD.md` 6.1 describes the same flow —
+between launches, and home _is_ the hospital list for it. `docs/PRD.md` 6.1 describes the same flow —
 only the persistence is new, and it removes a full screen of friction from every visit.
 
 ```
@@ -323,8 +338,8 @@ only the persistence is new, and it removes a full screen of friction from every
 └─────────────────────────────────────────────┘
 ```
 
-- **The search box searches doctors AND hospitals.** With text in it, a *Doctors* section appears
-  above *Hospitals*. A box that only filtered hospitals returns nothing for a doctor's name and reads
+- **The search box searches doctors AND hospitals.** With text in it, a _Doctors_ section appears
+  above _Hospitals_. A box that only filtered hospitals returns nothing for a doctor's name and reads
   as broken.
 - **First run** shows a prompt with a **Select city** button, never an automatic redirect — the auth
   gate already redirects in an effect and a second one is how navigation loops start.
@@ -332,6 +347,7 @@ only the persistence is new, and it removes a full screen of friction from every
   filtering (`docs/Rules.md` §1).
 
 ### 5.6 Token card (patient — the hero after joining)
+
 ```
 ┌───────────────────────────────┐
 │           YOUR TOKEN          │  ← overline, slate-500
@@ -349,6 +365,7 @@ only the persistence is new, and it removes a full screen of friction from every
 ```
 
 ### 5.7 Doctor console — current patient (one dominant action)
+
 ```
 ┌───────────────────────────────────────────┐
 │ Session 10:00–13:00        ● Active        │
@@ -364,6 +381,7 @@ only the persistence is new, and it removes a full screen of friction from every
 ```
 
 ### 5.8 Staff check-in
+
 Big **Scan QR** button (opens camera) as the primary action; a manual "Search token / name" field beneath as fallback. On success → a green confirmation with the patient's token + name.
 
 **As built (Phase 6): three ways in, not two.** The camera is live on the page rather than behind a
@@ -371,10 +389,11 @@ button, then the typed token, then a searchable list of everyone still to arrive
 what saves a desk when the phone is flat or the booking is in a relative's name, and it costs nothing
 because the roster has to be fetched anyway. **The camera is treated as optional throughout** — no
 HTTPS, no device or a declined permission leaves a complete working screen with an explanation, never
-an error. The green confirmation names the token *and* the patient, so a mis-scan is visible before
+an error. The green confirmation names the token _and_ the patient, so a mis-scan is visible before
 the wrong person is called in.
 
 ### 5.9 Navigation
+
 - **Mobile:** bottom tab bar (Home/Discover · My Visits · Profile), active tint teal.
   - **As built (Phase 5):** three tabs — **Discover** (`compass`), **My Visits** (`clipboard`) and
     **Profile** (`user`). My Visits was deliberately absent until Phase 5, when there were finally
@@ -395,6 +414,7 @@ the wrong person is called in.
 ---
 
 ## 6. Iconography
+
 - Line icons, ~1.75px stroke, rounded caps (e.g. Lucide). Size 20 default, 24 for primary actions.
 - **As built:** **Feather**, via `@expo/vector-icons` on mobile. Lucide is a fork of Feather, so the
   stroke and cap treatment are the ones specified — and `@expo/vector-icons` ships with Expo, so there
@@ -414,6 +434,7 @@ the wrong person is called in.
 ---
 
 ## 7. Motion
+
 - Durations 150–250ms, ease-out. Purposeful, not decorative.
 - Queue/ETA updates: gentle fade/slide, never a jarring jump; briefly highlight a changed value.
 - Being **Called**: a calm but noticeable pulse on the token status (paired with push + haptic on mobile).
@@ -422,6 +443,7 @@ the wrong person is called in.
 ---
 
 ## 8. Accessibility
+
 - **Contrast:** meet WCAG AA (≥4.5:1 body text). Body text uses `slate-900`/`slate-700`; teal is for large text, fills, and accents — not small body copy on white.
 - **Touch targets:** ≥44×44.
 - **Never color-only:** status always has label + icon.
@@ -439,12 +461,14 @@ the wrong person is called in.
 ---
 
 ## 9. Layout & Responsive
+
 - **Mobile (patient):** single-column, 16px gutters, thumb-reachable primary actions at the bottom.
 - **Web console:** max content width ~1200px; responsive down to tablet (staff/doctor may use tablets at reception). Queue lists are dense but readable.
 
 ---
 
 ## 10. Imagery & Empty States
+
 - Minimal, friendly line illustrations in teal/slate for empty states ("No sessions today," "No one in the queue yet").
 - Doctor/hospital avatars: initials on `teal-100` bg if no photo.
 - No stock-photo clutter; keep it clean.
@@ -452,10 +476,11 @@ the wrong person is called in.
 ---
 
 ## 11. Voice & Tone (microcopy)
+
 - Calm, plain, reassuring. Short sentences.
-- ETA is always framed as an estimate: *"You'll likely be seen 11:10–11:30."*
-- Changes are explained without alarm: *"The queue moved a bit — your new window is 11:25–11:45."*
-- Priority/emergency stays private: *"The queue changed due to a priority case. Your time is updated."* — never reveal another patient's details.
+- ETA is always framed as an estimate: _"You'll likely be seen 11:10–11:30."_
+- Changes are explained without alarm: _"The queue moved a bit — your new window is 11:25–11:45."_
+- Priority/emergency stays private: _"The queue changed due to a priority case. Your time is updated."_ — never reveal another patient's details.
 - Actions are direct: "Join queue," "Check in," "Complete consultation."
 
 ---

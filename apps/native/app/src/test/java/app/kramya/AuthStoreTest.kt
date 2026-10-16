@@ -143,6 +143,7 @@ class AuthStoreTest {
             assertEquals(false, auth.state.value.signedIn)
             assertNull(auth.state.value.accessToken)
             assertNull(storage.load())
+            assertEquals(1, storage.saveCount)
         }
 
     @Test

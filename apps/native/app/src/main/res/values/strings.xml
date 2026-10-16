@@ -1,5 +1,3 @@
 <resources>
-    <!-- "Kramya Native", not "Kramya": this sits on the same launcher as the Expo build
-         and a tester has to be able to tell which one they are opening. -->
-    <string name="app_name">Kramya Native</string>
+    <string name="app_name">Kramya</string>
 </resources>

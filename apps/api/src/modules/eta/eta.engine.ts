@@ -1,5 +1,18 @@
 import type { DeadTimeBasis, EtaBasis } from '@opd/contracts';
 
+/** A running clock estimate requires a present doctor and an unpaused queue. */
+export function isEtaAvailable(session: {
+  status: string;
+  doctorPresence: string;
+  pausedAt: Date | null;
+}): boolean {
+  return (
+    (session.status === 'OPEN_FOR_REGISTRATION' || session.status === 'ACTIVE') &&
+    session.doctorPresence === 'PRESENT' &&
+    session.pausedAt === null
+  );
+}
+
 /**
  * P7-BE-03 · the ETA engine (docs/Architecture.md 8).
  *
@@ -155,7 +168,11 @@ export function measureDeadTime(samples: readonly number[]): DeadTimeResult {
   );
 
   if (credible.length < MIN_DEAD_TIME_SAMPLES) {
-    return { mins: SEED_DEAD_TIME_MIN, basis: 'SEED', sampleSize: credible.length };
+    return {
+      mins: SEED_DEAD_TIME_MIN,
+      basis: 'SEED',
+      sampleSize: credible.length,
+    };
   }
 
   const sorted = [...credible].sort((a, b) => a - b);
@@ -196,9 +213,7 @@ export function etaWindow(
 
   const elapsedMins = Math.max(0, (position.currentElapsedSec ?? 0) / 60);
   const remainingCurrent =
-    position.currentElapsedSec === null
-      ? 0
-      : Math.max(MIN_REMAINING_MIN, expected - elapsedMins);
+    position.currentElapsedSec === null ? 0 : Math.max(MIN_REMAINING_MIN, expected - elapsedMins);
 
   // Every patient ahead costs a consultation AND a handover, and one more handover
   // separates the person in the room now from the first of them. An empty room owes

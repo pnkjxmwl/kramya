@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { NotificationType, RegisterPushTokenRequest } from '@opd/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isUniqueViolation } from '../../common/prisma-errors';
-import type { ExpoApi } from './expo.client';
+import type { PushApi } from './push.client';
 import { PUSH_CLIENT } from './push.token';
 import { render } from './templates';
 
@@ -10,7 +10,7 @@ import { render } from './templates';
  * P8-BE-01 · everything we tell a patient goes through here
  * (docs/Architecture.md 13: *"no notification logic scattered in feature code"*).
  *
- * **A row is written first and sent afterwards.** Nothing calls Expo from inside a
+ * **A row is written first and sent afterwards.** Nothing calls FCM from inside a
  * queue command, for the same reason nothing calls Razorpay from inside one: an HTTP
  * call in a transaction holds a lock across the network, and a send that happens
  * before the commit is a lie if the commit then fails. So `record()` writes a PENDING
@@ -33,15 +33,7 @@ export class NotificationsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    /*
-      The INTERFACE, not a provider.
-
-      It was `ExpoClient` until a second patient client appeared holding FCM tokens rather
-      than Expo ones. Nothing in this file changed except this line: `PushRouter` sends
-      each message through whichever service knows about that device, and hands back the
-      same PushResult[] - including the `deviceGone` flag the pruning below depends on.
-    */
-    @Inject(PUSH_CLIENT) private readonly expo: ExpoApi,
+    @Inject(PUSH_CLIENT) private readonly push: PushApi,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -52,7 +44,7 @@ export class NotificationsService {
    * `POST /me/push-tokens` - this device, for this account.
    *
    * An upsert on the TOKEN, not on (account, token). A phone gets handed to a family
-   * member who signs in as themselves, and Expo would then route the first person's
+   * member who signs in as themselves, and FCM would then route the first person's
    * pushes to the second unless registering MOVES the token. It also clears
    * `disabledAt`, because a device that just registered is plainly not gone.
    */
@@ -107,6 +99,8 @@ export class NotificationsService {
     aheadCount?: number;
     /** The QueueEvent behind this message, when one caused it. */
     sourceEventId?: string | null;
+    /** Frozen when the outbox row is created, atomically with that row. */
+    predictedWindow?: { from: Date; to: Date };
   }): Promise<boolean> {
     const { title, body } = render(input.type, {
       tokenLabel: input.tokenLabel,
@@ -117,19 +111,34 @@ export class NotificationsService {
     const sourceEventId = input.sourceEventId ?? null;
 
     try {
-      await this.prisma.notification.create({
-        data: {
-          accountId: input.accountId,
-          entryId: input.entryId,
-          type: input.type,
-          title,
-          body,
-          sourceEventId,
-          // One event, one notification; otherwise one booking, one notification.
-          dedupeKey: sourceEventId ?? `${input.entryId}:${input.type}`,
-          // The deep link, and nothing else. No name, no diagnosis (docs/Rules.md 8).
-          data: { type: input.type, entryId: input.entryId, sessionId: input.sessionId },
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.notification.create({
+          data: {
+            accountId: input.accountId,
+            entryId: input.entryId,
+            type: input.type,
+            title,
+            body,
+            sourceEventId,
+            // One event, one notification; otherwise one booking, one notification.
+            dedupeKey: sourceEventId ?? `${input.entryId}:${input.type}`,
+            // The deep link, and nothing else. No name, no diagnosis (docs/Rules.md 8).
+            data: {
+              type: input.type,
+              entryId: input.entryId,
+              sessionId: input.sessionId,
+            },
+          },
+        });
+        if (input.predictedWindow) {
+          await tx.queueEntry.update({
+            where: { id: input.entryId },
+            data: {
+              predictedCallFrom: input.predictedWindow.from,
+              predictedCallTo: input.predictedWindow.to,
+            },
+          });
+        }
       });
       return true;
     } catch (error) {
@@ -151,7 +160,9 @@ export class NotificationsService {
       where: { status: 'PENDING', attempts: { lt: MAX_ATTEMPTS } },
       orderBy: { createdAt: 'asc' },
       take: BATCH,
-      include: { account: { select: { pushTokens: { where: { disabledAt: null } } } } },
+      include: {
+        account: { select: { pushTokens: { where: { disabledAt: null } } } },
+      },
     });
     if (pending.length === 0) return { sent: 0, failed: 0 };
 
@@ -166,13 +177,17 @@ export class NotificationsService {
         // device registered, and the record stands as the history that we tried.
         await this.prisma.notification.update({
           where: { id: notification.id },
-          data: { status: 'FAILED', attempts: MAX_ATTEMPTS, lastError: 'no registered device' },
+          data: {
+            status: 'FAILED',
+            attempts: MAX_ATTEMPTS,
+            lastError: 'no registered device',
+          },
         });
         failed += 1;
         continue;
       }
 
-      const results = await this.expo.send(
+      const results = await this.push.send(
         tokens.map((device) => ({
           token: device.token,
           title: notification.title,
@@ -181,7 +196,7 @@ export class NotificationsService {
         })),
       );
 
-      // Prune what Expo says is gone, or the delivery rate quietly rots as dead
+      // Prune tokens Firebase confirms are gone, or the delivery rate quietly rots as dead
       // tokens accumulate (docs/Phases.md).
       const dead = results.filter((r) => r.deviceGone).map((r) => r.token);
       if (dead.length > 0) {
@@ -203,7 +218,8 @@ export class NotificationsService {
           : {
               // Give up only once every device is gone or the attempts are spent.
               // Anything else stays PENDING and the next sweep tries again.
-              status: attempts >= MAX_ATTEMPTS || dead.length === results.length ? 'FAILED' : 'PENDING',
+              status:
+                attempts >= MAX_ATTEMPTS || dead.length === results.length ? 'FAILED' : 'PENDING',
               attempts,
               lastError: results.find((r) => !r.ok)?.error ?? 'send failed',
             },

@@ -32,7 +32,11 @@ export const EnvSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   /// Access tokens stay short-lived; the refresh token carries the session.
   JWT_ACCESS_TTL_SEC: z.coerce.number().int().positive().default(900),
-  JWT_REFRESH_TTL_SEC: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
+  JWT_REFRESH_TTL_SEC: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 24 * 30),
 
   /**
    * Signs the check-in QR (P6-BE-01, `common/checkin-code.ts`).
@@ -59,7 +63,12 @@ export const EnvSchema = z.object({
   GOOGLE_CLIENT_IDS: z
     .string()
     .default('')
-    .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
 
   // Razorpay, test mode for MVP (docs/PRD.md 10, docs/Rules.md 9).
   //
@@ -123,19 +132,17 @@ export const EnvSchema = z.object({
   DISABLED_WORKERS: z
     .string()
     .default('')
-    .transform((raw) => raw.split(',').map((name) => name.trim()).filter(Boolean)),
-
-  /**
-   * Expo push access token (Phase 8). Empty disables sending, and the API still
-   * boots and still RECORDS every notification - the same posture as Razorpay above,
-   * so a contributor with no Expo account can run everything else.
-   */
-  EXPO_ACCESS_TOKEN: z.string().default(''),
+    .transform((raw) =>
+      raw
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
 
   /**
    * Firebase service-account JSON, base64-encoded, for pushing to the NATIVE Android
    * client (`apps/native`). Empty disables FCM sending and nothing else: the API still
-   * boots, still records every notification, and still reaches every Expo device.
+   * boots and still records notifications until FCM is configured.
    *
    * **Base64 rather than raw JSON** because the credential contains newlines inside
    * `private_key`, and every hosting panel mangles those differently - Render included.

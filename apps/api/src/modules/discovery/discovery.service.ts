@@ -22,6 +22,7 @@ import { registrationGate } from '../../common/registration';
 import { ELIGIBLE_TO_CALL, HOLDS_A_SLOT } from '../queue/state-machine';
 import { QueuePolicyService } from '../config/queue-policy.service';
 import { EtaService } from '../eta/eta.service';
+import { isEtaAvailable } from '../eta/eta.engine';
 import { NotFoundError } from '../../common/errors';
 import { dateColumnFromString, dateColumnToString, istToday } from '../../common/ist';
 
@@ -585,9 +586,7 @@ export class DiscoveryService {
         doctorId: row.currentProviderDoctorId,
         aheadCount: eligibleAhead.get(row.id) ?? 0,
         currentStartedAt: consultingSince.get(row.id) ?? null,
-        estimable:
-          (row.status === 'OPEN_FOR_REGISTRATION' || row.status === 'ACTIVE') &&
-          row.doctorPresence !== 'LEFT',
+        estimable: isEtaAvailable(row),
       })),
       now,
     );

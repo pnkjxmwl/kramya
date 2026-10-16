@@ -35,7 +35,7 @@ import type { AccessTokenClaims } from '../common/auth-context';
  */
 @Injectable()
 @WebSocketGateway({
-  // Same origin policy as the REST API: the console and the Expo app are separate
+  // Same origin policy as the REST API: the console and the Kotlin app are separate
   // origins, and a socket that silently fails CORS looks exactly like a socket that
   // is merely quiet.
   cors: { origin: true, credentials: true },

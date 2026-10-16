@@ -58,14 +58,19 @@ function enumerateRoutes(app: INestApplication): Route[] {
   const stack = (server._router ?? server.router)?.stack ?? [];
 
   const routes: Route[] = [];
-  for (const layer of stack as { route?: { path: string; methods: Record<string, boolean> } }[]) {
+  for (const layer of stack as {
+    route?: { path: string; methods: Record<string, boolean> };
+  }[]) {
     if (layer.route === undefined) continue;
     // Nest registers a `/*` catch-all per method that exists only to produce the 404
     // for an unmatched URL. It is not an endpoint and has nothing to guard.
     if (layer.route.path.includes('*')) continue;
     for (const [method, enabled] of Object.entries(layer.route.methods)) {
       if (enabled && ['get', 'post', 'patch', 'delete', 'put'].includes(method)) {
-        routes.push({ method: method as Route['method'], path: layer.route.path });
+        routes.push({
+          method: method as Route['method'],
+          path: layer.route.path,
+        });
       }
     }
   }
@@ -103,9 +108,7 @@ describe('route authorization matrix (P9-SEC-01)', () => {
       const key = `${route.method} ${route.path}`;
       if (INTENTIONALLY_PUBLIC.has(key)) continue;
 
-      const res = await request(app.getHttpServer())
-        [route.method](fillParams(route.path))
-        .send({});
+      const res = await request(app.getHttpServer())[route.method](fillParams(route.path)).send({});
 
       // 401 is the only acceptable answer. A 404 would mean the guard let the
       // request through to a handler that then failed to find a row - which is an
@@ -114,8 +117,10 @@ describe('route authorization matrix (P9-SEC-01)', () => {
       if (res.status !== 401) unguarded.push(`${key} -> ${res.status}`);
     }
 
-    expect(unguarded, `these routes answered an anonymous caller:\n${unguarded.join('\n')}`)
-      .toEqual([]);
+    expect(
+      unguarded,
+      `these routes answered an anonymous caller:\n${unguarded.join('\n')}`,
+    ).toEqual([]);
   });
 
   it('keeps the public list exact - no route silently became public', async () => {
@@ -127,8 +132,7 @@ describe('route authorization matrix (P9-SEC-01)', () => {
       if (res.status === 401) shouldBePublicButIsNot.push(key);
     }
 
-    expect(shouldBePublicButIsNot, 'these are listed as public but rejected anonymity')
-      .toEqual([]);
+    expect(shouldBePublicButIsNot, 'these are listed as public but rejected anonymity').toEqual([]);
   });
 
   it('keeps the public list honest - no stale entries for routes that no longer exist', () => {
@@ -147,7 +151,7 @@ describe('route authorization matrix (P9-SEC-01)', () => {
     // takes an id from the URL and must scope it to the caller rather than trusting
     // it (docs/Rules.md 3).
 
-    it('will not show, edit or delete another account\'s patient', async () => {
+    it("will not show, edit or delete another account's patient", async () => {
       const mine = await signup(app, 'owner@idor.test');
       const theirs = await signup(app, 'stranger@idor.test');
 
@@ -181,11 +185,13 @@ describe('route authorization matrix (P9-SEC-01)', () => {
 
       // And the row is untouched, which is the assertion that would catch a handler
       // that answered 404 while still doing the work.
-      const still = await prisma.patient.findUnique({ where: { id: victimId } });
+      const still = await prisma.patient.findUnique({
+        where: { id: victimId },
+      });
       expect(still?.name).toBe('Somebody Else');
     });
 
-    it('will not list another account\'s bookings', async () => {
+    it("will not list another account's bookings", async () => {
       const mine = await signup(app, 'mine@idor.test');
       const theirs = await signup(app, 'theirs@idor.test');
 
@@ -198,8 +204,9 @@ describe('route authorization matrix (P9-SEC-01)', () => {
       // tamper with. This asserts the shape stays that way - a future `?accountId=`
       // would be exactly the regression.
       const items = (res.body.items ?? []) as { accountId?: string }[];
-      expect(items.every((i) => i.accountId === undefined || i.accountId === mine.accountId))
-        .toBe(true);
+      expect(items.every((i) => i.accountId === undefined || i.accountId === mine.accountId)).toBe(
+        true,
+      );
       expect(theirs.accountId).not.toBe(mine.accountId);
     });
 
@@ -209,7 +216,10 @@ describe('route authorization matrix (P9-SEC-01)', () => {
       await request(app.getHttpServer())
         .post('/me/push-tokens')
         .set(auth(mine.accessToken))
-        .send({ token: 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]', platform: 'android' })
+        .send({
+          token: 'fcm-aaaaaaaaaaaaaaaaaaaaaa-device-token',
+          platform: 'android',
+        })
         .expect(201);
 
       const rows = await prisma.pushToken.findMany();

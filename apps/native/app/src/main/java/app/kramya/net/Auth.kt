@@ -160,7 +160,9 @@ class AuthStore(private val store: TokenStorage) {
     private suspend fun rotate(staleAccessToken: String?): AuthTokens = rotation.withLock {
         // Re-check under the lock. If we waited behind another caller's rotation, the
         // token in hand is already fresh and asking again would burn a second one.
-        val held = tokens ?: throw ApiException("Signed out")
+        // Another waiting caller may already have rejected this refresh and cleared
+        // the session. Preserve the same authentication failure for every waiter.
+        val held = tokens ?: throw ApiException("Signed out", status = 401)
         if (held.accessToken != staleAccessToken) return@withLock held
 
         val started = generation

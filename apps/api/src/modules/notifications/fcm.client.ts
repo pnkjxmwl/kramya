@@ -1,34 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  cert,
-  getApp,
-  getApps,
-  initializeApp,
-  type App,
-} from 'firebase-admin/app';
+import { cert, getApp, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getMessaging, type Message } from 'firebase-admin/messaging';
 import { env, type Env } from '../../config/env';
-import type { ExpoApi, PushMessage, PushResult } from './expo.client';
+import type { PushApi, PushMessage, PushResult } from './push.client';
 
-/**
- * The Firebase Cloud Messaging boundary.
- *
- * **Why this exists at all.** `ExpoClient` next door can only reach devices holding an
- * `ExponentPushToken[...]`, which means an Expo-built app. The native Android client in
- * `apps/native` is not one - it gets an ordinary FCM registration token, and Expo's SDK
- * rejects those outright and marks them `deviceGone`. Without this, every notification to
- * that app would be silently pruned as a dead device.
- *
- * It implements the SAME `ExpoApi` interface as the Expo client, so `NotificationsService`
- * cannot tell them apart: same `PushMessage` in, same `PushResult` out, same `deviceGone`
- * flag driving the same pruning. `PushRouter` picks between them per token.
- *
- * Thin on purpose, exactly like `ExpoClient` and `RazorpayClient`: one class owns the
- * network call, so a test can replace it and nothing else in the codebase knows a third
- * party exists.
- */
+/** Delivers the Kotlin patient app's notification outbox through Firebase. */
 @Injectable()
-export class FcmClient implements ExpoApi {
+export class FcmClient implements PushApi {
   private readonly log = new Logger(FcmClient.name);
   private readonly app: App | null;
 
@@ -37,11 +15,9 @@ export class FcmClient implements ExpoApi {
   }
 
   /**
-   * Unlike Expo, FCM genuinely needs a server credential.
-   *
    * False when `FIREBASE_SERVICE_ACCOUNT` is unset, which is the default - so the API
    * boots, still RECORDS every notification, and simply cannot deliver to native clients.
-   * The same posture `EXPO_ACCESS_TOKEN` and the Razorpay keys already take, so a
+   * The same posture the Razorpay keys already take, so a
    * contributor with no Firebase project can run everything else.
    */
   get configured(): boolean {
@@ -77,11 +53,11 @@ export class FcmClient implements ExpoApi {
         notification: { title: message.title, body: message.body },
         data: message.data,
         android: {
-          // Matches Expo's `priority: 'high'` - this has to wake a dozing device.
+          // Delivery needs to wake a dozing Android device.
           priority: 'high',
-          // Matches Expo's `ttl: 60 * 30`. A queue nudge is worthless late: FCM drops it
+          // A queue nudge is worthless late: FCM drops it
           // rather than delivering "you are next" an hour after the patient was seen.
-          // Expressed in millis here, seconds there.
+          // Firebase uses milliseconds.
           ttl: 30 * 60 * 1000,
           notification: {
             // The channel apps/native creates at HIGH importance. Naming a channel that
@@ -100,16 +76,13 @@ export class FcmClient implements ExpoApi {
         /*
           The two codes worth acting on, and the only ones.
 
-          `registration-token-not-registered` is FCM's `DeviceNotRegistered`: the app was
-          uninstalled or the token rotated. `invalid-argument` on a send keyed by token
-          means the token is malformed. Both are dead rows rather than transient failures,
-          so they are reported as `deviceGone` and the existing pruning disables them.
-          Everything else - quota, transport, an FCM outage - is worth retrying.
+          Only confirmed invalid or unregistered tokens are pruned. Generic
+          invalid-argument can also mean a payload error, so keep the device
+          registered and report that send failure for retry/diagnosis.
         */
         const deviceGone =
           code === 'messaging/registration-token-not-registered' ||
-          code === 'messaging/invalid-registration-token' ||
-          code === 'messaging/invalid-argument';
+          code === 'messaging/invalid-registration-token';
 
         if (!deviceGone) this.log.error({ err: error }, 'fcm push failed');
 

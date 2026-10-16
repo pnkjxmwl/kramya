@@ -45,19 +45,26 @@ export type NotificationStatus = z.infer<typeof NotificationStatus>;
 /**
  * `POST /me/push-tokens` - a device says where to reach it.
  *
- * The token is an Expo push token (`ExponentPushToken[...]`), which is opaque and
- * device-specific. Shape is not validated beyond a length bound: Expo owns that
- * format and a client that guesses wrong should be told so by Expo, not by a regex
- * here that will rot.
+ * Kotlin registers an opaque FCM token. Firebase owns its format; keep bounded
+ * input validation and explicitly refuse the retired client's token prefixes.
  */
 export const RegisterPushTokenRequest = z.object({
-  token: z.string().trim().min(10).max(255),
-  /** Helps prune sensibly when a device re-registers. Optional - iOS/Android only. */
-  platform: z.enum(['ios', 'android']).optional(),
+  token: z
+    .string()
+    .trim()
+    .min(10)
+    .max(255)
+    .refine(
+      (token) => !/^(ExponentPushToken|ExpoPushToken)\[/.test(token),
+      'Register an FCM token from the Android app',
+    ),
+  platform: z.literal('android').optional(),
 });
 export type RegisterPushTokenRequest = z.infer<typeof RegisterPushTokenRequest>;
 
-export const UnregisterPushTokenRequest = z.object({ token: z.string().min(10).max(255) });
+export const UnregisterPushTokenRequest = z.object({
+  token: z.string().min(10).max(255),
+});
 export type UnregisterPushTokenRequest = z.infer<typeof UnregisterPushTokenRequest>;
 
 export const PushTokenResponse = z.object({
