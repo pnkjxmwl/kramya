@@ -12,6 +12,7 @@ Updated 16 October 2026. The founder asked to defer hands-on phone testing and t
 - [x] API checks rejected cross-clinic staff access and patient access to staff queues.
 - [x] This safeguard/design change passed 426 API tests, 47 Android JVM tests and an Android debug build locally. Restricted-role SQL checks and eight backup/deployment safety checks passed. CI results are recorded on its PR.
 - [x] Encrypted fictional local backup restored into an isolated PostgreSQL 17 database with matching table counts, foreign keys and indexes. This does not satisfy the hosted-backup recovery gate below.
+- [x] Main-only GitHub migration environment has both private secrets; workflow [38956356781](https://github.com/pnkjxmwl/kramya/actions/runs/38956356781) successfully connected to Supabase, applied pending migrations and requested the exact checked commit via the Render deploy hook. Live restricted-role credentials and the API build cutover still require their separate checks below.
 
 Credentials are in the local, Git-ignored `.env.staging-test-access.md`. Never copy passwords, tokens or database URLs into this file. Test tenants are Andheri and Bandra; primary staff accounts belong to Andheri. Refresh or create sessions when the fixture dates expire. Never repurpose fictional patients as real clinic records.
 
