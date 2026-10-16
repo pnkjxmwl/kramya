@@ -22,7 +22,7 @@ Credentials are in the local, Git-ignored `.env.staging-test-access.md`. Never c
 - [x] Separate migration and API runtime database credentials; verify the deployed API actually uses the restricted role.
 - [x] Move migrations out of the Render API build into the main-only migration workflow, turn automatic commit deploys off, and deploy the exact migrated commit.
 - [x] Verify runtime grants and append-only history using a non-owner connection in isolated PostgreSQL; independently verify hosted role attributes, grants and runtime app behavior. Do not treat role restrictions as tenant RLS.
-- [ ] Rotate the old runtime-exposed postgres owner password, update only GitHub's migration secret, and rerun the protected workflow. Render must retain its separate runtime URI.
+- [x] The operator rotated the old runtime-exposed postgres owner password and updated only GitHub's migration secret. [Workflow attempt 2](https://github.com/pnkjxmwl/kramya/actions/runs/38958710636/attempts/2) successfully authenticated and checked all 17 migrations with the replacement credential. Render retained its separate runtime URI; readiness and actual runtime-role connections remained healthy after rotation.
 - [ ] Prove an encrypted hosted backup and restoration into an isolated target. Record artifact, key custody, recovery time, row counts and application smoke checks.
 - [ ] Decide clinic-hour availability, recovery objectives, support and clinic fallback procedures. No paid hosting changes have been authorized.
 - [ ] Verify Firebase project matching, server delivery credentials, release signing and distribution.

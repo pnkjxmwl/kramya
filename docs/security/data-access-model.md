@@ -5,8 +5,9 @@ prepared a restricted NOLOGIN role; the operator enabled LOGIN and the deployed 
 now connects as `kramya_runtime`. CI verifies its grants, append-only history, and
 compatibility with a non-superuser migration owner. Application ownership still
 depends on NestJS authorization and scoped Prisma queries. The owner credential
-is separate in GitHub's main-only migration environment; its old runtime-exposed
-password still needs rotation. Follow the
+is separate in GitHub's main-only migration environment; the operator rotated its
+old runtime-exposed password and the protected workflow verified the replacement.
+Follow the
 [production safeguard runbook](../production-readiness.md) for the credential cutover.
 
 ## Verified boundaries
