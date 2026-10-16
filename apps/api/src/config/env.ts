@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Load .env explicitly with Node's built-in loader (no dotenv dependency).
 // Prisma also loads .env as a side effect of importing its client, but depending on
@@ -18,13 +18,17 @@ try {
  * on the first request.
  */
 export const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
 
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
 
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z
+    .enum(["fatal", "error", "warn", "info", "debug", "trace"])
+    .default("info"),
 
   // Separate secrets per token type: a leaked access secret must not let an
   // attacker mint refresh tokens. 32 chars minimum - short secrets are brute-forceable.
@@ -56,16 +60,16 @@ export const EnvSchema = z.object({
   /// decision for the whole stack. Declaring the variable now means turning error
   /// reporting on is a config change, not a moment where somebody has to remember a
   /// DPDP obligation under time pressure.
-  SENTRY_DSN: z.string().default(''),
+  SENTRY_DSN: z.string().default(""),
 
   /// Comma-separated Google OAuth client ids (iOS, Android and web each have one).
   /// Empty disables POST /auth/google rather than failing boot - Google is optional.
   GOOGLE_CLIENT_IDS: z
     .string()
-    .default('')
+    .default("")
     .transform((v) =>
       v
-        .split(',')
+        .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
     ),
@@ -77,11 +81,15 @@ export const EnvSchema = z.object({
   // failing boot would stop a contributor running discovery or the queue engine at
   // all just because they have no gateway account. `paymentsConfigured()` below is
   // the single check, and join fails loudly with a real message when it is false.
-  RAZORPAY_KEY_ID: z.string().default(''),
-  RAZORPAY_KEY_SECRET: z.string().default(''),
+  RAZORPAY_KEY_ID: z.string().default(""),
+  RAZORPAY_MODE: z.enum(["test", "live"]).default("test"),
+  DEPLOYMENT_AVAILABILITY: z
+    .enum(["best-effort", "always-on"])
+    .default("best-effort"),
+  RAZORPAY_KEY_SECRET: z.string().default(""),
   /// Set in the Razorpay dashboard when registering the webhook URL. This is what
   /// the inbound signature is verified against, and it is NOT the API secret.
-  RAZORPAY_WEBHOOK_SECRET: z.string().default(''),
+  RAZORPAY_WEBHOOK_SECRET: z.string().default(""),
 
   /**
    * The publicly reachable origin of THIS api, e.g. the dev tunnel.
@@ -91,7 +99,7 @@ export const EnvSchema = z.object({
    * `localhost` and a LAN ip are neither. Empty falls back to a sentinel the app
    * intercepts locally, which works but leaves the redirect target unresolvable.
    */
-  PUBLIC_BASE_URL: z.string().default(''),
+  PUBLIC_BASE_URL: z.string().default(""),
 
   /**
    * How many reverse proxies sit between the internet and this process.
@@ -131,10 +139,10 @@ export const EnvSchema = z.object({
    */
   DISABLED_WORKERS: z
     .string()
-    .default('')
+    .default("")
     .transform((raw) =>
       raw
-        .split(',')
+        .split(",")
         .map((name) => name.trim())
         .filter(Boolean),
     ),
@@ -150,7 +158,7 @@ export const EnvSchema = z.object({
    *
    * Firebase console -> Project settings -> Service accounts -> Generate new private key.
    */
-  FIREBASE_SERVICE_ACCOUNT: z.string().default(''),
+  FIREBASE_SERVICE_ACCOUNT: z.string().default(""),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -162,8 +170,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('\n');
+      .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
 
@@ -190,8 +198,9 @@ export function resetEnvCache(): void {
  */
 export function paymentsConfigured(config: Env = env()): boolean {
   return (
-    config.RAZORPAY_KEY_ID !== '' &&
-    config.RAZORPAY_KEY_SECRET !== '' &&
-    config.RAZORPAY_WEBHOOK_SECRET !== ''
+    config.RAZORPAY_KEY_ID !== "" &&
+    config.RAZORPAY_KEY_ID.startsWith(`rzp_${config.RAZORPAY_MODE}_`) &&
+    config.RAZORPAY_KEY_SECRET !== "" &&
+    config.RAZORPAY_WEBHOOK_SECRET !== ""
   );
 }

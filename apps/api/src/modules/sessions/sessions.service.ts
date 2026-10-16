@@ -98,15 +98,15 @@ export class SessionsService {
       ...(query.status ? { status: query.status } : {}),
     };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.oPDSession.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.oPDSession.findMany({
         where,
         orderBy: [{ date: 'desc' }, { scheduledStart: 'asc' }],
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.oPDSession.count({ where }),
-    ]);
+      tx.oPDSession.count({ where }),
+    ]));
 
     return { items: rows.map(toDto), total, limit: query.limit, offset: query.offset };
   }

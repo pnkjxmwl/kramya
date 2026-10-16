@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { Injectable, Logger } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
 import {
   ConnectedSocket,
   MessageBody,
@@ -7,18 +7,19 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from '@nestjs/websockets';
-import type { Server, Socket } from 'socket.io';
+} from "@nestjs/websockets";
+import type { Server, Socket } from "socket.io";
 import {
   REALTIME_EVENT,
   SubscribeRequest,
   accountRoom,
   sessionRoom,
   type SubscribeAck,
-} from '@opd/contracts';
-import { PrismaService } from '../prisma/prisma.service';
-import { env } from '../config/env';
-import type { AccessTokenClaims } from '../common/auth-context';
+} from "@opd/contracts";
+import { PrismaService } from "../prisma/prisma.service";
+import { env } from "../config/env";
+import type { AccessTokenClaims } from "../common/auth-context";
+import { DatabaseIdentityFor } from "../prisma/database-context";
 
 /**
  * P7-BE-01 · the Socket.IO gateway (docs/Architecture.md 9).
@@ -64,7 +65,7 @@ export class RealtimeGateway implements OnGatewayConnection {
    */
   async handleConnection(socket: Socket): Promise<void> {
     const token =
-      typeof socket.handshake.auth?.token === 'string'
+      typeof socket.handshake.auth?.token === "string"
         ? socket.handshake.auth.token
         : extractBearer(socket.handshake.headers.authorization);
 
@@ -95,38 +96,43 @@ export class RealtimeGateway implements OnGatewayConnection {
    * hidden one are refused identically, so this cannot be used to discover which
    * session ids exist.
    */
-  @SubscribeMessage('subscribe')
+  @SubscribeMessage("subscribe")
+  @DatabaseIdentityFor((socket: Socket) => ({
+    accountId:
+      typeof socket.data.accountId === "string" ? socket.data.accountId : "",
+    purpose: "account",
+  }))
   async subscribe(
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: unknown,
   ): Promise<SubscribeAck> {
     const accountId: unknown = socket.data.accountId;
-    if (typeof accountId !== 'string') {
+    if (typeof accountId !== "string") {
       // Belt and braces: handleConnection disconnects an unauthenticated socket, so
       // this is unreachable unless that changes. It is here so that if it ever does,
       // the failure is a refusal rather than an open subscription.
-      return { ok: false, error: 'Not signed in' };
+      return { ok: false, error: "Not signed in" };
     }
 
     const parsed = SubscribeRequest.safeParse(body);
-    if (!parsed.success) return { ok: false, error: 'Unknown session' };
+    if (!parsed.success) return { ok: false, error: "Unknown session" };
 
     const visible = await this.prisma.oPDSession.findFirst({
       where: {
         id: parsed.data.sessionId,
-        status: { not: 'CANCELLED' },
-        hospital: { status: 'VERIFIED' },
+        status: { not: "CANCELLED" },
+        hospital: { status: "VERIFIED" },
       },
       select: { id: true },
     });
-    if (visible === null) return { ok: false, error: 'Unknown session' };
+    if (visible === null) return { ok: false, error: "Unknown session" };
 
     await socket.join(sessionRoom(parsed.data.sessionId));
     return { ok: true };
   }
 
   /** Leaving is unconditional - a client may always stop listening. */
-  @SubscribeMessage('unsubscribe')
+  @SubscribeMessage("unsubscribe")
   async unsubscribe(
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: unknown,
@@ -153,21 +159,30 @@ export class RealtimeGateway implements OnGatewayConnection {
    */
   emitSessionUpdate(sessionId: string, version: number): void {
     this.safely(() => {
-      this.server?.to(sessionRoom(sessionId)).emit(REALTIME_EVENT.sessionUpdated, {
-        sessionId,
-        version,
-      });
+      this.server
+        ?.to(sessionRoom(sessionId))
+        .emit(REALTIME_EVENT.sessionUpdated, {
+          sessionId,
+          version,
+        });
     });
   }
 
   /** "Something about your booking changed." Only to the account that owns it. */
-  emitEntryUpdate(accountId: string, entryId: string, sessionId: string, version: number): void {
+  emitEntryUpdate(
+    accountId: string,
+    entryId: string,
+    sessionId: string,
+    version: number,
+  ): void {
     this.safely(() => {
-      this.server?.to(accountRoom(accountId)).emit(REALTIME_EVENT.entryUpdated, {
-        entryId,
-        sessionId,
-        version,
-      });
+      this.server
+        ?.to(accountRoom(accountId))
+        .emit(REALTIME_EVENT.entryUpdated, {
+          entryId,
+          sessionId,
+          version,
+        });
     });
   }
 
@@ -181,10 +196,13 @@ export class RealtimeGateway implements OnGatewayConnection {
     try {
       emit();
     } catch (error) {
-      this.log.error({ err: error }, 'realtime emit failed - state is committed, clients will refetch');
+      this.log.error(
+        { err: error },
+        "realtime emit failed - state is committed, clients will refetch",
+      );
     }
   }
 }
 
 const extractBearer = (header: string | undefined): string | null =>
-  header?.startsWith('Bearer ') === true ? header.slice(7) : null;
+  header?.startsWith("Bearer ") === true ? header.slice(7) : null;

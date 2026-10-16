@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
-import { OAuth2Client } from 'google-auth-library';
+import { Injectable } from "@nestjs/common";
+import { hash as argonHash, verify as argonVerify } from "@node-rs/argon2";
+import { OAuth2Client } from "google-auth-library";
 import type {
   AcceptInviteRequest,
   AuthTokens,
@@ -10,17 +10,22 @@ import type {
   Role,
   SignupRequest,
   StaffStatus,
-} from '@opd/contracts';
-import { PrismaService } from '../../prisma/prisma.service';
-import { TokenService } from './token.service';
-import { env } from '../../config/env';
+} from "@opd/contracts";
+import { PrismaService } from "../../prisma/prisma.service";
+import { TokenService } from "./token.service";
+import { env } from "../../config/env";
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
   NotFoundError,
   UnauthorizedError,
-} from '../../common/errors';
-import { StaffService } from '../staff/staff.service';
+} from "../../common/errors";
+import { StaffService } from "../staff/staff.service";
+import {
+  DatabaseIdentityFor,
+  setDatabaseIdentity,
+} from "../../prisma/database-context";
+import { createHash } from "node:crypto";
 
 @Injectable()
 export class AuthService {
@@ -32,6 +37,10 @@ export class AuthService {
     private readonly staff: StaffService,
   ) {}
 
+  @DatabaseIdentityFor((input: SignupRequest) => ({
+    purpose: "auth",
+    email: input.email,
+  }))
   async signup(input: SignupRequest): Promise<AuthTokens> {
     const passwordHash = await argonHash(input.password);
 
@@ -41,13 +50,16 @@ export class AuthService {
           email: input.email,
           passwordHash,
           // Signing up for yourself creates your own profile; family is added later.
-          patients: input.name ? { create: { name: input.name, relation: 'SELF' } } : undefined,
+          patients: input.name
+            ? { create: { name: input.name, relation: "SELF" } }
+            : undefined,
         },
         select: { id: true, email: true },
       });
       return this.tokens.issue(account);
     } catch (e) {
-      if (isUniqueViolation(e, 'email')) throw new EmailAlreadyRegisteredError();
+      if (isUniqueViolation(e, "email"))
+        throw new EmailAlreadyRegisteredError();
       throw e;
     }
   }
@@ -67,13 +79,21 @@ export class AuthService {
    *    "no such token" from "expired" from "already used" tells an attacker which
    *    guesses were close.
    */
+  @DatabaseIdentityFor((input: AcceptInviteRequest) => ({
+    purpose: "invite",
+    inviteHash: createHash("sha256").update(input.token).digest("hex"),
+  }))
   async acceptInvite(input: AcceptInviteRequest): Promise<AuthTokens> {
-    const invalid = new UnauthorizedError('This invitation is not valid');
+    const invalid = new UnauthorizedError("This invitation is not valid");
 
     // HospitalStaff belongs to the staff module; this asks it rather than reading
     // the table (docs/CLAUDE.md 3).
     const invitation = await this.staff.findOpenInvitation(input.token);
     if (!invitation) throw invalid;
+    setDatabaseIdentity({
+      accountId: invitation.accountId,
+      invitationId: invitation.membershipId,
+    });
 
     const account = await this.prisma.account.findUnique({
       where: { id: invitation.accountId },
@@ -86,14 +106,23 @@ export class AuthService {
     // The inviter knows this token. It authorizes membership, never a login to an
     // existing identity. Google-only accounts must use their existing sign-in.
     if (account.passwordHash) {
-      if (!(await argonVerify(account.passwordHash, input.password))) throw invalid;
+      if (!(await argonVerify(account.passwordHash, input.password)))
+        throw invalid;
     } else if (account.googleId) {
       throw invalid;
     }
-    const passwordHash = account.passwordHash ?? (await argonHash(input.password));
+    const passwordHash =
+      account.passwordHash ?? (await argonHash(input.password));
 
     await this.prisma.$transaction(async (tx) => {
-      if (!(await this.staff.consumeInvitation(invitation.membershipId, input.token, tx))) throw invalid;
+      if (
+        !(await this.staff.consumeInvitation(
+          invitation.membershipId,
+          input.token,
+          tx,
+        ))
+      )
+        throw invalid;
 
       if (!account.passwordHash) {
         // A concurrent Google login or another invitation must not have established
@@ -109,6 +138,10 @@ export class AuthService {
     return this.tokens.issue({ id: account.id, email: account.email });
   }
 
+  @DatabaseIdentityFor((input: LoginRequest) => ({
+    purpose: "auth",
+    email: input.email,
+  }))
   async login(input: LoginRequest): Promise<AuthTokens> {
     const account = await this.prisma.account.findUnique({
       where: { email: input.email },
@@ -126,14 +159,25 @@ export class AuthService {
   }
 
   /** Google-only and password accounts prove identity through their existing session. */
-  async acceptMembership(accountId: string, token: string): Promise<AuthTokens> {
+  @DatabaseIdentityFor((accountId: string, token: string) => ({
+    accountId,
+    purpose: "invite",
+    inviteHash: createHash("sha256").update(token).digest("hex"),
+  }))
+  async acceptMembership(
+    accountId: string,
+    token: string,
+  ): Promise<AuthTokens> {
     const invitation = await this.staff.findOpenInvitation(token);
-    const invalid = new UnauthorizedError('This invitation is not valid');
+    const invalid = new UnauthorizedError("This invitation is not valid");
     if (!invitation || invitation.accountId !== accountId) throw invalid;
+    setDatabaseIdentity({ invitationId: invitation.membershipId });
     const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: accountId }, select: { id: true, email: true },
+      where: { id: accountId },
+      select: { id: true, email: true },
     });
-    if (!(await this.staff.consumeInvitation(invitation.membershipId, token))) throw invalid;
+    if (!(await this.staff.consumeInvitation(invitation.membershipId, token)))
+      throw invalid;
     return this.tokens.issue(account);
   }
 
@@ -141,13 +185,16 @@ export class AuthService {
    * Exchange a Google ID token for our own tokens. The token is verified against
    * Google's keys server-side - a client-supplied email or subject is never trusted.
    */
+  @DatabaseIdentityFor(() => ({ purpose: "auth" }))
   async google(input: GoogleAuthRequest): Promise<AuthTokens> {
     const audience = env().GOOGLE_CLIENT_IDS;
-    if (!audience.length) throw new UnauthorizedError('Google sign-in is not configured');
+    if (!audience.length)
+      throw new UnauthorizedError("Google sign-in is not configured");
 
     const payload = await this.verifyGoogleToken(input.idToken, audience);
     const sub = payload.sub;
     const email = payload.email.toLowerCase();
+    setDatabaseIdentity({ email });
 
     // ponytail: read-then-write, not an upsert. Two concurrent first-time logins for
     // the same account would race; the unique constraint rejects the loser and the
@@ -167,7 +214,10 @@ export class AuthService {
 
     // Same verified email as an existing password account: link, don't duplicate.
     if (!existing.googleId) {
-      await this.prisma.account.update({ where: { id: existing.id }, data: { googleId: sub } });
+      await this.prisma.account.update({
+        where: { id: existing.id },
+        data: { googleId: sub },
+      });
     }
 
     return this.tokens.issue({ id: existing.id, email: existing.email });
@@ -196,7 +246,7 @@ export class AuthService {
         doctor: { select: { id: true, hospitalId: true } },
       },
     });
-    if (!account) throw new NotFoundError('Account not found');
+    if (!account) throw new NotFoundError("Account not found");
 
     return {
       id: account.id,
@@ -209,7 +259,10 @@ export class AuthService {
         role: m.role as Role,
         status: m.status as StaffStatus,
         permissions: m.permissions,
-        doctorId: account.doctor?.hospitalId === m.hospitalId ? account.doctor.id : null,
+        doctorId:
+          account.doctor?.hospitalId === m.hospitalId
+            ? account.doctor.id
+            : null,
       })),
     };
   }
@@ -219,7 +272,10 @@ export class AuthService {
     audience: string[],
   ): Promise<{ sub: string; email: string }> {
     try {
-      const ticket = await this.googleClient.verifyIdToken({ idToken, audience });
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken,
+        audience,
+      });
       const payload = ticket.getPayload();
       // An unverified Google email must not be able to claim an existing account.
       if (payload?.sub && payload.email && payload.email_verified) {
@@ -228,14 +284,14 @@ export class AuthService {
     } catch {
       // fall through to one generic error
     }
-    throw new UnauthorizedError('Invalid Google token');
+    throw new UnauthorizedError("Invalid Google token");
   }
 }
 
 /** Prisma's unique-constraint violation, narrowed to one field. */
 function isUniqueViolation(e: unknown, field: string): boolean {
   const err = e as { code?: string; meta?: { target?: string[] | string } };
-  if (err?.code !== 'P2002') return false;
+  if (err?.code !== "P2002") return false;
   const target = err.meta?.target;
   return Array.isArray(target) ? target.includes(field) : target === field;
 }

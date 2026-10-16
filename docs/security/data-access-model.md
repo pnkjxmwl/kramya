@@ -51,6 +51,22 @@ must retain their current API checks even after database policies are introduced
 
 ## Runtime-role and RLS implementation sequence
 
+Migration `202610170001` prepares private membership/visibility helpers and fixed,
+read-only `QueueMetric` / `ConsultationMetric` projections. These are intentional
+owner views with security barriers and explicit identity checks; they omit names,
+account/patient IDs, check-in codes and payment/event metadata. They preserve
+cross-patient timing inputs without granting patient requests raw row access.
+Only the runtime role can read them. Privileged operators retain operator access.
+
+The application binds identities with AsyncLocalStorage and transaction-local
+settings on the same connection as every query or domain transaction. HTTP gets
+identity from verified JWT/membership guards; auth/refresh/invitations, socket
+subscriptions, signature-verified webhooks and the enumerated workers have explicit
+server-owned paths. Headers cannot supply identity. Callback transactions preserve
+the existing lock/commit boundaries; identity changes inside a transaction fail.
+Deploy that application revision **before** a separate RLS activation migration.
+The projection migration alone does not enable row policies.
+
 1. Separate migration credentials from runtime credentials. The migration owner runs
    DDL; a dedicated non-owner runtime role must have no CREATE, role-management,
    TRUNCATE or BYPASSRLS privileges. Keep both credentials in deployment secrets.

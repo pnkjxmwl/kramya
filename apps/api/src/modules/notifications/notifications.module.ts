@@ -1,13 +1,13 @@
-import { Module } from '@nestjs/common';
-import { PUSH_CLIENT } from './push.token';
-import { NotificationsController } from './notifications.controller';
-import { NotificationsService } from './notifications.service';
-import { FcmClient } from './fcm.client';
-import { DispatchSweeper } from './dispatch-sweeper';
-import { EventNotifier } from './event-notifier';
-import { LeaveNowNotifier } from './leave-now';
-import { ConfigModule } from '../config/config.module';
-import { EtaModule } from '../eta/eta.module';
+import { Module } from "@nestjs/common";
+import { PUSH_CLIENT } from "./push.token";
+import { NotificationsController } from "./notifications.controller";
+import { NotificationsService } from "./notifications.service";
+import { FcmClient } from "./fcm.client";
+import { DispatchSweeper } from "./dispatch-sweeper";
+import { EventNotifier } from "./event-notifier";
+import { LeaveNowNotifier } from "./leave-now";
+import { ConfigModule } from "../config/config.module";
+import { EtaModule } from "../eta/eta.module";
 
 /**
  * Notifications (docs/Architecture.md 13). Owns `Notification` and `PushToken`.
@@ -33,6 +33,12 @@ import { EtaModule } from '../eta/eta.module';
     { provide: FcmClient, useFactory: () => new FcmClient() },
     { provide: PUSH_CLIENT, useExisting: FcmClient },
   ],
-  exports: [NotificationsService, EventNotifier, LeaveNowNotifier, DispatchSweeper],
+  exports: [
+    NotificationsService,
+    EventNotifier,
+    LeaveNowNotifier,
+    DispatchSweeper,
+    FcmClient,
+  ],
 })
 export class NotificationsModule {}

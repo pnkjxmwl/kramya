@@ -1,8 +1,16 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { ForbiddenError, TenantMismatchError, UnauthorizedError } from '../errors';
-import type { AuthedRequest } from '../auth-context';
-import type { Role } from '@opd/contracts';
+import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import { PrismaService } from "../../prisma/prisma.service";
+import {
+  ForbiddenError,
+  TenantMismatchError,
+  UnauthorizedError,
+} from "../errors";
+import type { AuthedRequest } from "../auth-context";
+import type { Role } from "@opd/contracts";
+import {
+  setDatabaseIdentity,
+  withDatabaseIdentity,
+} from "../../prisma/database-context";
 
 /**
  * Resolves the tenant for any route carrying a :hospitalId OR a :sessionId
@@ -32,26 +40,35 @@ export class TenantGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const params = req.params as Record<string, string> | undefined;
-    const hospitalId = params?.hospitalId ?? (await this.hospitalOfSession(params?.sessionId));
+    const hospitalId =
+      params?.hospitalId ?? (await this.hospitalOfSession(params?.sessionId));
     if (!hospitalId) return true;
 
     if (!req.account) throw new UnauthorizedError();
 
     const membership = await this.prisma.hospitalStaff.findUnique({
-      where: { hospitalId_accountId: { hospitalId, accountId: req.account.id } },
+      where: {
+        hospitalId_accountId: { hospitalId, accountId: req.account.id },
+      },
       select: { role: true, permissions: true, status: true },
     });
 
     // Same answer for "no such hospital" and "not your hospital": a 404-vs-403
     // difference would let a caller enumerate which hospital ids exist.
     if (!membership) throw new TenantMismatchError();
-    if (membership.status !== 'ACTIVE') throw new ForbiddenError('Membership is not active');
+    if (membership.status !== "ACTIVE")
+      throw new ForbiddenError("Membership is not active");
 
     req.tenant = {
       hospitalId,
       role: membership.role as Role,
       permissions: membership.permissions,
     };
+    setDatabaseIdentity({
+      hospitalId,
+      role: membership.role,
+      purpose: "staff",
+    });
     return true;
   }
 
@@ -63,12 +80,18 @@ export class TenantGuard implements CanActivate {
    * would let anyone enumerate which session ids exist across every hospital on the
    * platform, one request at a time.
    */
-  private async hospitalOfSession(sessionId: string | undefined): Promise<string | undefined> {
+  private async hospitalOfSession(
+    sessionId: string | undefined,
+  ): Promise<string | undefined> {
     if (!sessionId) return undefined;
-    const session = await this.prisma.oPDSession.findUnique({
-      where: { id: sessionId },
-      select: { hospitalId: true },
-    });
+    const session = await withDatabaseIdentity(
+      { purpose: "resolve-session", sessionId },
+      () =>
+        this.prisma.oPDSession.findUnique({
+          where: { id: sessionId },
+          select: { hospitalId: true },
+        }),
+    );
     return session?.hospitalId ?? NO_SUCH_HOSPITAL;
   }
 }
@@ -90,4 +113,4 @@ export class TenantGuard implements CanActivate {
  * Hospital ids are UUIDs, so a plain lowercase phrase can never be one. The
  * impossibility does not need an unrepresentable byte to hold.
  */
-const NO_SUCH_HOSPITAL = 'no-such-hospital';
+const NO_SUCH_HOSPITAL = "no-such-hospital";

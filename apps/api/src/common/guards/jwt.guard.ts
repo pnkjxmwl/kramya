@@ -1,10 +1,11 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
-import { env } from '../../config/env';
-import { IS_PUBLIC } from '../decorators';
-import { UnauthorizedError } from '../errors';
-import type { AccessTokenClaims, AuthedRequest } from '../auth-context';
+import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { JwtService } from "@nestjs/jwt";
+import { env } from "../../config/env";
+import { setDatabaseIdentity } from "../../prisma/database-context";
+import { IS_PUBLIC } from "../decorators";
+import { UnauthorizedError } from "../errors";
+import type { AccessTokenClaims, AuthedRequest } from "../auth-context";
 
 /**
  * Authenticates every request. Registered globally - routes opt OUT with @Public(),
@@ -26,13 +27,17 @@ export class JwtGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) throw new UnauthorizedError();
+    if (!header?.startsWith("Bearer ")) throw new UnauthorizedError();
 
     try {
-      const claims = await this.jwt.verifyAsync<AccessTokenClaims>(header.slice(7), {
-        secret: env().JWT_ACCESS_SECRET,
-      });
+      const claims = await this.jwt.verifyAsync<AccessTokenClaims>(
+        header.slice(7),
+        {
+          secret: env().JWT_ACCESS_SECRET,
+        },
+      );
       req.account = { id: claims.sub, email: claims.email };
+      setDatabaseIdentity({ accountId: claims.sub, purpose: "account" });
       return true;
     } catch {
       // Expired, tampered or signed with the refresh secret - all the same to a caller.

@@ -1,17 +1,23 @@
-import { Injectable } from '@nestjs/common';
-import { createHash, randomBytes } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
-import type { InviteStaffRequest, Role, StaffInvite, StaffStatus } from '@opd/contracts';
-import { PrismaService } from '../../prisma/prisma.service';
-import { ConflictError, ValidationFailedError } from '../../common/errors';
-import { isUniqueViolation } from '../../common/prisma-errors';
-import { DoctorsService } from '../config/doctors.service';
+import { Injectable } from "@nestjs/common";
+import { createHash, randomBytes } from "node:crypto";
+import type { Prisma } from "@prisma/client";
+import type {
+  InviteStaffRequest,
+  Role,
+  StaffInvite,
+  StaffStatus,
+} from "@opd/contracts";
+import { PrismaService } from "../../prisma/prisma.service";
+import { ConflictError, ValidationFailedError } from "../../common/errors";
+import { isUniqueViolation } from "../../common/prisma-errors";
+import { DoctorsService } from "../config/doctors.service";
+import { DatabaseIdentityFor } from "../../prisma/database-context";
 
 /** Seven days. Long enough for a hospital to pass it on, short enough to expire. */
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const hashInviteToken = (token: string): string =>
-  createHash('sha256').update(token).digest('hex');
+  createHash("sha256").update(token).digest("hex");
 
 /**
  * Staff invitations. PRD 14: doctors and staff are admin-invited, never self-signup.
@@ -32,20 +38,31 @@ export class StaffService {
     private readonly doctors: DoctorsService,
   ) {}
 
-  async invite(hospitalId: string, input: InviteStaffRequest): Promise<StaffInvite> {
+  @DatabaseIdentityFor((_hospitalId: string, input: InviteStaffRequest) => ({
+    email: input.email,
+  }))
+  async invite(
+    hospitalId: string,
+    input: InviteStaffRequest,
+  ): Promise<StaffInvite> {
     // Validate the doctor link BEFORE creating anything, so the failure case leaves
     // no half-built invitation behind.
-    if (input.role === 'DOCTOR') {
-      const doctor = await this.doctors.requireForHospital(hospitalId, input.doctorId!);
+    if (input.role === "DOCTOR") {
+      const doctor = await this.doctors.requireForHospital(
+        hospitalId,
+        input.doctorId!,
+      );
       if (!doctor.isActive) {
-        throw new ValidationFailedError('Doctor is not active', { doctorId: 'inactive' });
+        throw new ValidationFailedError("Doctor is not active", {
+          doctorId: "inactive",
+        });
       }
       if (doctor.accountId !== null) {
-        throw new ConflictError('This doctor already has a login');
+        throw new ConflictError("This doctor already has a login");
       }
     }
 
-    const token = randomBytes(32).toString('base64url');
+    const token = randomBytes(32).toString("base64url");
     const inviteTokenHash = hashInviteToken(token);
     const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
@@ -60,15 +77,19 @@ export class StaffService {
         });
 
         const existing = await tx.hospitalStaff.findUnique({
-          where: { hospitalId_accountId: { hospitalId, accountId: account.id } },
+          where: {
+            hospitalId_accountId: { hospitalId, accountId: account.id },
+          },
           select: { id: true, status: true },
         });
 
         // Re-inviting someone whose invitation is still outstanding replaces the
         // token rather than failing: an invite gets lost or expires, and the
         // alternative is an admin with no way to resend one.
-        if (existing && existing.status !== 'INVITED') {
-          throw new ConflictError('This person is already a member of this hospital');
+        if (existing && existing.status !== "INVITED") {
+          throw new ConflictError(
+            "This person is already a member of this hospital",
+          );
         }
 
         const row = existing
@@ -81,16 +102,21 @@ export class StaffService {
                 hospitalId,
                 accountId: account.id,
                 role: input.role,
-                status: 'INVITED',
+                status: "INVITED",
                 inviteTokenHash,
                 inviteExpiresAt,
               },
             });
 
-        if (input.role === 'DOCTOR') {
+        if (input.role === "DOCTOR") {
           // Written through the owning service, inside this transaction, so a
           // membership never exists without its doctor link.
-          await this.doctors.linkAccount(hospitalId, input.doctorId!, account.id, tx);
+          await this.doctors.linkAccount(
+            hospitalId,
+            input.doctorId!,
+            account.id,
+            tx,
+          );
         }
 
         return { row, email: account.email, accountId: account.id };
@@ -102,7 +128,7 @@ export class StaffService {
         email: membership.email,
         role: membership.row.role as Role,
         status: membership.row.status as StaffStatus,
-        doctorId: input.role === 'DOCTOR' ? input.doctorId! : null,
+        doctorId: input.role === "DOCTOR" ? input.doctorId! : null,
         createdAt: membership.row.createdAt.toISOString(),
         // Returned once and never retrievable again - only its hash is stored.
         inviteToken: token,
@@ -110,7 +136,9 @@ export class StaffService {
       };
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new ConflictError('This person is already a member of this hospital');
+        throw new ConflictError(
+          "This person is already a member of this hospital",
+        );
       }
       throw error;
     }
@@ -123,16 +151,25 @@ export class StaffService {
    * This module owns HospitalStaff, so the auth module asks rather than reading the
    * table itself (docs/CLAUDE.md 3).
    */
+  @DatabaseIdentityFor((token: string) => ({
+    inviteHash: hashInviteToken(token),
+  }))
   async findOpenInvitation(
     token: string,
   ): Promise<{ membershipId: string; accountId: string } | null> {
     const row = await this.prisma.hospitalStaff.findUnique({
       where: { inviteTokenHash: hashInviteToken(token) },
-      select: { id: true, status: true, inviteExpiresAt: true, accountId: true },
+      select: {
+        id: true,
+        status: true,
+        inviteExpiresAt: true,
+        accountId: true,
+      },
     });
 
-    if (!row || row.status !== 'INVITED') return null;
-    if (!row.inviteExpiresAt || row.inviteExpiresAt.getTime() < Date.now()) return null;
+    if (!row || row.status !== "INVITED") return null;
+    if (!row.inviteExpiresAt || row.inviteExpiresAt.getTime() < Date.now())
+      return null;
 
     return { membershipId: row.id, accountId: row.accountId };
   }
@@ -153,11 +190,11 @@ export class StaffService {
     const { count } = await client.hospitalStaff.updateMany({
       where: {
         id: membershipId,
-        status: 'INVITED',
+        status: "INVITED",
         inviteTokenHash: hashInviteToken(token),
         inviteExpiresAt: { gt: new Date() },
       },
-      data: { status: 'ACTIVE', inviteTokenHash: null, inviteExpiresAt: null },
+      data: { status: "ACTIVE", inviteTokenHash: null, inviteExpiresAt: null },
     });
     return count > 0;
   }

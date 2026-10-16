@@ -155,15 +155,15 @@ export class DiscoveryService {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
     };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.hospital.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.hospital.findMany({
         where,
         orderBy: { name: 'asc' },
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.hospital.count({ where }),
-    ]);
+      tx.hospital.count({ where }),
+    ]));
 
     const ids = rows.map((row) => row.id);
     const counts = await this.todayCountsBy('hospitalId', ids);
@@ -262,15 +262,15 @@ export class DiscoveryService {
       hospital: LISTABLE_HOSPITAL,
     };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.department.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.department.findMany({
         where,
         orderBy: { name: 'asc' },
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.department.count({ where }),
-    ]);
+      tx.department.count({ where }),
+    ]));
 
     const counts = await this.todayCountsBy('departmentId', rows.map((row) => row.id));
 
@@ -314,16 +314,16 @@ export class DiscoveryService {
       hospital: { select: { name: true, city: true } },
     } as const;
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.doctor.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.doctor.findMany({
         where,
         include,
         orderBy: { name: 'asc' },
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.doctor.count({ where }),
-    ]);
+      tx.doctor.count({ where }),
+    ]));
 
     return {
       items: rows.map(toDoctorDto),
@@ -390,16 +390,16 @@ export class DiscoveryService {
     const date = dateColumnFromString(query.date ?? istToday());
     const where = { ...narrow, ...listableSession(date) };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.oPDSession.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.oPDSession.findMany({
         where,
         include: SESSION_INCLUDE,
         orderBy: [{ scheduledStart: 'asc' }, { id: 'asc' }],
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.oPDSession.count({ where }),
-    ]);
+      tx.oPDSession.count({ where }),
+    ]));
 
     const now = new Date();
     const snapshots = await this.snapshots(rows, now);
@@ -498,7 +498,7 @@ export class DiscoveryService {
     // hottest read path in the product to align two numbers nobody can perceive
     // would be the wrong trade.
     const [counts, serving, held] = await Promise.all([
-      this.prisma.queueEntry.groupBy({
+      this.prisma.queueMetric.groupBy({
         by: ['sessionId', 'status'],
         where: { sessionId: { in: sessionIds }, status: { in: [...COUNTED_STATUSES] } },
         // Prisma requires an orderBy once more than one field is grouped by. It has
@@ -506,7 +506,7 @@ export class DiscoveryService {
         orderBy: [{ sessionId: 'asc' }, { status: 'asc' }],
         _count: { _all: true },
       }),
-      this.prisma.queueEntry.findMany({
+      this.prisma.queueMetric.findMany({
         where: { sessionId: { in: sessionIds }, status: { in: ['CALLED', 'IN_CONSULTATION'] } },
         // Phase 7 added the last two, in the query that was already being made:
         // the ETA needs to know how long the person in the room has been in it.
@@ -515,7 +515,7 @@ export class DiscoveryService {
       // Online bookings holding a slot, for maxOnlineTokens. Grouped across the
       // whole page, never one query per card. A lapsed unpaid hold is excluded
       // whether or not the sweeper has reached it - the column frees the slot.
-      this.prisma.queueEntry.groupBy({
+      this.prisma.queueMetric.groupBy({
         by: ['sessionId'],
         where: {
           sessionId: { in: sessionIds },

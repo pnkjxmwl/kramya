@@ -25,7 +25,9 @@ Live cutover evidence: workflow [38958710636](https://github.com/pnkjxmwl/kramya
 
 ## Encrypted backup and isolated restore
 
-`scripts/database-backup.mjs` uses the official PostgreSQL 17 Docker client. Hosted Supabase was verified as PostgreSQL 17.11. The tool exports only the `public` app schema/data, including Prisma migration history; it excludes role ownership and ACLs. It does not back up Supabase Auth, Storage objects, platform roles, external payment state, Redis, secrets or infrastructure settings.
+`scripts/database-backup.mjs` uses the official PostgreSQL 17 Docker client. Hosted Supabase was verified as PostgreSQL 17.11. The tool exports the `public` app schema/data and `kramya_private` policy helpers, including Prisma migration history; it excludes role ownership and ACLs. It does not back up Supabase Auth, Storage objects, platform roles, external payment state, Redis, secrets or infrastructure settings.
+
+The manual encrypted hosted-backup workflow and public-key envelope are described in [clinic operations](clinic-operations.md). The restore private key never goes to GitHub. Its public recipient fingerprint is `2d3ab63c9d8346124faf20eea9cbd37ccfefe2eb7e505ff42670bd39079b33c6`. On 17 October the founder confirmed private off-computer copies of the backup private key and local staging Android signing files. A hosted artifact restore must still be verified before clearing the recovery gate.
 
 Initialize a local key without printing it:
 
@@ -58,5 +60,5 @@ Local rehearsal, 16 October 2026: an encrypted fictional development snapshot re
 
 - Define and demonstrate clinic-hour API/worker availability; current Render Free sleeps.
 - Agree recovery point/time objectives, backup frequency, retention, operator ownership and failure escalation. No scheduled backup or paid upgrade is activated by this change.
-- Rotate the old owner password and complete the database context/RLS design, access review, privacy/retention operations and clinic fallback procedure. The least-privilege live connection is now verified.
+- Complete database context/RLS activation, access review and privacy/retention operations. Owner-password rotation and the least-privilege live connection are verified. [Clinic operations](clinic-operations.md) documents the proposed recovery targets, opening checks and manual fallback; clinic-hour availability still needs a hosting decision and proof.
 - Verify release signing, Firebase delivery, test-mode checkout/webhooks and the final acceptance file before a supervised clinic pilot.

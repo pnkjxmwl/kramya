@@ -1,10 +1,14 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { NotificationType, RegisterPushTokenRequest } from '@opd/contracts';
-import { PrismaService } from '../../prisma/prisma.service';
-import { isUniqueViolation } from '../../common/prisma-errors';
-import type { PushApi } from './push.client';
-import { PUSH_CLIENT } from './push.token';
-import { render } from './templates';
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { DatabaseIdentityFor } from "../../prisma/database-context";
+import type {
+  NotificationType,
+  RegisterPushTokenRequest,
+} from "@opd/contracts";
+import { PrismaService } from "../../prisma/prisma.service";
+import { isUniqueViolation } from "../../common/prisma-errors";
+import type { PushApi } from "./push.client";
+import { PUSH_CLIENT } from "./push.token";
+import { render } from "./templates";
 
 /**
  * P8-BE-01 · everything we tell a patient goes through here
@@ -26,6 +30,10 @@ const BATCH = 100;
 
 @Injectable()
 export class NotificationsService {
+  @DatabaseIdentityFor((accountId: string) => ({
+    accountId,
+    purpose: "account",
+  }))
   async unregisterDevice(accountId: string, token: string): Promise<void> {
     await this.prisma.pushToken.deleteMany({ where: { accountId, token } });
   }
@@ -48,7 +56,15 @@ export class NotificationsService {
    * pushes to the second unless registering MOVES the token. It also clears
    * `disabledAt`, because a device that just registered is plainly not gone.
    */
-  async registerDevice(accountId: string, input: RegisterPushTokenRequest): Promise<void> {
+  @DatabaseIdentityFor(
+    (_accountId: string, input: RegisterPushTokenRequest) => ({
+      deviceToken: input.token,
+    }),
+  )
+  async registerDevice(
+    accountId: string,
+    input: RegisterPushTokenRequest,
+  ): Promise<void> {
     await this.prisma.pushToken.upsert({
       where: { token: input.token },
       create: {
@@ -157,8 +173,8 @@ export class NotificationsService {
    */
   async dispatch(): Promise<{ sent: number; failed: number }> {
     const pending = await this.prisma.notification.findMany({
-      where: { status: 'PENDING', attempts: { lt: MAX_ATTEMPTS } },
-      orderBy: { createdAt: 'asc' },
+      where: { status: "PENDING", attempts: { lt: MAX_ATTEMPTS } },
+      orderBy: { createdAt: "asc" },
       take: BATCH,
       include: {
         account: { select: { pushTokens: { where: { disabledAt: null } } } },
@@ -178,9 +194,9 @@ export class NotificationsService {
         await this.prisma.notification.update({
           where: { id: notification.id },
           data: {
-            status: 'FAILED',
+            status: "FAILED",
             attempts: MAX_ATTEMPTS,
-            lastError: 'no registered device',
+            lastError: "no registered device",
           },
         });
         failed += 1;
@@ -214,14 +230,16 @@ export class NotificationsService {
       await this.prisma.notification.update({
         where: { id: notification.id },
         data: delivered
-          ? { status: 'SENT', sentAt: new Date(), attempts, lastError: null }
+          ? { status: "SENT", sentAt: new Date(), attempts, lastError: null }
           : {
               // Give up only once every device is gone or the attempts are spent.
               // Anything else stays PENDING and the next sweep tries again.
               status:
-                attempts >= MAX_ATTEMPTS || dead.length === results.length ? 'FAILED' : 'PENDING',
+                attempts >= MAX_ATTEMPTS || dead.length === results.length
+                  ? "FAILED"
+                  : "PENDING",
               attempts,
-              lastError: results.find((r) => !r.ok)?.error ?? 'send failed',
+              lastError: results.find((r) => !r.ok)?.error ?? "send failed",
             },
       });
 

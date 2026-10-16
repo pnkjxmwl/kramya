@@ -78,7 +78,7 @@ export async function eligibleQueue(ctx: CommandContext): Promise<QueueEntryRow[
  * future caller ever runs this outside the lock (docs/Rules.md 5).
  */
 export async function nextTokenNumber(ctx: CommandContext): Promise<number> {
-  const highest = await ctx.tx.queueEntry.aggregate({
+  const highest = await ctx.tx.queueMetric.aggregate({
     where: { sessionId: ctx.session.id },
     _max: { tokenNumber: true },
   });

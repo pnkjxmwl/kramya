@@ -1,8 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { cert, getApp, getApps, initializeApp, type App } from 'firebase-admin/app';
-import { getMessaging, type Message } from 'firebase-admin/messaging';
-import { env, type Env } from '../../config/env';
-import type { PushApi, PushMessage, PushResult } from './push.client';
+import { Injectable, Logger } from "@nestjs/common";
+import {
+  cert,
+  getApp,
+  getApps,
+  initializeApp,
+  type App,
+} from "firebase-admin/app";
+import { getMessaging, type Message } from "firebase-admin/messaging";
+import { env, type Env } from "../../config/env";
+import type { PushApi, PushMessage, PushResult } from "./push.client";
 
 /** Delivers the Kotlin patient app's notification outbox through Firebase. */
 @Injectable()
@@ -24,6 +30,46 @@ export class FcmClient implements PushApi {
     return this.app !== null;
   }
 
+  /** Proves service-account authentication, without sending to any device. */
+  async preflight(): Promise<{
+    configured: boolean;
+    projectMatches: boolean;
+    authenticated: boolean;
+  }> {
+    const result = {
+      configured: this.configured,
+      projectMatches: false,
+      authenticated: false,
+    };
+    if (!this.app) return result;
+    try {
+      const json = JSON.parse(
+        Buffer.from(this.config.FIREBASE_SERVICE_ACCOUNT, "base64").toString(
+          "utf8",
+        ),
+      ) as { project_id?: string };
+      result.projectMatches = json.project_id === "kramya-39390";
+      if (!result.projectMatches) return result;
+      const credential = this.app.options.credential;
+      if (!credential) return result;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          credential.getAccessToken(),
+          new Promise((_, fail) => {
+            timer = setTimeout(() => fail(new Error("timeout")), 10_000);
+          }),
+        ]);
+        result.authenticated = true;
+      } finally {
+        clearTimeout(timer);
+      }
+      return result;
+    } catch {
+      return result;
+    }
+  }
+
   async send(messages: PushMessage[]): Promise<PushResult[]> {
     if (this.app === null) {
       // Not a device problem, so nothing is pruned: a deployment that later gains a
@@ -32,7 +78,7 @@ export class FcmClient implements PushApi {
         token: message.token,
         ok: false,
         deviceGone: false,
-        error: 'FCM is not configured',
+        error: "FCM is not configured",
       }));
     }
 
@@ -54,7 +100,7 @@ export class FcmClient implements PushApi {
         data: message.data,
         android: {
           // Delivery needs to wake a dozing Android device.
-          priority: 'high',
+          priority: "high",
           // A queue nudge is worthless late: FCM drops it
           // rather than delivering "you are next" an hour after the patient was seen.
           // Firebase uses milliseconds.
@@ -62,8 +108,8 @@ export class FcmClient implements PushApi {
           notification: {
             // The channel apps/native creates at HIGH importance. Naming a channel that
             // does not exist on the device means Android shows nothing at all on API 26+.
-            channelId: 'queue',
-            sound: 'default',
+            channelId: "queue",
+            sound: "default",
           },
         },
       };
@@ -72,7 +118,7 @@ export class FcmClient implements PushApi {
         await messaging.send(payload);
         return { token: message.token, ok: true, deviceGone: false };
       } catch (error) {
-        const code = (error as { code?: string } | undefined)?.code ?? '';
+        const code = (error as { code?: string } | undefined)?.code ?? "";
         /*
           The two codes worth acting on, and the only ones.
 
@@ -81,16 +127,16 @@ export class FcmClient implements PushApi {
           registered and report that send failure for retry/diagnosis.
         */
         const deviceGone =
-          code === 'messaging/registration-token-not-registered' ||
-          code === 'messaging/invalid-registration-token';
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token";
 
-        if (!deviceGone) this.log.error({ err: error }, 'fcm push failed');
+        if (!deviceGone) this.log.error({ err: error }, "fcm push failed");
 
         return {
           token: message.token,
           ok: false,
           deviceGone,
-          error: error instanceof Error ? error.message : 'fcm send failed',
+          error: error instanceof Error ? error.message : "fcm send failed",
         };
       }
     });
@@ -114,7 +160,7 @@ export class FcmClient implements PushApi {
  * reason a hospital cannot run its queue.
  */
 function initialiseApp(config: Env, log: Logger): App | null {
-  if (config.FIREBASE_SERVICE_ACCOUNT === '') return null;
+  if (config.FIREBASE_SERVICE_ACCOUNT === "") return null;
 
   // Nest can instantiate this class more than once across a test suite, and
   // initializeApp throws on a duplicate name.
@@ -122,15 +168,24 @@ function initialiseApp(config: Env, log: Logger): App | null {
   if (existing !== undefined) return getApp(FIREBASE_APP_NAME);
 
   try {
-    const decoded = Buffer.from(config.FIREBASE_SERVICE_ACCOUNT, 'base64').toString('utf8');
+    const decoded = Buffer.from(
+      config.FIREBASE_SERVICE_ACCOUNT,
+      "base64",
+    ).toString("utf8");
     const credentials = JSON.parse(decoded) as {
       project_id?: string;
       client_email?: string;
       private_key?: string;
     };
 
-    if (!credentials.project_id || !credentials.client_email || !credentials.private_key) {
-      log.error('FIREBASE_SERVICE_ACCOUNT is missing project_id, client_email or private_key');
+    if (
+      !credentials.project_id ||
+      !credentials.client_email ||
+      !credentials.private_key
+    ) {
+      log.error(
+        "FIREBASE_SERVICE_ACCOUNT is missing project_id, client_email or private_key",
+      );
       return null;
     }
 
@@ -145,9 +200,12 @@ function initialiseApp(config: Env, log: Logger): App | null {
       FIREBASE_APP_NAME,
     );
   } catch (error) {
-    log.error({ err: error }, 'FIREBASE_SERVICE_ACCOUNT could not be read - FCM push is off');
+    log.error(
+      { err: error },
+      "FIREBASE_SERVICE_ACCOUNT could not be read - FCM push is off",
+    );
     return null;
   }
 }
 
-const FIREBASE_APP_NAME = 'kramya-push';
+const FIREBASE_APP_NAME = "kramya-push";

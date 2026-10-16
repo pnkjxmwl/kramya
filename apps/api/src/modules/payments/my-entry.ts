@@ -73,16 +73,16 @@ export async function loadSessionLiveView(
   sessionId: string,
 ): Promise<SessionLiveView> {
   const [eligible, serving, booked] = await Promise.all([
-    tx.queueEntry.findMany({
+    tx.queueMetric.findMany({
       where: { sessionId, status: { in: [...ELIGIBLE_TO_CALL] } },
       orderBy: CALL_ORDER,
       select: { id: true },
     }),
-    tx.queueEntry.findFirst({
+    tx.queueMetric.findFirst({
       where: { sessionId, status: { in: ['CALLED', 'IN_CONSULTATION'] } },
       select: { tokenLabel: true, status: true, consultStartedAt: true },
     }),
-    tx.queueEntry.findMany({
+    tx.queueMetric.findMany({
       where: { sessionId, status: { in: ['CONFIRMED', 'VIRTUAL_WAITING'] } },
       select: { tokenNumber: true },
     }),
