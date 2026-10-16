@@ -9222,3 +9222,150 @@ gitignored**.
 The fast tool was wrong in a way that looks exactly like being right - an empty result. Use
 `rg --no-ignore --hidden` when the question is "does this string exist anywhere", rather
 than "does this string exist in tracked code".
+
+## 2026-09-19 · The staging runbook, and a clock that is not on the data
+
+Render mailed a warning: the free Postgres expires **2026-10-08** and will be deleted
+unless it moves to a paid compute plan. Created 2026-09-08, so this is exactly the 30-day
+rule `render.yaml` already documents at the top of the file. Wrote `docs/staging-runbook.md`
+— half of `P10-TEST-01`. The other half, the full journey on a real phone, is still not
+done, so the box stays `☐`.
+
+### The misreading worth recording
+
+The instinct was "just delete the old data and push new data in" — which is the right fix
+for stale demo data and does nothing at all about this. **The 30-day clock is on the database
+instance, not on the rows.** It is fixed at creation and no amount of truncating, reseeding
+or redeploying moves it; on the date, the whole Postgres server goes, connection string
+included. Only paying before deletion keeps it.
+
+The runbook is therefore split into two procedures that answer two different questions —
+refresh the data in a living database (§1) versus replace a deleted instance (§2) — with the
+explicit instruction not to reach for the second to solve the first. Recreating an instance to
+get fresh rows is slower and riskier and fixes nothing that re-running `demo-data.mjs` does not.
+
+### Decided: let it expire
+
+Not paying to preserve four fake hospitals on Razorpay test keys. Everything in that database
+is generated rather than authored — schema by `prisma migrate deploy` at the end of
+`buildCommand`, data by `scripts/demo-data.mjs` through the real API — so the recovery is
+~15 minutes and the loss is nothing. The sequencing that follows: **do the phone walkthrough
+before 2026-10-08**, on the instance that already exists, and recreate only when next needed.
+
+Paying becomes correct at a different moment, and for a different reason: a real hospital, in
+an India region Render does not have. That day replaces `render.yaml`; it does not upgrade a plan.
+
+### Two details the runbook pins down because they are easy to get wrong
+
+- **Name the replacement `opd-postgres`.** `DATABASE_URL` is wired `fromDatabase: name:
+  opd-postgres`, so a matching name rewires itself and any other name is a silent manual edit.
+  And `env()` memoises at first call — a hand-edited env var needs a restart, not a save.
+- **A replaced database reaches no client.** The API URL is unchanged, so the Vercel console,
+  the Expo app and the native APK all need nothing. Worth stating explicitly, because the
+  instinct after losing a database is to rebuild everything downstream of it.
+
+The wipe-to-empty path (§1b) is documented as an escape hatch with its own warning:
+`prisma migrate reset` drops every row and `scripts/no-migrate-dev.mjs` refuses it against a
+non-local host on purpose. Calling prisma directly to bypass that guard is acceptable *only*
+while this database is throwaway. §4 says to delete that section from the file the day it is not.
+
+## 2026-10-15 — Architecture, code, UX and first-clinic readiness review
+
+**Did:** Reviewed the application for the founder's clarified target of 3–4 hospitals/clinics
+and roughly 300–400 initial patients. The founder confirmed existing Render data was fake and
+a fresh database is acceptable. Saved `docs/reviews/2026-10-15-architecture-and-pilot-review.md`,
+`docs/supabase-migration-plan.md`, and the inactive reference Blueprint
+`docs/deployment/render.supabase.example.yaml`. Worked on
+`codex/architecture-review-2026-10-15`; no commit, push, cloud provisioning, deployment,
+credential change, or application logic fix was performed. Preserved the pre-existing staging
+runbook and earlier uncommitted progress entry. No phase checkbox was advanced.
+
+**Found:** Isolated service executions with mocked persistence confirmed that an invitation
+returned to a hospital admin can issue an existing user's global session without verifying
+that user's identity, and that replayed late captures can create duplicate refund obligations
+and inflate the local refunded amount. A real gateway might reject the duplicate refund;
+double payout was not claimed. Source review also found reconciliation starvation, incomplete
+session closure, account-cache/push ownership problems, and refresh/reconnect defects. The
+report gives exact paths, impacts, and regression scenarios. These findings remain open.
+
+**Decided:** Recommend retaining the modular monolith, Prisma and server-side authorization;
+propose Supabase Free in Mumbai as hosted Postgres only. Its session pooler fits the existing
+Render IPv4 deployment, and its Data API should be disabled for this API-owned schema. Reject
+another expiring Render database as the durable answer. Neon remains an alternative, but this
+application's frequent sweepers can consume its free compute-hours allowance even with few
+users. Replacing the database does not solve a sleeping Render API. Vercel Hobby's documented
+non-commercial restriction also requires a hosting decision for a clinic business; Netlify
+Free is a preview/benchmark candidate, not a deployed or guaranteed replacement. Official
+provider links and limitations are recorded in the deliverables.
+
+**UI:** Inspected the public landing, demo overview/board and login in the browser. Checked
+the sample board at 390×844 and 1280×900; Complete consultation → Call next worked on sample
+state. Keep its hierarchy and visual direction, repair accessibility and recovery states,
+shorten patient entry, and verify the actual devices. Neither patient client was rendered on
+a physical device in this review. Recommend one actively maintained patient app (Expo), with
+Kotlin preserved pending evidence of a separate need. No client was deleted or redesigned.
+
+**Verification and surprises:** Existing node_modules junctions still targeted
+`C:\Projects\New folder`. Initial commands could not load Turbo/Vitest. An offline sandboxed
+reinstall stalled on the old installation; stopped the task's installer processes and used
+an approved frozen-lockfile reinstall with lifecycle scripts disabled. It restored the
+dependencies without upgrading versions or changing the lockfile. Prisma's engine download
+was separately blocked by sandbox networking; an approved `prisma:generate` completed without
+connecting to or mutating a database. Corepack can run pnpm, but a bare pnpm executable is not
+on PATH, so the root Turbo wrapper could not dispatch tasks. Ran the package scripts directly
+through Corepack instead: lint passed (two existing seed.ts console warnings), all TypeScript
+checks passed, 38 contract tests passed, and 122 backend unit tests passed. The temporary
+unit-only Vitest config omitted DB global setup and was removed after the run. Docker's engine
+pipe was unavailable, so real-Postgres integration, production build, native JVM/device,
+live checkout and physical push delivery were not claimed as tested. The source and CI Node
+versions differ and should be aligned. Formatted/parsed the new Markdown and YAML artifacts;
+`git diff --check` passed. Historical green counts are not substituted for missing fresh tests.
+
+**Next:** Repair the security, payment and session-integrity blockers with the report's
+regression cases, provision fresh staging, prove backup/restore and a real-phone journey, then
+supervise one clinic before expanding. Track physical waiting, ETA accuracy, staff adoption,
+booking recovery and willingness to renew rather than adding product surface to impress an
+accelerator. No architecture can guarantee acceptance.
+
+## 2026-10-16 — First remediation and Supabase bootstrap
+
+**Fixed:** Prevented staff invitation tokens from logging in as an existing account; bound
+retry-safe refresh rotation to a client-held key; made payment capture, cancellation/refund,
+late payment, and session closure settle through the locked queue command; prevented the
+reconciliation worker from starving later records; reset client caches and push-token ownership
+at identity changes; added web session/reconnect recovery and active clinic switching; and
+made native secure storage fail closed instead of falling back to plaintext. Raised small-text
+contrast and touch target accessibility. Corrected the public demo's hard-coded date to render
+the current India date per request.
+
+**Provisioned:** Created Supabase `Kramya` in the approved free organization, Mumbai (`ap-south-1`);
+the project is healthy and empty. Render still has its existing free `opd-keyvalue`. Its old free
+`opd-postgres` is suspended and expired, and the fictional data will not be recovered. Updated
+the Blueprint to use an externally supplied Supabase URL while temporarily retaining the old DB
+resource declaration to avoid deleting it during the first sync.
+
+**Verified:** Local Docker PostgreSQL and Redis were healthy. All **395 API unit/integration
+tests across 26 files passed** against local `opd_test`, including the new security, payment,
+and queue closure regressions. Workspace lint and TypeScript checks passed; only the two existing
+`no-console` warnings in `apps/api/src/seed.ts` remain. The Next.js production build passed before
+and after the demo-date fix. A browser accessibility-tree check of the local sign-in and sample
+overview showed the expected console hierarchy and explicit sample-data notice. `git diff --check`
+passed.
+
+**Not verified yet:** Prisma migrations have not been applied to Supabase; the Render secret and
+deployment have not been changed. The native JVM suite could not start: only JDK 25 is installed
+and the project's Gradle 8.14.3 wrapper rejects it. Real-device behavior, hosted API readiness,
+backup restore, payment gateway, and physical push delivery remain manual pilot gates. Render Free
+sleeps and pauses workers, so the free setup remains staging/demo only, not an operating promise to
+a clinic.
+
+**Supabase follow-up:** The account owner completed sign-in and the Kramya project dashboard is
+now available. Disabled the unused Data API and turned off automatic exposure of newly created
+tables; both settings were saved and verified in the dashboard. Confirmed the project remains
+healthy and empty. Selected the shared IPv4 session pooler endpoint for Render and verified the
+password reset returned to a masked placeholder after refresh. A first database password looked
+guessable in the connection view, so it was treated as exposed and not used; the owner reported
+rotating it with Supabase's generator. Credentials must not be sent in chat. Render's
+`DATABASE_URL` has not yet changed, and no Prisma migrations have been applied to the hosted
+project. The Render dashboard login requires the owner's normal login method; its GitHub
+deployment connection is not enabled for account sign-in.

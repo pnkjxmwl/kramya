@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Doctor, OPDSession, Paginated } from '@opd/contracts';
 import { apiGet } from '../../../lib/api';
-import { getMe } from '../../../lib/tenant';
+import { getMe, getActiveMembership } from '../../../lib/tenant';
 import { Icon } from '../../../components/icon';
 import {
   Badge,
@@ -42,7 +42,7 @@ export default async function Overview() {
   // Shares the layout's call, rather than repeating it. Still NOT
   // `requireStaffHospital()` - see the note below, that would loop.
   const me = await getMe();
-  const active = me.memberships.find((m) => m.status === 'ACTIVE');
+  const active = await getActiveMembership();
 
   /*
     An account with no active membership is a real state - an invitation accepted

@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   RazorpayWebhookEvent,
+  type EndSessionRequest,
+  type QueueCommandResult,
   type CancelEntryRequest,
   type CancelEntryResponse,
   type JoinRequest,
@@ -22,6 +24,7 @@ import { isUniqueViolation } from '../../common/prisma-errors';
 import { QueueService, type CommandContext, type QueueActor } from '../queue/queue.service';
 import { QueuePolicyService } from '../config/queue-policy.service';
 import { EtaService } from '../eta/eta.service';
+import { endSession } from '../queue/commands/end-session';
 import { joinQueue } from '../queue/commands/join';
 import { applyPaymentConfirmation } from '../queue/commands/confirm-payment';
 import { applyCancellation } from '../queue/commands/cancel-entry';
@@ -346,16 +349,22 @@ export class PaymentsService {
 
     const stale = await this.prisma.payment.findMany({
       where: {
-        status: { in: ['CREATED', 'PENDING'] },
+        status: { in: ['CREATED', 'PENDING', 'FAILED'] },
+        reconcileAfter: { lte: new Date() },
         createdAt: { lt: olderThan },
       },
-      select: { id: true, razorpayOrderId: true },
-      orderBy: { createdAt: 'asc' },
+      select: { id: true, razorpayOrderId: true, reconcileAfter: true },
+      orderBy: [{ reconcileAfter: 'asc' }, { id: 'asc' }],
       take: limit,
     });
 
     let confirmed = 0;
     for (const payment of stale) {
+      const claim = await this.prisma.payment.updateMany({
+        where: { id: payment.id, reconcileAfter: payment.reconcileAfter },
+        data: { reconcileAfter: new Date(Date.now() + 5 * 60_000) },
+      });
+      if (claim.count !== 1) continue;
       try {
         const attempts = await this.razorpay.paymentsForOrder(payment.razorpayOrderId);
         const captured = attempts.find((attempt) => attempt.status === 'captured');
@@ -401,15 +410,17 @@ export class PaymentsService {
     const stranded = await this.prisma.refund.findMany({
       where: {
         status: 'PENDING',
-        razorpayRefundId: null,
+        reconcileAfter: { lte: new Date() },
         createdAt: { lt: olderThan },
       },
       select: {
         id: true,
         amountPaise: true,
+        reconcileAfter: true,
+        razorpayRefundId: true,
         payment: { select: { id: true, razorpayPaymentId: true } },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ reconcileAfter: 'asc' }, { id: 'asc' }],
       take: limit,
     });
 
@@ -417,6 +428,11 @@ export class PaymentsService {
     let adopted = 0;
 
     for (const refund of stranded) {
+      const claim = await this.prisma.refund.updateMany({
+        where: { id: refund.id, reconcileAfter: refund.reconcileAfter, status: 'PENDING' },
+        data: { reconcileAfter: new Date(Date.now() + 5 * 60_000) },
+      });
+      if (claim.count !== 1) continue;
       const gatewayPaymentId = refund.payment.razorpayPaymentId;
       // Nothing was ever captured, so there is nothing to give back. The row is
       // bookkeeping for a payment that never completed.
@@ -424,12 +440,12 @@ export class PaymentsService {
 
       try {
         const existing = await this.razorpay.refundsForPayment(gatewayPaymentId);
-        const already = existing.find((r) => r.notes?.refundId === refund.id);
+        const already = existing.find((r) => r.id === refund.razorpayRefundId || r.notes?.refundId === refund.id);
 
         if (already !== undefined) {
-          await this.prisma.refund.update({
-            where: { id: refund.id },
-            data: { razorpayRefundId: already.id },
+          await this.prisma.refund.updateMany({
+            where: { id: refund.id, status: 'PENDING' },
+            data: { razorpayRefundId: already.id, status: already.status === 'processed' ? 'PROCESSED' : already.status === 'failed' ? 'FAILED' : 'PENDING' },
           });
           adopted += 1;
           this.log.warn(
@@ -439,6 +455,7 @@ export class PaymentsService {
           continue;
         }
 
+        if (refund.razorpayRefundId !== null) continue;
         await this.sendRefundToGateway(refund.id, refund.payment.id, refund.amountPaise);
         sent += 1;
       } catch (error) {
@@ -486,66 +503,36 @@ export class PaymentsService {
       return { handled: 'IGNORED' };
     }
 
-    if (payment.status === 'SUCCESS' && payment.razorpayPaymentId === entity.id) {
-      return { handled: 'DUPLICATE' };
-    }
-
-    const session = await this.prisma.oPDSession.findUnique({
-      where: { id: payment.entry.sessionId },
-      select: { status: true },
-    });
-    const sessionLive =
-      session !== null && (session.status === 'OPEN_FOR_REGISTRATION' || session.status === 'ACTIVE');
-
-    // There is no queue left to join. Take the money on the books, then give it back
-    // - the alternative is silently keeping it (docs/Phases.md Phase 5 risks).
-    if (!sessionLive) {
-      await this.recordCapture(payment.id, entity.id);
-      await this.raiseRefund({
-        paymentId: payment.id,
-        hospitalId: payment.hospitalId,
-        amountPaise: payment.amountPaise,
-        reason: 'Session ended before the payment was confirmed',
-      });
-      return { handled: 'REFUND_UPDATED' };
-    }
-
-    // The hold had already lapsed and the money arrived anyway. The webhook wins:
-    // the token number was never handed to anyone else, so giving the slot back is
-    // a status change. Its own command, so the audit trail says which happened.
-    const reinstating = payment.entry.status === 'CANCELLED';
-
-    try {
-      await this.queue.runCommand({
-        sessionId: payment.entry.sessionId,
-        actor: { accountId: payment.accountId, hospitalId: payment.hospitalId, type: 'SYSTEM' },
-        command: reinstating ? 'REINSTATE' : 'CONFIRM_PAYMENT',
-        reason: reinstating ? 'Payment captured after the reservation had expired' : null,
-        handler: async (ctx) => {
-          // Queue owns the entry write; this module owns the payment write. One
-          // transaction, so a paid entry with no payment record is impossible.
-          await applyPaymentConfirmation(
-            ctx,
-            payment.entry.id,
-            reinstating ? 'REINSTATE' : 'CONFIRM_PAYMENT',
-          );
-          await ctx.tx.payment.update({
-            where: { id: payment.id },
-            data: { status: 'SUCCESS', razorpayPaymentId: entity.id },
+    const outcome = await this.queue.runCommand({
+      sessionId: payment.entry.sessionId,
+      actor: { accountId: payment.accountId, hospitalId: payment.hospitalId, type: 'SYSTEM' },
+      command: 'SETTLE_PAYMENT',
+      handler: async (ctx): Promise<{ ack: WebhookAck; refund: RaisedRefund | null }> => {
+        // Read under the session lock; a refunded capture is still a capture.
+        const current = await ctx.tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+        if (current.razorpayPaymentId !== null) {
+          return { ack: { handled: current.razorpayPaymentId === entity.id ? 'DUPLICATE' : 'IGNORED' }, refund: null };
+        }
+        const entry = await ctx.entryInSession(payment.entry.id);
+        const live = ctx.session.status === 'OPEN_FOR_REGISTRATION' || ctx.session.status === 'ACTIVE';
+        const expired = entry.status === 'CANCELLED' && await ctx.tx.queueEvent.findFirst({
+          where: { entryId: entry.id, type: 'ENTRY_CANCELLED', metadata: { path: ['via'], equals: 'EXPIRE_RESERVATION' } },
+          select: { id: true },
+        });
+        await ctx.tx.payment.update({ where: { id: payment.id }, data: { status: 'SUCCESS', razorpayPaymentId: entity.id } });
+        if (!live || (entry.status !== 'RESERVED' && !expired)) {
+          const refund = await refundForCancellation(ctx, {
+            entryId: entry.id, hospitalId: payment.hospitalId, pct: 100,
+            reason: 'Payment arrived after the booking was cancelled or the session ended',
           });
-        },
-      });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        // Two copies of the same webhook in flight at once. The unique index on
-        // razorpayPaymentId is the replay guard, and losing that race means the
-        // other one succeeded - which is success, not an error.
-        return { handled: 'DUPLICATE' };
-      }
-      throw error;
-    }
-
-    return { handled: reinstating ? 'REINSTATED' : 'CONFIRMED' };
+          return { ack: { handled: 'REFUND_UPDATED' }, refund };
+        }
+        await applyPaymentConfirmation(ctx, entry.id, expired ? 'REINSTATE' : 'CONFIRM_PAYMENT');
+        return { ack: { handled: expired ? 'REINSTATED' : 'CONFIRMED' }, refund: null };
+      },
+    });
+    if (outcome.refund) await this.sendRefundToGateway(outcome.refund.refundId, outcome.refund.paymentId, outcome.refund.amountPaise);
+    return outcome.ack;
   }
 
   /** Marks the attempt failed. The hold stays live so the patient can simply retry. */
@@ -580,18 +567,11 @@ export class PaymentsService {
     if (refund === null) {
       return { handled: 'IGNORED' };
     }
-    await this.prisma.refund.update({
-      where: { id: refund.id },
+    await this.prisma.refund.updateMany({
+      where: { id: refund.id, status: { not: 'PROCESSED' } },
       data: { status: event === 'refund.processed' ? 'PROCESSED' : 'FAILED' },
     });
     return { handled: 'REFUND_UPDATED' };
-  }
-
-  private async recordCapture(paymentId: string, razorpayPaymentId: string): Promise<void> {
-    await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: 'SUCCESS', razorpayPaymentId },
-    });
   }
 
   // -------------------------------------------------------------------------
@@ -820,47 +800,40 @@ export class PaymentsService {
       return;
     }
 
+    // At most one outbound attempt per obligation. A timeout is ambiguous:
+    // reconcile against gateway records instead of risking a second refund.
+    const claim = await this.prisma.refund.updateMany({
+      where: { id: refundId, status: 'PENDING', razorpayRefundId: null, submittedAt: null },
+      data: { submittedAt: new Date() },
+    });
+    if (claim.count !== 1) return;
     try {
       const result = await this.razorpay.refund({
         paymentId: payment.razorpayPaymentId,
         amountPaise,
         notes: { refundId },
       });
-      await this.prisma.refund.update({
-        where: { id: refundId },
-        data: { razorpayRefundId: result.id },
+      await this.prisma.refund.updateMany({
+        where: { id: refundId, status: 'PENDING' },
+        data: { razorpayRefundId: result.id, status: result.status === 'processed' ? 'PROCESSED' : result.status === 'failed' ? 'FAILED' : 'PENDING' },
       });
     } catch (error) {
       this.log.error({ err: error, refundId }, 'refund request to razorpay failed - left PENDING');
     }
   }
 
-  /** A refund raised by the server rather than by a patient cancelling. */
-  private async raiseRefund(input: {
-    paymentId: string;
-    hospitalId: string;
-    amountPaise: number;
-    reason: string;
-  }): Promise<void> {
-    const refund = await this.prisma.refund.create({
-      data: {
-        hospitalId: input.hospitalId,
-        paymentId: input.paymentId,
-        amountPaise: input.amountPaise,
-        status: 'PENDING',
-        reason: input.reason,
-      },
-      select: { id: true },
+  async endSession(sessionId: string, actor: QueueActor, input: EndSessionRequest): Promise<QueueCommandResult> {
+    const refunds: RaisedRefund[] = [];
+    const result = await endSession(this.queue, sessionId, actor, input, async (ctx, entryId, target) => {
+      const refund = await refundForCancellation(ctx, {
+        entryId, hospitalId: actor.hospitalId,
+        pct: target === 'NO_SHOW' ? ctx.policy.cancellationRules.noShowRefundPct : 100,
+        reason: target === 'NO_SHOW' ? 'Session ended: no-show refund per clinic policy' : 'Session ended before consultation: full refund',
+      });
+      if (refund) refunds.push(refund);
     });
-    // Increment, never assign. Today this only ever runs on a freshly captured
-    // payment where the total is zero, so the two are identical - but an assignment
-    // silently erases an earlier partial refund the day that stops being true, and
-    // that is money.
-    await this.prisma.payment.update({
-      where: { id: input.paymentId },
-      data: { refundedPaise: { increment: input.amountPaise }, status: 'REFUNDED' },
-    });
-    await this.sendRefundToGateway(refund.id, input.paymentId, input.amountPaise);
+    for (const refund of refunds) await this.sendRefundToGateway(refund.refundId, refund.paymentId, refund.amountPaise);
+    return result;
   }
 
   async readMyEntry(entryId: string): Promise<MyQueueEntry> {

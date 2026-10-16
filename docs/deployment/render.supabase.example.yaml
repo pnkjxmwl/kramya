@@ -1,0 +1,61 @@
+# REVIEW TEMPLATE ONLY. Not applied; root render.yaml remains the active Blueprint.
+# Use with docs/supabase-migration-plan.md. Preserve existing service identities.
+# Strictly a free staging/demo bridge: API sleeps; workers pause while asleep.
+# DATABASE_URL must be a private Supabase session-pooler connection with TLS.
+# No Render Postgres is created here. Review any existing Blueprint resource diff.
+services:
+  - name: opd-api
+    type: web
+    runtime: node
+    region: singapore
+    plan: free
+    healthCheckPath: /health
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm --filter @opd/api prisma:generate &&
+      pnpm exec turbo run build --filter=@opd/api &&
+      pnpm --filter @opd/api prisma:deploy
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          name: opd-keyvalue
+          type: keyvalue
+          property: connectionString
+      # Supply/preserve existing environment secrets. Do not unintentionally rotate.
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CHECKIN_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Optional: empty values are supported by the current env schema.
+      - key: SENTRY_DSN
+        sync: false
+      - key: GOOGLE_CLIENT_IDS
+        sync: false
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+
+  - name: opd-keyvalue
+    type: keyvalue
+    region: singapore
+    plan: free
+    ipAllowList: []

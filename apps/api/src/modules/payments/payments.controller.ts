@@ -4,6 +4,8 @@ import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import {
   CancelEntryRequest,
+  EndSessionRequest,
+  type QueueCommandResult,
   JoinRequest,
   MyQueueEntriesQuery,
   type CancelEntryResponse,
@@ -159,6 +161,16 @@ export class RazorpayWebhookController {
 @Controller('sessions/:sessionId')
 export class StaffCancellationController {
   constructor(private readonly payments: PaymentsService) {}
+
+  @Post('end')
+  end(
+    @Param('sessionId') sessionId: string,
+    @CurrentAccount() account: AuthedAccount,
+    @CurrentHospital() tenant: TenantContext,
+    @Body(new ZodBody(EndSessionRequest)) body: EndSessionRequest,
+  ): Promise<QueueCommandResult> {
+    return this.payments.endSession(sessionId, actorOf(account, tenant), body);
+  }
 
   @Post('cancel-entry')
   cancel(

@@ -49,6 +49,7 @@ class Services(context: Context) {
     val query = QueryClient(auth, scope)
     val realtime = RealtimeClient(query)
     val city = CityStore(context)
+    init { auth.onIdentityChanged = { query.clear(); realtime.stop() } }
 }
 
 val LocalCity = staticCompositionLocalOf<CityStore> {

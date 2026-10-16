@@ -30,8 +30,8 @@ type Variant = 'primary' | 'quiet' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 const SIZE: Record<Size, string> = {
-  sm: 'h-7 gap-1.5 rounded-md px-2.5 text-caption',
-  md: 'h-9 gap-2 rounded-md px-3.5 text-label',
+  sm: 'h-7 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 gap-1.5 rounded-md px-2.5 text-caption',
+  md: 'h-9 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 gap-2 rounded-md px-3.5 text-label',
   lg: 'h-11 gap-2 rounded-md px-5 text-body-lg font-semibold',
 };
 

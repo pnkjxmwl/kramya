@@ -155,6 +155,7 @@ export function Field(props: {
         {icon ? <Icon name={icon} size={17} color={theme.color.inkTertiary} /> : null}
         <TextInput
           {...input}
+          accessibilityLabel={label}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           style={styles.input}

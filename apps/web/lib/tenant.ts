@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import type { MeResponse } from '@opd/contracts';
@@ -21,6 +22,14 @@ import { apiGet } from './api';
  */
 export const getMe = cache(async (): Promise<MeResponse> => apiGet<MeResponse>('/me'));
 
+/** One selected, verified membership for every console route in this request. */
+export const getActiveMembership = cache(async () => {
+  const me = await getMe();
+  const selected = (await cookies()).get('opd_hospital')?.value;
+  const memberships = me.memberships.filter((m) => m.status === 'ACTIVE');
+  return memberships.find((m) => m.hospitalId === selected) ?? memberships.sort((a, b) => a.hospitalId.localeCompare(b.hospitalId))[0];
+});
+
 /**
  * The hospital the admin console acts on.
  *
@@ -33,9 +42,8 @@ export const getMe = cache(async (): Promise<MeResponse> => apiGet<MeResponse>('
  * request anyway.
  */
 export const requireAdminHospital = cache(async (): Promise<{ id: string; name: string }> => {
-  const me = await getMe();
-  const active = me.memberships.find((m) => m.status === 'ACTIVE' && m.role === 'ADMIN');
-  if (!active) redirect('/overview');
+  const active = await getActiveMembership();
+  if (!active || active.role !== 'ADMIN') redirect('/overview');
   return { id: active.hospitalId, name: active.hospitalName };
 });
 
@@ -59,8 +67,7 @@ export const requireStaffHospital = cache(
     /** The Doctor record this account IS, when they are one. Null for staff. */
     doctorId: string | null;
   }> => {
-    const me = await getMe();
-    const active = me.memberships.find((m) => m.status === 'ACTIVE');
+    const active = await getActiveMembership();
     if (!active) redirect('/overview');
     return {
       id: active.hospitalId,

@@ -312,6 +312,38 @@ describe('join -> pay -> token (Phase 5)', () => {
   // My visits + cancel
   // -------------------------------------------------------------------------
 
+  it('does not resurrect a cancelled paid booking when the capture is replayed', async () => {
+    const joined = await join().expect(201);
+    const payload = capturedBody(joined.body.razorpayOrderId, 'pay_replay_refunded');
+    await postWebhook(payload).expect(201);
+    await request(app.getHttpServer()).post(`/queue-entries/${joined.body.entry.id}/cancel`).set(auth(accessToken)).send({}).expect(201);
+    await postWebhook(payload).expect(201);
+    expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: joined.body.entry.id } })).status).toBe('CANCELLED');
+    expect(await prisma.refund.count()).toBe(1);
+    expect(razorpay.refunds).toHaveLength(1);
+  });
+
+  it('records exactly one late-capture refund under concurrent delivery', async () => {
+    const joined = await join().expect(201);
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'COMPLETED' } });
+    const payload = capturedBody(joined.body.razorpayOrderId, 'pay_late_repeated');
+    await Promise.all(Array.from({ length: 4 }, () => postWebhook(payload).expect(201)));
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: joined.body.entry.id } });
+    expect(payment.refundedPaise).toBe(FEE_PAISE);
+    expect(payment.status).toBe('REFUNDED');
+    expect(await prisma.refund.count()).toBe(1);
+    expect(razorpay.refunds).toHaveLength(1);
+  });
+
+  it('refunds a late capture after a patient explicitly cancels an unpaid hold', async () => {
+    const joined = await join().expect(201);
+    await request(app.getHttpServer()).post(`/queue-entries/${joined.body.entry.id}/cancel`).set(auth(accessToken)).send({}).expect(201);
+    const result = await postWebhook(capturedBody(joined.body.razorpayOrderId, 'pay_cancelled_hold')).expect(201);
+    expect(result.body.handled).toBe('REFUND_UPDATED');
+    expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: joined.body.entry.id } })).status).toBe('CANCELLED');
+    expect(razorpay.refunds).toHaveLength(1);
+  });
+
   it('recovers the token after a crash, and shows nobody else', async () => {
     const joined = (await join().expect(201)).body;
     await postWebhook(capturedBody(joined.razorpayOrderId, 'pay_recover')).expect(201);
@@ -360,7 +392,7 @@ describe('join -> pay -> token (Phase 5)', () => {
 
     expect(res.body.entry.status).toBe('CANCELLED');
     expect(res.body.refund.amountPaise).toBe(FEE_PAISE);
-    expect(res.body.refund.status).toBe('PENDING');
+    expect(res.body.refund.status).toBe('PROCESSED');
 
     const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: joined.entry.id } });
     expect(payment.status).toBe('REFUNDED');

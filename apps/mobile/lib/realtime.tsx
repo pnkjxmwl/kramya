@@ -35,7 +35,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   /** Rooms this client wants to be in, so they can be re-joined after a reconnect. */
-  const watched = useRef(new Set<string>());
+  const watched = useRef(new Map<string, number>());
 
   useEffect(() => {
     if (!signedIn || accessToken === null) {
@@ -61,7 +61,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       // Re-join every room, then refetch everything on screen. In that order: a
       // change that happened while the socket was down would otherwise sit on the
       // screen until the next navigation. This IS the reconnect contract.
-      for (const sessionId of watched.current) {
+      for (const sessionId of watched.current.keys()) {
         void socket.emitWithAck('subscribe', { sessionId });
       }
       void queryClient.invalidateQueries();
@@ -120,11 +120,13 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
    * already re-joins them, and a window in which an update is missed.
    */
   const watch = useCallback((sessionId: string) => {
-    watched.current.add(sessionId);
+    watched.current.set(sessionId, (watched.current.get(sessionId) ?? 0) + 1);
     // A socket that is not up yet is fine: the id is in `watched`, and `connect`
     // re-joins everything there.
     void socketRef.current?.emitWithAck('subscribe', { sessionId });
     return () => {
+      const remaining = (watched.current.get(sessionId) ?? 1) - 1;
+      if (remaining > 0) { watched.current.set(sessionId, remaining); return; }
       watched.current.delete(sessionId);
       socketRef.current?.emit('unsubscribe', { sessionId });
     };

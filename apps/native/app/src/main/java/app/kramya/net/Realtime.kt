@@ -36,7 +36,7 @@ class RealtimeClient(private val query: QueryClient) {
      * Synchronised because it is written from Compose effects on the main thread and read
      * from socket.io's own IO thread inside the connect handler.
      */
-    private val watched: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+    private val watched: MutableMap<String, Int> = Collections.synchronizedMap(mutableMapOf())
 
     /** Opens the socket for a signed-in session. Safe to call when one is already open. */
     fun start(accessToken: String) {
@@ -63,7 +63,7 @@ class RealtimeClient(private val query: QueryClient) {
             // Re-join every room, THEN refetch everything on screen. In that order: a
             // change that happened while the socket was down would otherwise sit on the
             // screen until the next navigation. This IS the reconnect contract.
-            synchronized(watched) { watched.toList() }.forEach { subscribe(created, it) }
+            synchronized(watched) { watched.keys.toList() }.forEach { subscribe(created, it) }
             query.invalidate()
         }
 
@@ -106,11 +106,15 @@ class RealtimeClient(private val query: QueryClient) {
      * re-joins everything there.
      */
     fun watch(sessionId: String): () -> Unit {
-        watched.add(sessionId)
+        synchronized(watched) { watched[sessionId] = (watched[sessionId] ?: 0) + 1 }
         socket?.let { subscribe(it, sessionId) }
         return {
-            watched.remove(sessionId)
-            socket?.emit("unsubscribe", JSONObject().put("sessionId", sessionId))
+            val last = synchronized(watched) {
+                val count = (watched[sessionId] ?: 1) - 1
+                if (count > 0) { watched[sessionId] = count; false }
+                else { watched.remove(sessionId); true }
+            }
+            if (last) socket?.emit("unsubscribe", JSONObject().put("sessionId", sessionId))
         }
     }
 

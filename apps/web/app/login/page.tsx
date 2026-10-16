@@ -16,6 +16,7 @@ export default function LoginPage() {
     setPending(true);
     setError(null);
 
+    try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,13 +28,20 @@ export default function LoginPage() {
       // page into a Suspense boundary just to prerender a static login form.
       const next = new URLSearchParams(window.location.search).get('next');
       // Full navigation, not router.push: middleware must see the new cookies.
-      window.location.href = next?.startsWith('/') && next !== '/' ? next : '/overview';
+      const target = new URL(next ?? '/overview', window.location.origin);
+      window.location.href = target.origin === window.location.origin && target.pathname !== '/'
+        ? target.pathname + target.search + target.hash : '/overview';
       return;
     }
 
     const body = (await res.json().catch(() => null)) as ApiError | null;
     setError(body?.error.message ?? 'Sign-in failed. Please try again.');
-    setPending(false);
+
+    } catch {
+      setError('Cannot reach the server. Check your connection and try again.');
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

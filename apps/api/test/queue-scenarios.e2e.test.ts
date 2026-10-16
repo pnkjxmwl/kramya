@@ -463,7 +463,7 @@ describe('queue scenarios (P4-TEST-01)', () => {
 
     // The distinction docs/PRD.md 8.9 and 8.11 each describe one half of: someone
     // who took the afternoon off and came in is not a no-show.
-    expect(await statusOf(present)).toBe('RESCHEDULED');
+    expect(await statusOf(present)).toBe('CANCELLED');
     expect(await statusOf(athome)).toBe('NO_SHOW');
   });
 

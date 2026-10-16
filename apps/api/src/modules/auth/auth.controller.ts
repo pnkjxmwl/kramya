@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   AcceptInviteRequest,
+  AcceptMembershipRequest,
   GoogleAuthRequest,
   LoginRequest,
   LogoutRequest,
@@ -15,6 +16,7 @@ import { TokenService } from './token.service';
 import { ZodBody } from '../../common/pipes/zod-validation.pipe';
 import { CurrentAccount, Public } from '../../common/decorators';
 import type { AuthedAccount } from '../../common/auth-context';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Rate limiting here is deliberately per route, not per controller.
@@ -38,6 +40,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly tokens: TokenService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @Public()
@@ -82,7 +85,16 @@ export class AuthController {
   @HttpCode(200)
   @Post('auth/refresh')
   refresh(@Body(new ZodBody(RefreshRequest)) body: RefreshRequest): Promise<AuthTokens> {
-    return this.tokens.rotate(body.refreshToken);
+    return this.tokens.rotate(body.refreshToken, body.rotationKey);
+  }
+
+  @HttpCode(200)
+  @Post('auth/accept-membership')
+  acceptMembership(
+    @CurrentAccount() account: AuthedAccount,
+    @Body(new ZodBody(AcceptMembershipRequest)) body: AcceptMembershipRequest,
+  ): Promise<AuthTokens> {
+    return this.auth.acceptMembership(account.id, body.token);
   }
 
   /** Public: logging out must work even with an expired access token. */
@@ -90,7 +102,8 @@ export class AuthController {
   @HttpCode(204)
   @Post('auth/logout')
   async logout(@Body(new ZodBody(LogoutRequest)) body: LogoutRequest): Promise<void> {
-    await this.tokens.revoke(body.refreshToken);
+    const accountId = await this.tokens.revoke(body.refreshToken);
+    if (accountId && body.pushToken) await this.notifications.unregisterDevice(accountId, body.pushToken);
   }
 
   @Get('me')

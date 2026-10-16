@@ -355,8 +355,8 @@ describe('background workers (P8-BE-03, P8-BE-04, P8-BE-05)', () => {
 
   describe('payment reconcile (P8-BE-05)', () => {
     /** A reservation whose webhook never arrived. */
-    async function abandonedHold(): Promise<{ entryId: string; paymentId: string }> {
-      const entry = await book('Paid But Unconfirmed', 1, 'CONFIRMED');
+    async function abandonedHold(tokenNumber = 1): Promise<{ entryId: string; paymentId: string }> {
+      const entry = await book('Paid But Unconfirmed', tokenNumber, 'CONFIRMED');
       await prisma.queueEntry.update({
         where: { id: entry.id },
         data: { status: 'RESERVED', reservationExpiresAt: new Date(Date.now() + 600_000) },
@@ -449,6 +449,18 @@ describe('background workers (P8-BE-03, P8-BE-04, P8-BE-05)', () => {
       expect(await prisma.queueEvent.count({ where: { type: 'ENTRY_CONFIRMED' } })).toBe(1);
     });
 
+    it('moves past twenty abandoned orders and reconciles a later successful retry', async () => {
+      const rows = [];
+      for (let n = 1; n <= 21; n++) rows.push(await abandonedHold(n));
+      const last = rows[20]!;
+      await prisma.payment.update({ where: { id: last.paymentId }, data: { status: 'FAILED' } });
+      fakeRazorpay.paymentsForOrder = async (orderId: string) => orderId === `order_${last.entryId}` ? [{ id: 'pay_after_backlog', order_id: orderId, status: 'captured', amount: 50_000, currency: 'INR' }] : [];
+      const service = app.get(PaymentsService);
+      await service.reconcilePending(new Date());
+      await service.reconcilePending(new Date());
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id: last.paymentId } })).status).toBe('SUCCESS');
+    });
+
     it('survives a gateway that will not answer, and keeps going', async () => {
       await abandonedHold();
       fakeRazorpay.paymentsForOrder = async () => {
@@ -535,16 +547,16 @@ describe('background workers (P8-BE-03, P8-BE-04, P8-BE-05)', () => {
       ).toBe('rfnd_already_sent');
     });
 
-    it('leaves a refund that already has a gateway id alone', async () => {
+    it('settles a refund with a gateway id when its webhook was missed', async () => {
       const { refundId } = await strandedRefund();
       await prisma.refund.update({
         where: { id: refundId },
         data: { razorpayRefundId: 'rfnd_done' },
       });
 
-      expect(await app.get(PaymentsService).reconcileRefunds(new Date())).toMatchObject({
-        checked: 0,
-      });
+      fakeRazorpay.refundsForPayment = async () => [{ id: 'rfnd_done', amount: 50_000, status: 'processed' }];
+      expect(await app.get(PaymentsService).reconcileRefunds(new Date())).toMatchObject({ checked: 1, adopted: 1 });
+      expect((await prisma.refund.findUniqueOrThrow({ where: { id: refundId } })).status).toBe('PROCESSED');
     });
   });
 

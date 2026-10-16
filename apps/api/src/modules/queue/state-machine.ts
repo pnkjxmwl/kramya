@@ -37,6 +37,7 @@ import {
  */
 export type QueueCommand =
   | 'JOIN'
+  | 'SETTLE_PAYMENT'
   | 'CONFIRM_PAYMENT'
   | 'REINSTATE'
   | 'CANCEL_ENTRY'
@@ -59,6 +60,7 @@ export type QueueCommand =
 
 export const QUEUE_COMMANDS: readonly QueueCommand[] = [
   'JOIN',
+  'SETTLE_PAYMENT',
   'CONFIRM_PAYMENT',
   'REINSTATE',
   'CANCEL_ENTRY',
@@ -175,6 +177,9 @@ const ENTRY_TRANSITIONS: Record<
    * and nobody may be called from it.
    */
   JOIN: {},
+  // Financial settlement may arrive after closure. Entry transitions still use
+  // CONFIRM_PAYMENT or REINSTATE after inspecting the locked session.
+  SETTLE_PAYMENT: {},
 
   /**
    * The signature-verified webhook, and the ONLY thing that turns a hold into a
@@ -312,9 +317,10 @@ const ENTRY_TRANSITIONS: Record<
     RESERVED: 'CANCELLED',
     CONFIRMED: 'NO_SHOW',
     VIRTUAL_WAITING: 'NO_SHOW',
-    CHECKED_IN: 'RESCHEDULED',
-    READY: 'RESCHEDULED',
-    CALLED: 'RESCHEDULED',
+    SKIPPED: 'NO_SHOW',
+    CHECKED_IN: 'CANCELLED',
+    READY: 'CANCELLED',
+    CALLED: 'CANCELLED',
     COMPLETED: 'COMPLETED',
     CANCELLED: 'CANCELLED',
     NO_SHOW: 'NO_SHOW',
@@ -375,6 +381,7 @@ const SESSION_ACCEPTS: Record<QueueCommand, readonly SessionStatus[]> = {
   // A running clinic still takes bookings and still takes payment for them
   // (docs/PRD.md 8.12 closes registration on its own limits, never on ACTIVE).
   JOIN: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
+  SETTLE_PAYMENT: SESSION_STATUSES,
   CONFIRM_PAYMENT: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   // Refused once the session is over, which is what routes a too-late payment to a
   // refund instead of into a queue that no longer exists.

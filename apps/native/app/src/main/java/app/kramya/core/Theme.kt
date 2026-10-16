@@ -32,13 +32,8 @@ object Theme {
         val Ink = Color(0xFF0B0B0C)
         val InkSecondary = Color(0xFF48484A)
 
-        // The one token in the system that fails WCAG AA, and it is the handoff's own
-        // value: #8A8A8E on the #F7F7F8 canvas measures 3.21:1 against AA's 4.5:1.
-        // Left at the handoff value for the reason theme.ts gives - quietly darkening a
-        // signed-off colour is not a decision to make on a doc's behalf. Every screen
-        // reads this one token, so the fix is this line and nothing else:
-        //   #72727A -> 4.5:1 (AA for all text)   #6A6A72 -> 5.0:1 (comfortable)
-        val InkTertiary = Color(0xFF8A8A8E)
+        // AA-readable supporting text on the canvas and surface.
+        val InkTertiary = Color(0xFF6A6A72)
         val InkQuaternary = Color(0xFFC6C6CA)
 
         // The same four under the role names the screens use. `Primary` is still the

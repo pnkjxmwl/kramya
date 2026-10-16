@@ -1,5 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { RegisterPushTokenRequest, type PushTokenResponse } from '@opd/contracts';
+import { Body, Controller, Post, HttpCode } from '@nestjs/common';
+import { RegisterPushTokenRequest, UnregisterPushTokenRequest, type PushTokenResponse } from '@opd/contracts';
 import { ZodBody } from '../../common/pipes/zod-validation.pipe';
 import { CurrentAccount } from '../../common/decorators';
 import type { AuthedAccount } from '../../common/auth-context';
@@ -16,6 +16,15 @@ import { NotificationsService } from './notifications.service';
 @Controller('me/push-tokens')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
+
+  @Post('unregister')
+  @HttpCode(204)
+  unregister(
+    @CurrentAccount() account: AuthedAccount,
+    @Body(new ZodBody(UnregisterPushTokenRequest)) body: UnregisterPushTokenRequest,
+  ): Promise<void> {
+    return this.notifications.unregisterDevice(account.id, body.token);
+  }
 
   @Post()
   async register(

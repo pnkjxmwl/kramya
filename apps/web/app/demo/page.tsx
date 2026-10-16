@@ -13,6 +13,10 @@ import {
 } from '../../components/ui';
 import { DEMO_DEPARTMENTS, DEMO_SESSIONS, HOSPITAL } from './fixtures';
 
+// The sample sessions can remain fixture data, but the date is presented as today.
+// Render it per request so it cannot become stale in a static deployment.
+export const dynamic = 'force-dynamic';
+
 /**
  * The demo Overview - deliberately the same page as `(console)/overview/page.tsx`,
  * built from the same components, with fixtures where that one has API calls.
@@ -27,6 +31,9 @@ import { DEMO_DEPARTMENTS, DEMO_SESSIONS, HOSPITAL } from './fixtures';
  * then the day's table - so a buyer who later signs in recognises the screen.
  */
 export default function DemoOverview() {
+  const today = new Intl.DateTimeFormat('en-IN', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata',
+  }).format(new Date());
   const running = DEMO_SESSIONS.filter((s) => s.status === 'Running');
   const upcoming = DEMO_SESSIONS.filter((s) => s.status === 'Not started');
   const done = DEMO_SESSIONS.filter((s) => s.status === 'Finished');
@@ -36,7 +43,7 @@ export default function DemoOverview() {
       <PageHeader
         eyebrow={HOSPITAL.name}
         title="Today"
-        description="Friday, 13 September · Run a session from the board, or set up departments, doctors, schedules and queue rules under Configuration."
+        description={`${today} · Run a session from the board, or set up departments, doctors, schedules and queue rules under Configuration.`}
         actions={
           <Link href="/demo/queue" className={btn('quiet')}>
             <Icon name="queue" className="h-4 w-4" />
@@ -90,7 +97,7 @@ export default function DemoOverview() {
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <TableCard
           title="Today's sessions"
-          description={`${DEMO_SESSIONS.length} on Friday, 13 September`}
+          description={`${DEMO_SESSIONS.length} on ${today}`}
         >
           <table className={table}>
             <thead>

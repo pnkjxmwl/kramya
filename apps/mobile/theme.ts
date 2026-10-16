@@ -21,28 +21,8 @@ export const theme = {
      */
     ink: '#0B0B0C',
     inkSecondary: '#48484A',
-    /**
-     * **This is the one token in the file that fails WCAG AA, and it is the
-     * handoff's own value.**
-     *
-     * #8A8A8E on the #F7F7F8 canvas measures **3.21:1**. AA wants 4.5:1 for text
-     * below 24px (or 18.66px bold), so every row subtitle, caption and eyebrow drawn
-     * in it is short - while docs/CLAUDE.md 9 asks for AA. Apple ships the same grey
-     * as its own tertiaryLabel, which is why the handoff specifies it and why it
-     * looks right; that does not make it compliant.
-     *
-     * It is left at the handoff value because the handoff was signed off as final
-     * and high-fidelity, and quietly darkening a specified colour is not a decision
-     * to make on a doc's behalf. **Every screen reads this one token**, so the fix is
-     * this line and nothing else:
-     *
-     *   #72727A -> 4.5:1 (AA for all text)
-     *   #6A6A72 -> 5.0:1 (comfortable)
-     *
-     * `inkSecondary` above already passes at 8.5:1 and is the right home for
-     * anything that must be read rather than glanced at.
-     */
-    inkTertiary: '#8A8A8E',
+    /** AA-readable supporting text on the canvas and surface. */
+    inkTertiary: '#6A6A72',
     inkQuaternary: '#C6C6CA',
 
     /**

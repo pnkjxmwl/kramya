@@ -65,6 +65,7 @@ class QueryClient(
      * Concurrent rather than mutex-guarded: `computeIfAbsent` is atomic, which is exactly
      * and only what the dedupe needs, and it lets `observe` below be an ordinary function.
      */
+    @Volatile private var generation = 0L
     private val inFlight = ConcurrentHashMap<String, Deferred<Unit>>()
 
     /**
@@ -115,6 +116,7 @@ class QueryClient(
     }
 
     private suspend fun run(key: String, serializer: KSerializer<*>) {
+        val started = generation
         update(key) { it.copy(fetching = true) }
         var lastError: Throwable? = null
 
@@ -124,6 +126,7 @@ class QueryClient(
         repeat(RETRY_COUNT + 1) {
             try {
                 val value = request(key, serializer)
+                if (started != generation) return
                 update(key) {
                     Entry(
                         data = value,
@@ -136,7 +139,7 @@ class QueryClient(
                 inFlight.remove(key)
                 return
             } catch (cancelled: CancellationException) {
-                inFlight.remove(key)
+                if (started == generation) inFlight.remove(key)
                 throw cancelled
             } catch (error: Throwable) {
                 lastError = error
@@ -145,6 +148,7 @@ class QueryClient(
 
         // The previous data is kept. A background refetch that fails must not blank a
         // screen a patient is reading - it should say so and leave the numbers up.
+        if (started != generation) return
         update(key) { it.copy(error = lastError, fetching = false) }
         inFlight.remove(key)
     }
@@ -197,6 +201,10 @@ class QueryClient(
 
     /** Drops everything. Used on sign-out, so the next account starts from nothing. */
     fun clear() {
+        generation++
+        inFlight.values.forEach { it.cancel() }
+        inFlight.clear()
+        observers.clear()
         _entries.value = emptyMap()
     }
 
