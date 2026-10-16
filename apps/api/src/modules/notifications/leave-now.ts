@@ -56,11 +56,16 @@ export class LeaveNowNotifier extends Sweeper {
     const sessions = await this.prisma.oPDSession.findMany({
       where: {
         status: { in: ['OPEN_FOR_REGISTRATION', 'ACTIVE'] },
-        doctorPresence: { not: 'LEFT' },
+        doctorPresence: 'PRESENT',
         pausedAt: null,
         // Somebody who has BOOKED but not arrived is the only person this can be
         // about. Anyone CHECKED_IN is already standing in the corridor.
-        entries: { some: { status: { in: ['CONFIRMED', 'VIRTUAL_WAITING'] }, accountId: { not: null } } },
+        entries: {
+          some: {
+            status: { in: ['CONFIRMED', 'VIRTUAL_WAITING'] },
+            accountId: { not: null },
+          },
+        },
       },
       select: {
         id: true,
@@ -80,11 +85,20 @@ export class LeaveNowNotifier extends Sweeper {
       // The queue in the order it will actually be called, so "ahead of you" is the
       // number the doctor will really work through - not a token sort, which is
       // wrong the moment anyone is escalated or requeued.
-      const present = await this.prisma.queueEntry.findMany({
-        where: { sessionId: session.id, status: { in: ['CHECKED_IN', 'READY'] } },
-        orderBy: CALL_ORDER,
-        select: { id: true },
-      });
+      const [present, serving] = await Promise.all([
+        this.prisma.queueEntry.findMany({
+          where: {
+            sessionId: session.id,
+            status: { in: ['CHECKED_IN', 'READY'] },
+          },
+          orderBy: CALL_ORDER,
+          select: { id: true },
+        }),
+        this.prisma.queueEntry.findFirst({
+          where: { sessionId: session.id, status: 'IN_CONSULTATION' },
+          select: { consultStartedAt: true },
+        }),
+      ]);
 
       const awaited = await this.prisma.queueEntry.findMany({
         where: {
@@ -94,7 +108,12 @@ export class LeaveNowNotifier extends Sweeper {
           // Nothing to do for anyone already told.
           notifications: { none: { type: 'LEAVE_NOW' } },
         },
-        select: { id: true, accountId: true, tokenLabel: true, tokenNumber: true },
+        select: {
+          id: true,
+          accountId: true,
+          tokenLabel: true,
+          tokenNumber: true,
+        },
         orderBy: { tokenNumber: 'asc' },
       });
       if (awaited.length === 0) continue;
@@ -109,7 +128,7 @@ export class LeaveNowNotifier extends Sweeper {
             sessionId: session.id,
             doctorId: session.currentProviderDoctorId,
             aheadCount: present.length,
-            currentStartedAt: null,
+            currentStartedAt: serving?.consultStartedAt ?? null,
             estimable: true,
           },
         ],
@@ -134,28 +153,11 @@ export class LeaveNowNotifier extends Sweeper {
           tokenLabel: entry.tokenLabel,
           hospitalName: session.hospital.name,
           aheadCount: present.length,
+          predictedWindow: { from: new Date(window.from), to: new Date(window.to) },
         });
-        if (isNew) {
-          told.push(entry.id);
-          // Write down the promise at the moment it is made.
-          //
-          // This is the only place the ETA stops being a number computed on demand
-          // and becomes a commitment somebody acts on - they put their shoes on
-          // because of it. Recording the window here is what makes the estimate
-          // falsifiable afterwards: `calledAt` is already stored, so the pair says
-          // whether we kept our word.
-          //
-          // Guarded by `isNew`, so the storm guard on the notification doubles as
-          // the write-once guard here: a second sweep must not overwrite the window
-          // the patient actually saw with a fresher, flattering one.
-          await this.prisma.queueEntry.update({
-            where: { id: entry.id },
-            data: {
-              predictedCallFrom: new Date(window.from),
-              predictedCallTo: new Date(window.to),
-            },
-          });
-        }
+        // The unique notification key makes this write-once. The forecast and
+        // outbox row commit together, so a crash cannot leave an unscorable nudge.
+        if (isNew) told.push(entry.id);
       }
     }
 

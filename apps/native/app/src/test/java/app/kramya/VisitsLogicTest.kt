@@ -43,6 +43,8 @@ private fun entry(
     checkedInAheadCount = checkedInAhead,
     bookedAheadCount = bookedAhead,
     joinedAt = "2026-08-30T04:00:00.000Z",
+    etaFrom = "2026-08-30T04:30:00.000Z",
+    etaTo = "2026-08-30T04:45:00.000Z",
     cancellable = true,
     refundPctIfCancelledNow = 100,
 )
@@ -150,6 +152,15 @@ class VisitsLogicTest {
         assertEquals(
             notFirst,
             nextStepFor(entry(status = QueueEntryStatus.CONFIRMED, bookedAhead = 1)),
+        )
+    }
+
+    @Test
+    fun `missing estimate never instructs a waiting patient to travel`() {
+        val waiting = entry(status = QueueEntryStatus.CONFIRMED).copy(etaFrom = null, etaTo = null)
+        assertEquals(
+            "Waiting for an estimate. Check the clinic status or contact reception before travelling.",
+            nextStepFor(waiting),
         )
     }
 

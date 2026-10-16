@@ -1,3 +1,9 @@
+# Historical audit: retired patient-client comparison
+
+The Expo reference app was removed on 16 October 2026. Kotlin is now the sole patient
+client. The original comparison below is retained as implementation history; the
+current README, code and test results take precedence.
+
 # Parity audit — `apps/native` against `apps/mobile`
 
 The native Android client is a re-implementation of the patient app, not a redesign. This

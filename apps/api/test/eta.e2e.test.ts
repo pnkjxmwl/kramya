@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { auth, createTestApp, request, resetDb, signup } from './helpers';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { dateColumnFromString, istToday } from '../src/common/ist';
+import { loadRecordedForecasts } from '../src/modules/eta/eta.evaluation.query';
 
 /**
  * P7-BE-03 · the ETA over a real database.
@@ -27,7 +28,9 @@ describe('eta (P7-BE-03)', () => {
 
   /** A finished consultation for this doctor, `minutesAgo` in the past. */
   async function consultation(durationMins: number, minutesAgo: number): Promise<void> {
-    const person = await prisma.patient.create({ data: { name: `P${Math.random()}` } });
+    const person = await prisma.patient.create({
+      data: { name: `P${Math.random()}` },
+    });
     const endedAt = new Date(Date.now() - minutesAgo * 60_000);
     const entry = await prisma.queueEntry.create({
       data: {
@@ -67,10 +70,19 @@ describe('eta (P7-BE-03)', () => {
         data: { name: 'ETA Hospital', city: 'Mumbai', status: 'VERIFIED' },
       })
     ).id;
-    departmentId = (await prisma.department.create({ data: { hospitalId, name: 'Cardiology' } })).id;
+    departmentId = (
+      await prisma.department.create({
+        data: { hospitalId, name: 'Cardiology' },
+      })
+    ).id;
     doctorId = (
       await prisma.doctor.create({
-        data: { hospitalId, departmentId, name: 'Dr Pace', defaultConsultMins: 10 },
+        data: {
+          hospitalId,
+          departmentId,
+          name: 'Dr Pace',
+          defaultConsultMins: 10,
+        },
       })
     ).id;
 
@@ -87,6 +99,7 @@ describe('eta (P7-BE-03)', () => {
           scheduledEnd: new Date(start.getTime() + 4 * 60 * 60 * 1000),
           feePaise: 50_000,
           status: 'ACTIVE',
+          doctorPresence: 'PRESENT',
         },
       })
     ).id;
@@ -154,6 +167,90 @@ describe('eta (P7-BE-03)', () => {
     );
   });
 
+  it.each(['NOT_PRESENT', 'ON_BREAK'] as const)(
+    'withholds staff and patient ETAs while doctor is %s',
+    async (doctorPresence) => {
+      const person = await prisma.patient.create({
+        data: { name: 'Private ETA patient', accountId: outsider.accountId },
+      });
+      await prisma.queueEntry.create({
+        data: {
+          hospitalId,
+          sessionId,
+          patientId: person.id,
+          accountId: outsider.accountId,
+          tokenNumber: 1,
+          tokenLabel: 'A001',
+          type: 'ONLINE',
+          status: 'CONFIRMED',
+        },
+      });
+      await prisma.oPDSession.update({
+        where: { id: sessionId },
+        data: { doctorPresence },
+      });
+      expect((await read().expect(200)).body.joinNowEtaFrom).toBeNull();
+      const patientView = await http()
+        .get('/me/queue-entries?scope=active')
+        .set(auth(outsider.accessToken))
+        .expect(200);
+      expect(patientView.body.items[0].etaFrom).toBeNull();
+      expect(patientView.body.items[0].etaTo).toBeNull();
+    },
+  );
+
+  it('withholds the estimate while the queue is paused', async () => {
+    await prisma.oPDSession.update({
+      where: { id: sessionId },
+      data: { pausedAt: new Date() },
+    });
+    expect((await read().expect(200)).body.joinNowEtaFrom).toBeNull();
+  });
+
+  it('does not train an as-of estimate on future consultation outcomes', async () => {
+    await consultation(60, -120);
+    const res = await read().expect(200);
+    expect(res.body.sampleSize).toBe(0);
+    expect(res.body.basis).toBe('SEED');
+    expect(res.body.expectedConsultMins).toBe(10);
+  });
+
+  it('grades the first immutable call even after requeue replaces the current call time', async () => {
+    const person = await prisma.patient.create({ data: { name: 'Recalled report fixture' } });
+    const firstCall = new Date(Date.now() - 30 * 60_000);
+    const latestCall = new Date(Date.now() - 5 * 60_000);
+    const entry = await prisma.queueEntry.create({
+      data: {
+        hospitalId,
+        sessionId,
+        patientId: person.id,
+        tokenNumber: 1,
+        tokenLabel: 'A001',
+        type: 'WALK_IN',
+        status: 'CALLED',
+        calledAt: latestCall,
+      },
+    });
+    await prisma.queueEvent.createMany({
+      data: [firstCall, latestCall].map((createdAt) => ({
+        hospitalId,
+        sessionId,
+        entryId: entry.id,
+        type: 'ENTRY_CALLED' as const,
+        actorType: 'SYSTEM' as const,
+        createdAt,
+      })),
+    });
+    const rows = await loadRecordedForecasts(
+      prisma,
+      hospitalId,
+      new Date(Date.now() - 86_400_000),
+      new Date(Date.now() + 86_400_000),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.calledAt).toEqual(firstCall);
+  });
+
   it('offers none once the doctor has gone home', async () => {
     await prisma.oPDSession.update({
       where: { id: sessionId },
@@ -167,7 +264,10 @@ describe('eta (P7-BE-03)', () => {
   });
 
   it('offers none once the session is over', async () => {
-    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'COMPLETED' } });
+    await prisma.oPDSession.update({
+      where: { id: sessionId },
+      data: { status: 'COMPLETED' },
+    });
     expect((await read().expect(200)).body.joinNowEtaFrom).toBeNull();
   });
 
@@ -175,7 +275,12 @@ describe('eta (P7-BE-03)', () => {
     // docs/PRD.md 8.11: crediting the timings to the absent doctor would poison both
     // averages - and estimating from a doctor who is not in the room is worse still.
     const cover = await prisma.doctor.create({
-      data: { hospitalId, departmentId, name: 'Dr Cover', defaultConsultMins: 45 },
+      data: {
+        hospitalId,
+        departmentId,
+        name: 'Dr Cover',
+        defaultConsultMins: 45,
+      },
     });
     await prisma.oPDSession.update({
       where: { id: sessionId },

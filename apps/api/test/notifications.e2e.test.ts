@@ -5,7 +5,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { NotificationsService } from '../src/modules/notifications/notifications.service';
 import { EventNotifier } from '../src/modules/notifications/event-notifier';
 import { LeaveNowNotifier } from '../src/modules/notifications/leave-now';
-import { ExpoClient, type PushMessage, type PushResult } from '../src/modules/notifications/expo.client';
+import { FcmClient } from '../src/modules/notifications/fcm.client';
+import type { PushMessage, PushResult } from '../src/modules/notifications/push.client';
 import { QueueService } from '../src/modules/queue/queue.service';
 import { dateColumnFromString, istToday } from '../src/common/ist';
 
@@ -13,12 +14,12 @@ import { dateColumnFromString, istToday } from '../src/common/ist';
  * P8-BE-01, P8-BE-02 · what a patient is told, and what stops them being told it
  * eleven times.
  *
- * Expo is faked. Push is fire-and-forget - docs/Phases.md: *"a bad send cannot be
+ * FCM is faked. Push is fire-and-forget - docs/Phases.md: *"a bad send cannot be
  * recalled"* - so the fake is the only way to assert on what would have gone out.
  */
 
 /** Records every send, and can be told to fail in the two ways that matter. */
-class FakeExpo {
+class FakePush {
   readonly configured = true;
   readonly sent: PushMessage[] = [];
   behaviour: 'ok' | 'device-gone' | 'transient' = 'ok';
@@ -38,7 +39,7 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let notifications: NotificationsService;
-  let expo: FakeExpo;
+  let push: FakePush;
 
   let hospitalId: string;
   let sessionId: string;
@@ -49,8 +50,8 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
-    expo = new FakeExpo();
-    ({ app, prisma } = await createTestApp([{ provide: ExpoClient, useValue: expo }]));
+    push = new FakePush();
+    ({ app, prisma } = await createTestApp([{ provide: FcmClient, useValue: push }]));
     notifications = app.get(NotificationsService);
   });
 
@@ -58,19 +59,27 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
 
   beforeEach(async () => {
     await resetDb(prisma);
-    expo.sent.length = 0;
-    expo.behaviour = 'ok';
+    push.sent.length = 0;
+    push.behaviour = 'ok';
 
     hospitalId = (
       await prisma.hospital.create({
         data: { name: 'Notify Hospital', city: 'Mumbai', status: 'VERIFIED' },
       })
     ).id;
-    const departmentId = (await prisma.department.create({ data: { hospitalId, name: 'Cardiology' } }))
-      .id;
+    const departmentId = (
+      await prisma.department.create({
+        data: { hospitalId, name: 'Cardiology' },
+      })
+    ).id;
     const doctorId = (
       await prisma.doctor.create({
-        data: { hospitalId, departmentId, name: 'Dr Push', defaultConsultMins: 10 },
+        data: {
+          hospitalId,
+          departmentId,
+          name: 'Dr Push',
+          defaultConsultMins: 10,
+        },
       })
     ).id;
 
@@ -120,8 +129,11 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
     ).id;
   });
 
-  const registerDevice = (token = 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]') =>
-    http().post('/me/push-tokens').set(auth(patient.accessToken)).send({ token, platform: 'android' });
+  const registerDevice = (token = 'fcm-aaaaaaaaaaaaaaaaaaaaaa-device-token') =>
+    http()
+      .post('/me/push-tokens')
+      .set(auth(patient.accessToken))
+      .send({ token, platform: 'android' });
 
   // -------------------------------------------------------------------------
 
@@ -141,8 +153,12 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
     it('MOVES a token to the account that just registered it', async () => {
       // A phone handed to a family member who signs in as themselves. Leaving two
       // rows would route the first person's pushes to the second.
-      const token = 'ExponentPushToken[shared-device-000000]';
-      await http().post('/me/push-tokens').set(auth(patient.accessToken)).send({ token }).expect(201);
+      const token = 'fcm-shared-device-000000-device-token';
+      await http()
+        .post('/me/push-tokens')
+        .set(auth(patient.accessToken))
+        .send({ token })
+        .expect(201);
       await http().post('/me/push-tokens').set(auth(staff.accessToken)).send({ token }).expect(201);
 
       const rows = await prisma.pushToken.findMany({ where: { token } });
@@ -154,12 +170,21 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       await registerDevice().expect(201);
       await prisma.pushToken.updateMany({ data: { disabledAt: new Date() } });
       await registerDevice().expect(201);
-      expect(await prisma.pushToken.findFirstOrThrow({})).toMatchObject({ disabledAt: null });
+      expect(await prisma.pushToken.findFirstOrThrow({})).toMatchObject({
+        disabledAt: null,
+      });
     });
 
     it('refuses an unauthenticated caller and a nonsense token', async () => {
-      await http().post('/me/push-tokens').send({ token: 'x'.repeat(20) }).expect(401);
-      await http().post('/me/push-tokens').set(auth(patient.accessToken)).send({ token: 'no' }).expect(400);
+      await http()
+        .post('/me/push-tokens')
+        .send({ token: 'x'.repeat(20) })
+        .expect(401);
+      await http()
+        .post('/me/push-tokens')
+        .set(auth(patient.accessToken))
+        .send({ token: 'no' })
+        .expect(400);
     });
   });
 
@@ -182,7 +207,9 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       expect(row.status).toBe('PENDING');
       expect(row.data).toEqual({ type: 'TOKEN_ISSUED', entryId, sessionId });
       // A push renders on a lock screen, in public (docs/Rules.md 8).
-      expect(`${row.title} ${row.body} ${JSON.stringify(row.data)}`).not.toContain('Notified Patient');
+      expect(`${row.title} ${row.body} ${JSON.stringify(row.data)}`).not.toContain(
+        'Notified Patient',
+      );
     });
 
     it('tells a patient a given thing exactly ONCE, whatever the caller does', async () => {
@@ -217,42 +244,48 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
 
     it('sends what is pending and marks it sent', async () => {
       expect(await notifications.dispatch()).toEqual({ sent: 1, failed: 0 });
-      expect(expo.sent[0]?.title).toContain('A001');
-      expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({ status: 'SENT' });
+      expect(push.sent[0]?.title).toContain('A001');
+      expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({
+        status: 'SENT',
+      });
     });
 
     it('never sends the same notification twice', async () => {
       await notifications.dispatch();
       expect(await notifications.dispatch()).toEqual({ sent: 0, failed: 0 });
-      expect(expo.sent).toHaveLength(1);
+      expect(push.sent).toHaveLength(1);
     });
 
-    it('prunes a device Expo says is gone, so the delivery rate does not rot', async () => {
-      expo.behaviour = 'device-gone';
+    it('prunes a device FCM says is gone, so the delivery rate does not rot', async () => {
+      push.behaviour = 'device-gone';
       await notifications.dispatch();
 
       const token = await prisma.pushToken.findFirstOrThrow({});
       expect(token.disabledAt).not.toBeNull();
       // Every device gone means there is nowhere left to try.
-      expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({ status: 'FAILED' });
+      expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({
+        status: 'FAILED',
+      });
     });
 
     it('retries a transient failure rather than giving up', async () => {
-      expo.behaviour = 'transient';
+      push.behaviour = 'transient';
       await notifications.dispatch();
       expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({
         status: 'PENDING',
         attempts: 1,
       });
 
-      expo.behaviour = 'ok';
+      push.behaviour = 'ok';
       expect(await notifications.dispatch()).toEqual({ sent: 1, failed: 0 });
     });
 
     it('gives up after enough attempts instead of trying forever', async () => {
-      expo.behaviour = 'transient';
+      push.behaviour = 'transient';
       for (let i = 0; i < 5; i += 1) await notifications.dispatch();
-      expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({ status: 'FAILED' });
+      expect(await prisma.notification.findFirstOrThrow({})).toMatchObject({
+        status: 'FAILED',
+      });
     });
 
     it('records a failure when the patient has no device, and stops', async () => {
@@ -276,7 +309,11 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
         .set(auth(staff.accessToken))
         .send({ tokenNumber: 1 })
         .expect(201);
-      await http().post(`/sessions/${sessionId}/call-next`).set(auth(staff.accessToken)).send({}).expect(201);
+      await http()
+        .post(`/sessions/${sessionId}/call-next`)
+        .set(auth(staff.accessToken))
+        .send({})
+        .expect(201);
 
       expect(await notifier().notifyFromEvents()).toBeGreaterThan(0);
       const types = (await prisma.notification.findMany({})).map((n) => n.type);
@@ -289,7 +326,11 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
         .set(auth(staff.accessToken))
         .send({ tokenNumber: 1 })
         .expect(201);
-      await http().post(`/sessions/${sessionId}/call-next`).set(auth(staff.accessToken)).send({}).expect(201);
+      await http()
+        .post(`/sessions/${sessionId}/call-next`)
+        .set(auth(staff.accessToken))
+        .send({})
+        .expect(201);
 
       await notifier().notifyFromEvents();
       const first = await prisma.notification.count();
@@ -304,10 +345,16 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
         .set(auth(staff.accessToken))
         .send({ name: 'Desk Patient' })
         .expect(201);
-      await http().post(`/sessions/${sessionId}/call-next`).set(auth(staff.accessToken)).send({}).expect(201);
+      await http()
+        .post(`/sessions/${sessionId}/call-next`)
+        .set(auth(staff.accessToken))
+        .send({})
+        .expect(201);
 
       await notifier().notifyFromEvents();
-      const walkIn = await prisma.queueEntry.findFirstOrThrow({ where: { type: 'WALK_IN' } });
+      const walkIn = await prisma.queueEntry.findFirstOrThrow({
+        where: { type: 'WALK_IN' },
+      });
       expect(await prisma.notification.count({ where: { entryId: walkIn.id } })).toBe(0);
     });
 
@@ -318,7 +365,11 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       // one who never got told. The SKIPPED push they had just been sent said, in so
       // many words, "you will be called again".
       const call = () =>
-        http().post(`/sessions/${sessionId}/call-next`).set(auth(staff.accessToken)).send({}).expect(201);
+        http()
+          .post(`/sessions/${sessionId}/call-next`)
+          .set(auth(staff.accessToken))
+          .send({})
+          .expect(201);
 
       await http()
         .post(`/sessions/${sessionId}/check-in`)
@@ -400,7 +451,9 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
     it('tells a booked patient to set off when their turn is near', async () => {
       const told = await leaveNow().nudge();
       expect(told).toContain(entryId);
-      const row = await prisma.notification.findFirstOrThrow({ where: { type: 'LEAVE_NOW' } });
+      const row = await prisma.notification.findFirstOrThrow({
+        where: { type: 'LEAVE_NOW' },
+      });
       expect(row.title.toLowerCase()).toContain('notify hospital');
     });
 
@@ -418,10 +471,29 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       // afterwards whether we kept our word.
       await leaveNow().nudge();
 
-      const entry = await prisma.queueEntry.findFirstOrThrow({ where: { id: entryId } });
+      const entry = await prisma.queueEntry.findFirstOrThrow({
+        where: { id: entryId },
+      });
       expect(entry.predictedCallFrom).not.toBeNull();
       expect(entry.predictedCallTo).not.toBeNull();
       expect(entry.predictedCallTo!.getTime()).toBeGreaterThan(entry.predictedCallFrom!.getTime());
+    });
+
+    it('rolls back the nudge if its frozen forecast cannot be saved', async () => {
+      await expect(
+        notifications.record({
+          accountId: patient.accountId,
+          entryId,
+          sessionId,
+          type: 'LEAVE_NOW',
+          tokenLabel: 'A001',
+          hospitalName: 'Notify Hospital',
+          predictedWindow: { from: new Date('invalid'), to: new Date() },
+        }),
+      ).rejects.toThrow();
+      expect(await prisma.notification.count({ where: { type: 'LEAVE_NOW' } })).toBe(0);
+      const entry = await prisma.queueEntry.findUniqueOrThrow({ where: { id: entryId } });
+      expect(entry.predictedCallFrom).toBeNull();
     });
 
     it('never rewrites the promise on a later sweep', async () => {
@@ -429,10 +501,14 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       // fresher, more flattering one - that would make the record unfalsifiable by
       // always agreeing with the present.
       await leaveNow().nudge();
-      const first = await prisma.queueEntry.findFirstOrThrow({ where: { id: entryId } });
+      const first = await prisma.queueEntry.findFirstOrThrow({
+        where: { id: entryId },
+      });
 
       await leaveNow().nudge();
-      const second = await prisma.queueEntry.findFirstOrThrow({ where: { id: entryId } });
+      const second = await prisma.queueEntry.findFirstOrThrow({
+        where: { id: entryId },
+      });
 
       expect(second.predictedCallFrom!.getTime()).toBe(first.predictedCallFrom!.getTime());
       expect(second.predictedCallTo!.getTime()).toBe(first.predictedCallTo!.getTime());
@@ -441,7 +517,9 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
     it('leaves the promise null for anyone never nudged', async () => {
       // Null means "we never told them anything", which is honest. Scoring those as
       // a miss would blame the engine for patients it never spoke to.
-      const person = await prisma.patient.create({ data: { name: 'Never told' } });
+      const person = await prisma.patient.create({
+        data: { name: 'Never told' },
+      });
       const quiet = await prisma.queueEntry.create({
         data: {
           hospitalId,
@@ -456,7 +534,9 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
 
       await leaveNow().nudge();
 
-      const row = await prisma.queueEntry.findFirstOrThrow({ where: { id: quiet.id } });
+      const row = await prisma.queueEntry.findFirstOrThrow({
+        where: { id: quiet.id },
+      });
       expect(row.predictedCallFrom).toBeNull();
       expect(row.predictedCallTo).toBeNull();
     });
@@ -492,13 +572,58 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       expect(await leaveNow().nudge()).toEqual([]);
     });
 
+    it.each(['NOT_PRESENT', 'ON_BREAK', 'LEFT'] as const)(
+      'says nothing when the doctor is %s',
+      async (doctorPresence) => {
+        await prisma.oPDSession.update({
+          where: { id: sessionId },
+          data: { doctorPresence },
+        });
+        expect(await leaveNow().nudge()).toEqual([]);
+      },
+    );
+
+    it('includes the remaining consultation before telling an at-home patient to leave', async () => {
+      const session = await prisma.oPDSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      });
+      await prisma.doctor.update({
+        where: { id: session.currentProviderDoctorId },
+        data: { defaultConsultMins: 60 },
+      });
+      const person = await prisma.patient.create({
+        data: { name: 'Being seen' },
+      });
+      await prisma.queueEntry.create({
+        data: {
+          hospitalId,
+          sessionId,
+          patientId: person.id,
+          tokenNumber: 2,
+          tokenLabel: 'A002',
+          type: 'WALK_IN',
+          status: 'IN_CONSULTATION',
+          consultStartedAt: new Date(Date.now() - 60_000),
+        },
+      });
+      expect(await leaveNow().nudge()).toEqual([]);
+      expect(await prisma.notification.count({ where: { type: 'LEAVE_NOW' } })).toBe(0);
+    });
+
     it('says nothing while the queue is paused or the doctor has gone', async () => {
-      await prisma.oPDSession.update({ where: { id: sessionId }, data: { doctorPresence: 'LEFT' } });
+      await prisma.oPDSession.update({
+        where: { id: sessionId },
+        data: { doctorPresence: 'LEFT' },
+      });
       expect(await leaveNow().nudge()).toEqual([]);
 
       await prisma.oPDSession.update({
         where: { id: sessionId },
-        data: { doctorPresence: 'PRESENT', status: 'ACTIVE', pausedAt: new Date() },
+        data: {
+          doctorPresence: 'PRESENT',
+          status: 'ACTIVE',
+          pausedAt: new Date(),
+        },
       });
       expect(await leaveNow().nudge()).toEqual([]);
     });

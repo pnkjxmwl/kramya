@@ -53,7 +53,12 @@ describe('Phase 3 discovery', () => {
   beforeEach(async () => {
     await resetDb(prisma);
 
-    const hospital = async (name: string, city: string, area: string, status: 'VERIFIED' | 'PENDING') =>
+    const hospital = async (
+      name: string,
+      city: string,
+      area: string,
+      status: 'VERIFIED' | 'PENDING',
+    ) =>
       (
         await prisma.hospital.create({
           data: { name, city, area, address: `1 ${area} Road`, status },
@@ -81,7 +86,14 @@ describe('Phase 3 discovery', () => {
     ) =>
       (
         await prisma.doctor.create({
-          data: { hospitalId, departmentId, name, specialization, defaultConsultMins: 12, isActive },
+          data: {
+            hospitalId,
+            departmentId,
+            name,
+            specialization,
+            defaultConsultMins: 12,
+            isActive,
+          },
         })
       ).id;
 
@@ -128,25 +140,74 @@ describe('Phase 3 discovery', () => {
 
     // Visible: running now, and a later block for the same doctor (docs/PRD.md 5.1
     // - two sessions in a day are two cards).
-    openSession = await session({ hospitalId: hospitalA, departmentId: cardiology, doctorId: drSharma, startsInHours: -1 });
-    closedSession = await session({ hospitalId: hospitalA, departmentId: cardiology, doctorId: drSharma, startsInHours: 4, closed: true });
+    openSession = await session({
+      hospitalId: hospitalA,
+      departmentId: cardiology,
+      doctorId: drSharma,
+      startsInHours: -1,
+    });
+    closedSession = await session({
+      hospitalId: hospitalA,
+      departmentId: cardiology,
+      doctorId: drSharma,
+      startsInHours: 4,
+      closed: true,
+    });
 
     // Each of these must stay out of every list.
-    cancelledSession = await session({ hospitalId: hospitalA, departmentId: cardiology, doctorId: drSharma, startsInHours: 8, status: 'CANCELLED' });
-    await session({ hospitalId: hospitalA, departmentId: cardiology, doctorId: drGone, startsInHours: -1 });
-    await session({ hospitalId: hospitalA, departmentId: closedUnit, doctorId: drClosed, startsInHours: -1 });
-    pendingSession = await session({ hospitalId: hospitalPending, departmentId: pendingDept, doctorId: drPending, startsInHours: -1 });
+    cancelledSession = await session({
+      hospitalId: hospitalA,
+      departmentId: cardiology,
+      doctorId: drSharma,
+      startsInHours: 8,
+      status: 'CANCELLED',
+    });
+    await session({
+      hospitalId: hospitalA,
+      departmentId: cardiology,
+      doctorId: drGone,
+      startsInHours: -1,
+    });
+    await session({
+      hospitalId: hospitalA,
+      departmentId: closedUnit,
+      doctorId: drClosed,
+      startsInHours: -1,
+    });
+    pendingSession = await session({
+      hospitalId: hospitalPending,
+      departmentId: pendingDept,
+      doctorId: drPending,
+      startsInHours: -1,
+    });
 
-    yesterdaySession = await session({ hospitalId: hospitalA, departmentId: cardiology, doctorId: drSharma, date: yesterday(), startsInHours: -26 });
+    yesterdaySession = await session({
+      hospitalId: hospitalA,
+      departmentId: cardiology,
+      doctorId: drSharma,
+      date: yesterday(),
+      startsInHours: -26,
+    });
 
     // Booked with Nair, actually run by Cover (docs/PRD.md 8.11).
-    substitutedSession = await session({ hospitalId: hospitalB, departmentId: paediatrics, doctorId: drNair, providerId: drCover, startsInHours: -1 });
+    substitutedSession = await session({
+      hospitalId: hospitalB,
+      departmentId: paediatrics,
+      doctorId: drNair,
+      providerId: drCover,
+      startsInHours: -1,
+    });
 
     patient = (await signup(app, 'patient@test.local')).accessToken;
 
     const admin = await signup(app, 'admin-a@test.local');
     await prisma.hospitalStaff.create({
-      data: { hospitalId: hospitalA, accountId: admin.accountId, role: 'ADMIN', status: 'ACTIVE' },
+      data: {
+        hospitalId: hospitalA,
+        accountId: admin.accountId,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      },
     });
     adminA = admin.accessToken;
   });
@@ -245,7 +306,10 @@ describe('Phase 3 discovery', () => {
     it('lists only active departments of one hospital', async () => {
       const res = await get(`/departments?hospitalId=${hospitalA}`).expect(200);
       expect(res.body.total).toBe(1);
-      expect(res.body.items[0]).toMatchObject({ name: 'Cardiology', todaySessionCount: 2 });
+      expect(res.body.items[0]).toMatchObject({
+        name: 'Cardiology',
+        todaySessionCount: 2,
+      });
       expect(res.body.items.some((d: { id: string }) => d.id === closedUnit)).toBe(false);
     });
 
@@ -304,15 +368,8 @@ describe('Phase 3 discovery', () => {
         registrationOpen: true,
       });
 
-      // Phase 7 fills what Phase 3 froze as null. An open session with an empty
-      // queue still answers "when would I be seen" - with a window starting about
-      // now, because there is nobody in front of you.
-      expect(typeof card.snapshot.joinNowEtaFrom).toBe('string');
-      expect(new Date(card.snapshot.joinNowEtaTo).getTime()).toBeGreaterThan(
-        new Date(card.snapshot.joinNowEtaFrom).getTime(),
-      );
-      // A window, never a point (docs/Phases.md).
-      expect(card.snapshot.joinNowEtaFrom).not.toEqual(card.snapshot.joinNowEtaTo);
+      expect(card.snapshot.joinNowEtaFrom).toBeNull();
+      expect(card.snapshot.joinNowEtaTo).toBeNull();
     });
 
     it('offers no ETA on a session nobody can join - a time would be an invitation', async () => {
@@ -359,13 +416,19 @@ describe('Phase 3 discovery', () => {
         doctorDefaultConsultMins: 12,
       });
 
-      // Phase 7. The doctor has no history, so this window is built from
-      // `defaultConsultMins` alone - which is exactly what that column is for, and
-      // why a brand-new doctor still gets an honest answer rather than none.
-      expect(typeof res.body.snapshot.joinNowEtaFrom).toBe('string');
-      expect(new Date(res.body.snapshot.joinNowEtaTo).getTime()).toBeGreaterThan(
-        Date.now(),
-      );
+      expect(res.body.snapshot.joinNowEtaFrom).toBeNull();
+      await prisma.oPDSession.update({
+        where: { id: openSession },
+        data: { doctorPresence: 'PRESENT' },
+      });
+      const present = await get('/sessions/' + openSession).expect(200);
+      expect(typeof present.body.snapshot.joinNowEtaFrom).toBe('string');
+      await prisma.oPDSession.update({
+        where: { id: openSession },
+        data: { pausedAt: new Date() },
+      });
+      const paused = await get('/sessions/' + openSession).expect(200);
+      expect(paused.body.snapshot.joinNowEtaFrom).toBeNull();
     });
 
     it('hides a cancelled session and one belonging to an unverified hospital', async () => {

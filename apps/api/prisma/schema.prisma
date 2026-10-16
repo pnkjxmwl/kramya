@@ -415,14 +415,15 @@ model QueueEntry {
   /// running. The sweeper only writes down what is already true.
   reservationExpiresAt DateTime?
 
-  /// The ETA window this patient was SHOWN when the "leave now" push was sent, so
-  /// the promise can be compared with `calledAt` afterwards. Written once, never
+  /// The ETA window recorded when the "leave now" notification was queued, so
+  /// the forecast can be compared with `calledAt` afterwards. Written once, never
   /// updated: the point is what we committed to at the moment they acted on it, not
   /// the estimate as it drifted.
   ///
   /// Two columns rather than one because a window is what the patient sees - grading
   /// a midpoint invented after the fact would measure something nobody was told.
-  /// Null means no nudge was ever sent, which is honest rather than a zero score.
+  /// Provider submission and device receipt are separate from this record.
+  /// Null means no forecast was recorded, rather than a zero error score.
   predictedCallFrom DateTime?
   predictedCallTo   DateTime?
 
@@ -811,9 +812,9 @@ enum RefundStatus {
 
 /// A device this account can be reached on (P8-DB-01).
 ///
-/// The token is Expo's, opaque and device-specific. UNIQUE on the token itself, not
+/// The token is Firebase's, opaque and device-specific. UNIQUE on the token itself, not
 /// on (accountId, token): the same physical device can be handed to a different
-/// person, and Expo will then route the old account's pushes to the new one unless
+/// person, and FCM will then route the old account's pushes to the new one unless
 /// re-registering MOVES the token rather than duplicating it.
 model PushToken {
   id        String  @id @default(uuid())
@@ -821,7 +822,7 @@ model PushToken {
   token     String  @unique
   platform  String?
 
-  /// Set when Expo tells us the device is gone (`DeviceNotRegistered`). Kept rather
+  /// Set when Firebase tells us the device is gone (`registration-token-not-registered`). Kept rather
   /// than deleted so a device that comes back is recognised, and so the delivery
   /// rate can be measured against something (docs/Phases.md: dead tokens are how a
   /// delivery rate "quietly rots").

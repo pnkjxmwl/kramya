@@ -12,10 +12,7 @@ out/
 # turbo
 .turbo/
 
-# expo
-.expo/
-.expo-shared/
-*.ipa
+# Android build artifacts
 *.aab
 *.apk
 

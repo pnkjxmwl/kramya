@@ -1,3 +1,5 @@
+> Current patient-client decision (16 October 2026): Kotlin/Jetpack Compose in `apps/native` is the sole patient app. Expo source and backend delivery have been removed. Historical deployment sections below are superseded by `apps/native/README.md` and the current root README. ETA accuracy and a supervised first-clinic pilot are release priorities.
+
 # Architecture
 
 ## OPD Queue Platform — Technical Architecture
@@ -20,23 +22,23 @@
 
 ## 2. Technology Stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| **Patient app** | React Native + **Expo** (Expo Router) | iOS + Android from one codebase; Expo handles builds, push, secure storage. |
-| **Web console** (doctor/staff/admin) | **Next.js** (App Router) + React | Mature, fast, one app with role-gated routes. |
-| **Backend** | **NestJS** (Node + TS) | Structured modular monolith, DI, guards/interceptors — fits domain-command + RBAC design. |
-| **Database** | **PostgreSQL** + **Prisma** | Relational data, transactions, row locks. Prisma = typed queries + migrations. |
-| **Cache / locks / pub-sub** | **Redis** (ioredis) | Distributed locks, caching, and the Socket.IO scaling adapter. |
-| **Realtime** | **Socket.IO** (+ Redis adapter) | Rooms per session, reconnection handling, horizontal scaling. |
-| **Background jobs** | **BullMQ** (Redis-backed) | Grace-period timers, ETA refresh, reservation expiry, notifications. |
-| **Payments** | **Razorpay** (test mode) | India-native gateway; webhook-driven, idempotent. |
-| **Auth** | JWT (access + refresh) + Passport (Google OAuth) | Email/password + Google sign-in. |
-| **Push notifications** | Expo Push (→ FCM/APNs) | Free, works on both platforms. |
-| **Validation / contract** | **Zod** shared schemas (`nestjs-zod` on backend) | One source of truth for DTOs + runtime validation on every surface. |
-| **Data fetching (clients)** | TanStack Query | Caching, refetch-on-reconnect, pairs well with realtime. |
-| **UI (web)** | Tailwind + shadcn/ui | Fast, consistent, accessible components. |
-| **Monorepo tooling** | pnpm workspaces + Turborepo | Share the contract package; one install, coordinated builds. |
-| **Logging / errors** | pino + Sentry | Structured logs + error tracking. |
+| Layer                                | Choice                                           | Why                                                                                       |
+| ------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| **Patient app**                      | Kotlin + Jetpack Compose                         | Android; Gradle builds, FCM notifications, Keystore-backed tokens.                        |
+| **Web console** (doctor/staff/admin) | **Next.js** (App Router) + React                 | Mature, fast, one app with role-gated routes.                                             |
+| **Backend**                          | **NestJS** (Node + TS)                           | Structured modular monolith, DI, guards/interceptors — fits domain-command + RBAC design. |
+| **Database**                         | **PostgreSQL** + **Prisma**                      | Relational data, transactions, row locks. Prisma = typed queries + migrations.            |
+| **Cache / locks / pub-sub**          | **Redis** (ioredis)                              | Distributed locks, caching, and the Socket.IO scaling adapter.                            |
+| **Realtime**                         | **Socket.IO** (+ Redis adapter)                  | Rooms per session, reconnection handling, horizontal scaling.                             |
+| **Background jobs**                  | **BullMQ** (Redis-backed)                        | Grace-period timers, ETA refresh, reservation expiry, notifications.                      |
+| **Payments**                         | **Razorpay** (test mode)                         | India-native gateway; webhook-driven, idempotent.                                         |
+| **Auth**                             | JWT (access + refresh) + Passport (Google OAuth) | Email/password + Google sign-in.                                                          |
+| **Push notifications**               | Firebase Cloud Messaging                         | Android notification outbox and delivery.                                                 |
+| **Validation / contract**            | **Zod** shared schemas (`nestjs-zod` on backend) | One source of truth for DTOs + runtime validation on every surface.                       |
+| **Data fetching (clients)**          | TanStack Query                                   | Caching, refetch-on-reconnect, pairs well with realtime.                                  |
+| **UI (web)**                         | Tailwind + shadcn/ui                             | Fast, consistent, accessible components.                                                  |
+| **Monorepo tooling**                 | pnpm workspaces + Turborepo                      | Share the contract package; one install, coordinated builds.                              |
+| **Logging / errors**                 | pino + Sentry                                    | Structured logs + error tracking.                                                         |
 
 ---
 
@@ -75,7 +77,7 @@ kramya/
 ├── apps/
 │   ├── api/                # NestJS backend (the core)
 │   ├── web/                # Next.js console (doctor + staff + admin)
-│   ├── mobile/             # Expo React Native patient app
+│   ├── native/             # Kotlin + Jetpack Compose Android patient app
 │   └── native/             # Kotlin/Compose patient app — a second client, same screens
 ├── packages/
 │   ├── contracts/          # Zod schemas, DTOs, enums — the shared API contract
@@ -128,7 +130,7 @@ Two deliberate departures from the sketch above, both taken during the build and
   edited together, are all ADMIN-only and tenant-scoped, and reference each other constantly. Splitting
   them would turn every ordinary read into a cross-module service call for no isolation gained.
 - **`discovery/` reads tables it does not own** — the single exception to the rule above. It is
-  read-only, writes nothing and exports no service. The owning services are scoped to a *staff*
+  read-only, writes nothing and exports no service. The owning services are scoped to a _staff_
   membership and apply admin visibility rules, which a patient has neither of; and a session card is
   one aggregate join across four tables, which split across services becomes a per-card N+1 on the
   hottest read path in the product. Do not extend the exception to anything that writes.
@@ -211,7 +213,7 @@ Notification       id, accountId, type, payload(json), channel(PUSH), status, se
 - A `TenantGuard` derives the caller's active `hospital_id` from their `HospitalStaff` membership (never from the request body/query).
 - All repository reads/writes for those tables are filtered by that `hospital_id`. Fetching a record by id also checks it belongs to the caller's hospital → defeats IDOR/BOLA.
 - (Later hardening: Postgres Row-Level Security as a second safety net.)
-- **Patients/Accounts are global**: a patient can visit any hospital. A hospital only ever sees a patient *through a QueueEntry in its own session*.
+- **Patients/Accounts are global**: a patient can visit any hospital. A hospital only ever sees a patient _through a QueueEntry in its own session_.
 
 ---
 
@@ -220,6 +222,7 @@ Notification       id, accountId, type, payload(json), channel(PUSH), status, se
 REST for request/response, WebSocket for live deltas. **Reads are REST/CRUD-ish; writes that touch the queue are domain commands.**
 
 ### 6.1 Auth & profiles
+
 ```
 POST /auth/signup            email + password
 POST /auth/login
@@ -249,7 +252,7 @@ GET /doctors/:id/sessions?date=            → that doctor's sessions (matches C
 ```
 
 **Why departments hang off a query string.** `GET /hospitals/:id/departments` collides with the
-admin route `GET /hospitals/:hospitalId/departments` from Phase 2. Express matches on route *shape*,
+admin route `GET /hospitals/:hospitalId/departments` from Phase 2. Express matches on route _shape_,
 not parameter name, so one silently shadows the other — and the matched route's parameter name is what
 decides whether `TenantGuard` engages, so a patient would get a 403 instead of a list. Guarded by a
 test in `apps/api/test/discovery.e2e.test.ts`.
@@ -260,6 +263,7 @@ Phase 4 fills the counts and Phase 7 the window. Adding a field is safe, renamin
 breaks a shipped mobile app.
 
 ### 6.3 Join & payment (patient)
+
 **As built (Phase 5): `:id`, not `:sessionId`.** The parameter NAME is what makes the
 global `TenantGuard` engage, and a patient has no `HospitalStaff` membership in the hospital
 they are booking at - so `/sessions/:sessionId/join` would 403 every patient. The hospital is
@@ -315,6 +319,7 @@ it raises a refund, and `QueueModule` cannot import `PaymentsModule` since the d
 runs the other way.
 
 ### 6.5 Admin config (RBAC: ADMIN)
+
 ```
 CRUD /hospitals/:id/departments
 CRUD /hospitals/:id/doctors
@@ -351,11 +356,13 @@ async command(sessionId, actor, input) {
 ```
 
 Why this shape:
+
 - **`SELECT … FOR UPDATE` on the session** serializes concurrent staff/doctor actions on the same queue → no double-`call-next`, no duplicate tokens (answers concurrency: PRD §11).
 - **State-machine validation** means an entry can never jump to `COMPLETED` without going through `CALLED → IN_CONSULTATION`.
-- **Append-only `QueueEvent`** gives the accountable timeline *and* the raw data the ETA engine learns from.
+- **Append-only `QueueEvent`** gives the accountable timeline _and_ the raw data the ETA engine learns from.
 
 ### 7.1 Call-order logic
+
 - Eligible to be called = entries in `CHECKED_IN`/`READY` state. (`READY` is reserved and unreachable in v1 — see the note on `QueueEntryStatus` in `packages/contracts`.)
 - Order among eligible = `priority` desc, then `priorityAt`, then `requeuedAt` (nulls first), then `tokenNumber`. Fairness is booking order; EMERGENCY sorts to the front, and anyone requeued sorts behind everyone who was not.
 - Nothing else may call a patient: `call-next` also refuses while another entry is CALLED or IN_CONSULTATION, while the queue is paused, and while doctor presence is anything other than `PRESENT` — three distinct errors, because the remedy differs (`DOCTOR_NOT_PRESENT` is marked present, `DOCTOR_ON_BREAK` is waited out, `DOCTOR_HAS_LEFT` ends the session). `start-consultation` is gated identically; `check-in`, `walk-in` and `complete-consultation` never are.
@@ -363,6 +370,7 @@ Why this shape:
 - Walk-ins: created already `CHECKED_IN`, appended at the current max token.
 
 ### 7.2 No-show handling (BullMQ timers)
+
 ```
 call-next → entry CALLED → schedule "grace-expiry" job (gracePeriodSec)
   patient checks in / consultation starts → cancel the job
@@ -371,6 +379,7 @@ call-next → entry CALLED → schedule "grace-expiry" job (gracePeriodSec)
 ```
 
 ### 7.3 Token generation
+
 `tokenLabel = tokenPrefix + zero-padded(tokenNumber)` (e.g. `A027`), unique per session. `tokenNumber` is assigned atomically inside the locked transaction on confirm.
 
 ---
@@ -417,6 +426,7 @@ window = [now + etaMinutes - pad, now + etaMinutes + pad]
 
   The emit is wired once, in `QueueService.runCommand`, after `$transaction` resolves — so no
   command can forget it, for the same reason none can forget the session lock.
+
 - **Auth on connect:** JWT verified in the handshake; server decides which rooms a socket may join (a patient can't join a hospital-only channel).
 - **Reconnect contract:** client re-fetches the REST snapshot, then rejoins rooms. Realtime never replaces the snapshot as source of truth.
 
@@ -472,8 +482,8 @@ interval, the overlap guard and an env kill switch (`DISABLED_WORKERS`).
 
 The reasoning, in full, because this is a deliberate departure from the plan that used to
 be in this section. Phase 5 made the same call for `reservation-expiry` and wrote down
-why: *the column, not a job, is what frees the slot — the sweeper only writes down what
-is already true.* That describes all of them. A called patient is out of time when
+why: _the column, not a job, is what frees the slot — the sweeper only writes down what
+is already true._ That describes all of them. A called patient is out of time when
 `calledAt + gracePeriodSec` has passed; registration is past its cutoff when the clock
 and the queue say so; a payment is unreconciled when its row says PENDING. **The state is
 the schedule**, and re-deriving it beats remembering it:
@@ -488,19 +498,19 @@ the schedule**, and re-deriving it beats remembering it:
 
 The cost is precision: a sweep acts within one interval of the moment rather than at it.
 Grace periods and cutoffs are measured in minutes, so that is affordable. If something
-ever must fire *at* a second, BullMQ is still the right answer and `Sweeper` is the seam
+ever must fire _at_ a second, BullMQ is still the right answer and `Sweeper` is the seam
 it goes behind.
 
-| Sweeper | Lives in | Every | Purpose |
-|---|---|---|---|
-| `reservation` | `queue/reservation-sweeper.ts` | 60s | Mark lapsed unpaid holds CANCELLED (Phase 5). |
-| `eta-tick` | `eta/eta-tick.ts` | 60s | Re-broadcast live sessions so an idle doctor's ETA drifts later (Phase 7). |
-| `grace` | `queue/grace-sweeper.ts` | 15s | recall → skip → requeue → no-show, all thresholds from `QueuePolicy`. |
-| `cutoff` | `queue/cutoff-sweeper.ts` | 60s | Close registration when a newcomer could not be seen before the session ends. |
-| `reconcile` | `payments/reconcile-sweeper.ts` | 5m | Ask Razorpay about payments whose webhook never arrived. |
-| `notify` | `notifications/event-notifier.ts` | 30s | Turn `QueueEvent` rows into notifications. |
-| `leave-now` | `notifications/leave-now.ts` | 30s | Tell a booked patient when to set off. |
-| `dispatch` | `notifications/dispatch-sweeper.ts` | 15s | Send what is PENDING through Expo. |
+| Sweeper       | Lives in                            | Every | Purpose                                                                       |
+| ------------- | ----------------------------------- | ----- | ----------------------------------------------------------------------------- |
+| `reservation` | `queue/reservation-sweeper.ts`      | 60s   | Mark lapsed unpaid holds CANCELLED (Phase 5).                                 |
+| `eta-tick`    | `eta/eta-tick.ts`                   | 60s   | Re-broadcast live sessions so an idle doctor's ETA drifts later (Phase 7).    |
+| `grace`       | `queue/grace-sweeper.ts`            | 15s   | recall → skip → requeue → no-show, all thresholds from `QueuePolicy`.         |
+| `cutoff`      | `queue/cutoff-sweeper.ts`           | 60s   | Close registration when a newcomer could not be seen before the session ends. |
+| `reconcile`   | `payments/reconcile-sweeper.ts`     | 5m    | Ask Razorpay about payments whose webhook never arrived.                      |
+| `notify`      | `notifications/event-notifier.ts`   | 30s   | Turn `QueueEvent` rows into notifications.                                    |
+| `leave-now`   | `notifications/leave-now.ts`        | 30s   | Tell a booked patient when to set off.                                        |
+| `dispatch`    | `notifications/dispatch-sweeper.ts` | 15s   | Send what is PENDING through Expo.                                            |
 
 **Workers mutate state only by calling domain commands** — never by writing rows. That is
 what keeps the state machine, the audit log, the queue timeline and the realtime
@@ -552,6 +562,7 @@ forged or garbage scan costs one hash. Three properties are deliberate:
   raw code; that fallback is how a signing scheme becomes decoration.
 
 `CHECKIN_SECRET` is required at boot and is its own secret, not a reused JWT one.
+
 - QR check-in code is a **signed, opaque reference** (no PII); validated server-side.
 - **Audit + access logs** from day one; India-region hosting for data residency (DPDP).
 - Passwords hashed (Argon2id). PII treated as sensitive; least-privilege access.
@@ -563,6 +574,7 @@ forged or garbage scan costs one hash. Three properties are deliberate:
 ### 15.0 Deployment model (monorepo ≠ monolith ≠ one deployment)
 
 Two terms that sound alike but are independent:
+
 - **Monorepo** = one git repository holding all three apps (so they share TypeScript types). It does **not** mean they deploy together.
 - **Modular monolith** = only the **backend** (`apps/api`) is a single running service, internally split into modules. It does **not** include the web or mobile app.
 
@@ -595,13 +607,13 @@ apps/mobile  ──eas build──▶  Android .aab / iOS .ipa
 
 **Environments:** `local` (docker-compose Postgres+Redis) → `staging` → `production`.
 
-| Component | Host (MVP) |
-|---|---|
+| Component                    | Host (MVP)                                              |
+| ---------------------------- | ------------------------------------------------------- |
 | Backend (API + WS + workers) | Render / Railway / Fly.io (container), **India region** |
-| PostgreSQL | Managed (Neon / Render / Railway) |
-| Redis | Managed (Upstash / Render) |
-| Web console | Vercel |
-| Mobile app | Expo EAS → TestFlight + Play internal → stores |
+| PostgreSQL                   | Managed (Neon / Render / Railway)                       |
+| Redis                        | Managed (Upstash / Render)                              |
+| Web console                  | Vercel                                                  |
+| Mobile app                   | Expo EAS → TestFlight + Play internal → stores          |
 
 - **CI/CD:** GitHub Actions — install → lint → typecheck → test → `prisma migrate deploy` → deploy. Separate workflow for mobile (EAS build/submit).
 - **Config:** all secrets (DB URL, Redis URL, JWT secrets, Razorpay keys, Expo tokens) via environment variables per environment.
@@ -621,7 +633,7 @@ apps/mobile  ──eas build──▶  Android .aab / iOS .ipa
 ## 17. Key End-to-End Scenarios (traced)
 
 **A) Two staff press "check-in" for different patients at once**
-→ both hit `POST /check-in` → each transaction takes `FOR UPDATE` on the session → they serialize → both succeed in order, queue stays consistent. Two `call-next` at once → second sees updated state, gets the *next* patient, not a duplicate.
+→ both hit `POST /check-in` → each transaction takes `FOR UPDATE` on the session → they serialize → both succeed in order, queue stays consistent. Two `call-next` at once → second sees updated state, gets the _next_ patient, not a duplicate.
 
 **B) Payment succeeds, app crashes before token screen**
 → Razorpay webhook confirms server-side → token created + push sent → on relaunch `GET /me/queue-entries` shows the token. No duplicate (idempotent on order id), no loss.

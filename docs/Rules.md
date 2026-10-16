@@ -25,12 +25,14 @@ These are the boundaries for building this project (human or AI). When a rule he
 ## 2. Tech Stack — Use / Avoid
 
 **Use (the agreed stack — do not swap without approval):**
+
 - Backend: NestJS, Prisma, PostgreSQL, ioredis, Socket.IO (+ Redis adapter), BullMQ, `nestjs-zod`, Passport (Google), Razorpay SDK, pino, Argon2 (password hashing).
 - Web: Next.js (App Router), React, TanStack Query, Tailwind, shadcn/ui, socket.io-client.
-- Mobile: Expo (Expo Router), React Native, TanStack Query, socket.io-client, Expo Notifications, `react-native-qrcode-svg`, expo-secure-store.
+- Patient app: Kotlin + Jetpack Compose in `apps/native`, OkHttp, Socket.IO, Firebase Cloud Messaging, Android Keystore-backed token storage. Android is the only current patient platform.
 - Shared: Zod, TypeScript (strict).
 
 **Avoid unless explicitly approved:**
+
 - A different ORM (TypeORM/Sequelize/Knex), a different gateway, or a different realtime lib.
 - Redux/MobX (use TanStack Query + local state; add a store only if genuinely needed).
 - Moment.js (use date-fns / native `Intl`).
@@ -44,7 +46,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 
 ## 3. Project Structure Rules
 
-- Keep the monorepo layout from Architecture.md (`apps/api`, `apps/web`, `apps/mobile`, `packages/contracts`, `packages/config`).
+- Keep the monorepo layout from Architecture.md (`apps/api`, `apps/web`, `apps/native`, `packages/contracts`, `packages/config`).
 - Backend code lives in feature **modules** under `apps/api/src/modules`. Each module = controller + service + its Prisma access.
 - **No cross-module database access.** Module A must not read Module B's tables directly — call B's service.
 - Shared DTOs/enums/types live **only** in `packages/contracts`. Do not redefine them per app.
@@ -91,7 +93,13 @@ These are the boundaries for building this project (human or AI). When a rule he
 - Throw typed, meaningful errors (e.g. `InvalidQueueTransition`, `NotCheckedIn`, `TenantMismatch`, `PaymentNotVerified`). Don't throw bare strings.
 - A global exception filter maps errors to a **consistent JSON shape**:
   ```json
-  { "error": { "code": "INVALID_QUEUE_TRANSITION", "message": "human-readable", "details": {} } }
+  {
+    "error": {
+      "code": "INVALID_QUEUE_TRANSITION",
+      "message": "human-readable",
+      "details": {}
+    }
+  }
   ```
 - **Never leak internals** (stack traces, SQL, secrets) to clients. Log full detail server-side (pino), return a safe message + code.
 - Use correct HTTP status codes (400 validation, 401 authn, 403 authz/tenant, 404, 409 conflict/transition, 422, 429 rate limit, 5xx server).
@@ -124,7 +132,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 ## 10. Auth & Security Rules
 
 - Passwords hashed with **Argon2id**. Never store or log plaintext passwords or tokens.
-- Access tokens short-lived; refresh tokens rotated. Store client tokens in **secure storage** (expo-secure-store / httpOnly cookies for web).
+- Access tokens short-lived; refresh tokens rotated. Store client tokens in **secure storage** (Android Keystore-backed storage / httpOnly cookies for web).
 - Guard pipeline on protected routes: `JwtGuard` → `RolesGuard` → `TenantGuard`. **No sensitive endpoint is unguarded.**
 - Authorization is enforced on the backend, never by hiding UI on the client.
 - Rate-limit auth, join, and webhook endpoints.
@@ -156,7 +164,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 ## 13. Git & Workflow Rules
 
 - Never commit or push unless asked. Work on a branch, not the default branch.
-- Small, focused commits with clear messages describing *why*.
+- Small, focused commits with clear messages describing _why_.
 - Never commit secrets, `.env` files, build artifacts, or `node_modules`.
 - Run lint + typecheck + tests before proposing a change is complete.
 - Prisma migrations are committed with the code that needs them.
@@ -166,6 +174,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 ## 14. AI Working Agreement (what the AI should / shouldn't do)
 
 **Should:**
+
 - Follow these rules, the PRD, and the Architecture. When unsure, re-read them before coding.
 - Make the smallest change that fully solves the task; match existing patterns and naming.
 - State assumptions and call out trade-offs. Ask before doing anything hard to reverse (schema drops, new external services, dependency swaps, deployments).
@@ -174,6 +183,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 - **Append to `docs/PROGRESS.md`** what you did, what you decided, and why — see §16. Finishing a piece of work includes recording the reasoning behind it.
 
 **Should NOT:**
+
 - Invent libraries, endpoints, env vars, or fields that aren't defined — check `contracts` and the schema first.
 - Bypass the queue engine, tenant scoping, validation, or auth "to keep it simple."
 - Trust client-provided identity, amounts, prices, or `hospital_id`.
@@ -195,7 +205,7 @@ important as §1.
    phase's **contract (`packages/contracts`) and Prisma schema (Wave 1) are locked and merged**.
    The frozen contract is the only thing that lets parallel streams integrate.
 2. **Own exactly one directory.** Each parallel agent owns a single area — an `apps/api`
-   module, an `apps/web` route, or `apps/mobile`. **Never edit another agent's files.** The
+   module, an `apps/web` route, or `apps/native`. **Never edit another agent's files.** The
    safe fan-out is `apps/api ∥ apps/web ∥ apps/mobile`.
 3. **Do not touch `packages/contracts` mid-wave.** If you discover the contract is wrong,
    **stop and raise a coordinated change** — never patch a local copy or diverge the shape of
@@ -218,20 +228,20 @@ important as §1.
 ## 16. Build Log (`docs/PROGRESS.md`)
 
 `docs/PROGRESS.md` is the project's **append-only build log**. Code and git history already record
-*what* changed; the log records *why* — and the things that leave no trace in a diff: the alternatives
+_what_ changed; the log records _why_ — and the things that leave no trace in a diff: the alternatives
 rejected, the approach that failed, the constraint that forced a choice.
 
 1. **Append an entry whenever you finish a unit of work** — a subtask, a wave, a phase, or a standalone
    decision. Do it then, not "later": the reasoning is only accurate while it is fresh.
-2. **Every decision carries its *why*, and the alternatives you rejected.** "Used X" is worthless in
+2. **Every decision carries its _why_, and the alternatives you rejected.** "Used X" is worthless in
    three months. "Used X because Y failed on Z, and W would have broken V" is the entire value of this
    file.
-3. **Record failures, dead ends and surprises, not just successes.** The approach that did *not* work is
+3. **Record failures, dead ends and surprises, not just successes.** The approach that did _not_ work is
    usually the highest-value entry — it stops the next attempt repeating it.
 4. **Append, never rewrite.** Past entries are history, not documentation. If a decision is later
-   reversed, write a *new* entry saying so and why; never edit an old entry to look correct in hindsight.
-5. **Don't duplicate the scoreboard.** Phase and subtask *status* lives in `Phases.md` (the `☐` boxes and
-   §0 Progress Board); PROGRESS.md holds the *narrative*. A completed subtask updates **both**: tick the
+   reversed, write a _new_ entry saying so and why; never edit an old entry to look correct in hindsight.
+5. **Don't duplicate the scoreboard.** Phase and subtask _status_ lives in `Phases.md` (the `☐` boxes and
+   §0 Progress Board); PROGRESS.md holds the _narrative_. A completed subtask updates **both**: tick the
    box, append the entry.
 6. **Read it before continuing work** — especially after a break, or when picking up a phase someone
    else started. It carries the context the code cannot.

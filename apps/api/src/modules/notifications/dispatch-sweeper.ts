@@ -5,7 +5,7 @@ import { NotificationsService } from './notifications.service';
 /**
  * P8-BE-01 · sends what `NotificationsService.record()` wrote down.
  *
- * Separate from the recorder so that a slow or failing Expo cannot slow down or fail
+ * Separate from the recorder so that a slow or failing push provider cannot slow down or fail
  * the thing that decided a patient should be told. The outbox in between is what
  * makes a push survive a restart, and what makes "was she told?" answerable.
  */

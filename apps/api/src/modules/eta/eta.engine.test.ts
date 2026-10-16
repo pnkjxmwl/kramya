@@ -7,6 +7,7 @@ import {
   blendExpectedMins,
   etaWindow,
   isRunningBehind,
+  isEtaAvailable,
   measureDeadTime,
 } from './eta.engine';
 
@@ -24,6 +25,39 @@ import {
 const MIN = 60_000;
 const at = (iso: string) => new Date(iso);
 const T0 = at('2026-09-02T10:00:00.000Z');
+
+describe('ETA availability', () => {
+  it.each(['NOT_PRESENT', 'ON_BREAK', 'LEFT'])(
+    'withholds an ETA when doctor is %s',
+    (doctorPresence) => {
+      expect(isEtaAvailable({ status: 'ACTIVE', doctorPresence, pausedAt: null })).toBe(false);
+    },
+  );
+
+  it('requires an open, unpaused session and a present doctor', () => {
+    expect(
+      isEtaAvailable({
+        status: 'ACTIVE',
+        doctorPresence: 'PRESENT',
+        pausedAt: null,
+      }),
+    ).toBe(true);
+    expect(
+      isEtaAvailable({
+        status: 'ACTIVE',
+        doctorPresence: 'PRESENT',
+        pausedAt: T0,
+      }),
+    ).toBe(false);
+    expect(
+      isEtaAvailable({
+        status: 'COMPLETED',
+        doctorPresence: 'PRESENT',
+        pausedAt: null,
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('blendExpectedMins', () => {
   it('falls back to the seed when a doctor has no history at all', () => {
@@ -60,8 +94,16 @@ describe('blendExpectedMins', () => {
 
   it('weights today highest once today has anything to say', () => {
     const base = { seedMins: 10, allTimeMins: 10, allTimeSamples: 20 };
-    const slowToday = blendExpectedMins({ ...base, todayMins: 30, todaySamples: 4 });
-    const fastToday = blendExpectedMins({ ...base, todayMins: 5, todaySamples: 4 });
+    const slowToday = blendExpectedMins({
+      ...base,
+      todayMins: 30,
+      todaySamples: 4,
+    });
+    const fastToday = blendExpectedMins({
+      ...base,
+      todayMins: 5,
+      todaySamples: 4,
+    });
 
     expect(slowToday.basis).toBe('TODAY');
     // 0.5*30 + 0.3*10 + 0.2*10 = 20
@@ -70,7 +112,13 @@ describe('blendExpectedMins', () => {
 
     // "Weighted highest" stated as the thing it actually means: the same change to
     // today moves the estimate more than that change to any other term.
-    const flat = { seedMins: 10, allTimeMins: 10, allTimeSamples: 20, todayMins: 10, todaySamples: 4 };
+    const flat = {
+      seedMins: 10,
+      allTimeMins: 10,
+      allTimeSamples: 20,
+      todayMins: 10,
+      todaySamples: 4,
+    };
     const level = blendExpectedMins(flat).mins;
     const todayRaised = blendExpectedMins({ ...flat, todayMins: 20 }).mins;
     const historyRaised = blendExpectedMins({ ...flat, allTimeMins: 20 }).mins;
@@ -287,13 +335,23 @@ describe('etaWindow with dead time', () => {
 
   it('falls back to the seed on a nonsense value rather than dropping the term', () => {
     const nonsense = etaWindow(10, { aheadCount: 2, currentElapsedSec: null }, T0, Number.NaN);
-    const seeded = etaWindow(10, { aheadCount: 2, currentElapsedSec: null }, T0, SEED_DEAD_TIME_MIN);
+    const seeded = etaWindow(
+      10,
+      { aheadCount: 2, currentElapsedSec: null },
+      T0,
+      SEED_DEAD_TIME_MIN,
+    );
     expect(centre(nonsense)).toBe(centre(seeded));
   });
 
   it('uses the seed when no dead time is supplied at all', () => {
     const implicit = etaWindow(10, { aheadCount: 2, currentElapsedSec: null }, T0);
-    const explicit = etaWindow(10, { aheadCount: 2, currentElapsedSec: null }, T0, SEED_DEAD_TIME_MIN);
+    const explicit = etaWindow(
+      10,
+      { aheadCount: 2, currentElapsedSec: null },
+      T0,
+      SEED_DEAD_TIME_MIN,
+    );
     expect(centre(implicit)).toBe(centre(explicit));
   });
 });

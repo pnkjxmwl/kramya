@@ -31,7 +31,7 @@ const prisma = new PrismaClient();
  * Demo photography, from public CDNs and verified to resolve.
  *
  * Real URLs rather than placeholders on purpose: the whole path - the column, the
- * contract, the API mapper, expo-image's cache and the client fallback - is only
+ * contract, the API mapper, the Android image cache and the client fallback - is only
  * exercised end to end if something actually loads over the network. A hospital's own
  * photograph will come from an upload in the admin console later; `photoUrl` does not
  * change when it does.

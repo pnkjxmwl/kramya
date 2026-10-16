@@ -33,7 +33,7 @@ async function bootstrap(): Promise<void> {
   //   contentSecurityPolicy  off. This process serves JSON to two native clients and
   //     a console on another origin, never HTML. A CSP here protects nothing.
   //   crossOriginResourcePolicy  'cross-origin', not helmet's 'same-origin'. The
-  //     console and the Expo app are BOTH on a different origin from the API, which
+  //     console and the Kotlin app are BOTH on a different origin from the API, which
   //     is the whole deployment shape (P10-WEB-01 puts the console on Vercel). The
   //     default would be a header that exists only to break them.
   //

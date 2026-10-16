@@ -58,7 +58,9 @@ fun nextStepFor(entry: MyQueueEntry): String = when (entry.status) {
         "Your place is held until you pay. Finish the payment to get your token."
 
     QueueEntryStatus.CONFIRMED, QueueEntryStatus.VIRTUAL_WAITING ->
-        if (entry.checkedInAheadCount == 0 && entry.bookedAheadCount == 0) {
+        if (entry.etaFrom == null || entry.etaTo == null) {
+            "Waiting for an estimate. Check the clinic status or contact reception before travelling."
+        } else if (entry.checkedInAheadCount == 0 && entry.bookedAheadCount == 0) {
             "You are first in line. Reach the hospital and check in at reception."
         } else {
             "Wait comfortably. Reach the hospital in time to check in at reception."

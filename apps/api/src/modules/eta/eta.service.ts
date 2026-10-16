@@ -8,6 +8,7 @@ import {
   blendExpectedMins,
   etaWindow,
   isRunningBehind,
+  isEtaAvailable,
   measureDeadTime,
   type DeadTimeResult,
   type ExpectedResult,
@@ -98,7 +99,7 @@ export class EtaService {
 
     const [paces, deadTimes] = await Promise.all([
       this.pacesFor([...new Set(estimable.map((i) => i.doctorId))], now),
-      this.deadTimesFor([...new Set(estimable.map((i) => i.sessionId))]),
+      this.deadTimesFor([...new Set(estimable.map((i) => i.sessionId))], now),
     ]);
 
     for (const input of estimable) {
@@ -118,7 +119,10 @@ export class EtaService {
         now,
         (deadTimes.get(input.sessionId) ?? measureDeadTime([])).mins,
       );
-      out.set(input.key, { from: window.from.toISOString(), to: window.to.toISOString() });
+      out.set(input.key, {
+        from: window.from.toISOString(),
+        to: window.to.toISOString(),
+      });
     }
 
     return out;
@@ -132,21 +136,26 @@ export class EtaService {
    * from this session: a by-id fetch verifies the row belongs to the caller's
    * hospital, always (docs/Rules.md 1.3).
    */
-  async sessionEta(sessionId: string, hospitalId: string, now: Date = new Date()): Promise<SessionEta> {
+  async sessionEta(
+    sessionId: string,
+    hospitalId: string,
+    now: Date = new Date(),
+  ): Promise<SessionEta> {
     const session = await this.prisma.oPDSession.findFirst({
       where: { id: sessionId, hospitalId },
       select: {
         id: true,
         status: true,
         doctorPresence: true,
+        pausedAt: true,
         currentProviderDoctorId: true,
       },
     });
     if (session === null) throw new NotFoundError('Session not found');
 
     const [pace, ahead, serving] = await Promise.all([
-      this.pacesFor([session.currentProviderDoctorId], now).then(
-        (map) => map.get(session.currentProviderDoctorId),
+      this.pacesFor([session.currentProviderDoctorId], now).then((map) =>
+        map.get(session.currentProviderDoctorId),
       ),
       this.prisma.queueEntry.count({
         where: { sessionId, status: { in: [...ELIGIBLE_TO_CALL] } },
@@ -165,9 +174,9 @@ export class EtaService {
       todaySamples: 0,
     };
     const expected: ExpectedResult = blendExpectedMins(resolved);
-    const deadTime = await this.deadTimeFor(sessionId);
+    const deadTime = await this.deadTimeFor(sessionId, now);
 
-    const window = ETA_IS_MEANINGFUL.has(session.status) && session.doctorPresence !== 'LEFT'
+    const window = isEtaAvailable(session)
       ? etaWindow(
           expected.mins,
           {
@@ -219,13 +228,16 @@ export class EtaService {
    * consecutive rows, and a session's entries number in the tens - there is nothing
    * here worth the raw SQL that docs/Rules.md keeps for locking and reporting.
    */
-  private async deadTimeFor(sessionId: string): Promise<DeadTimeResult> {
-    const all = await this.deadTimesFor([sessionId]);
+  private async deadTimeFor(sessionId: string, now: Date): Promise<DeadTimeResult> {
+    const all = await this.deadTimesFor([sessionId], now);
     return all.get(sessionId) ?? measureDeadTime([]);
   }
 
   /** The same measurement for many sessions, in one query. */
-  private async deadTimesFor(sessionIds: string[]): Promise<Map<string, DeadTimeResult>> {
+  private async deadTimesFor(
+    sessionIds: string[],
+    now: Date,
+  ): Promise<Map<string, DeadTimeResult>> {
     const out = new Map<string, DeadTimeResult>();
     if (sessionIds.length === 0) return out;
 
@@ -233,7 +245,7 @@ export class EtaService {
       where: {
         sessionId: { in: sessionIds },
         calledAt: { not: null },
-        completedAt: { not: null },
+        completedAt: { not: null, lte: now },
       },
       select: { sessionId: true, calledAt: true, completedAt: true },
       orderBy: [{ sessionId: 'asc' }, { calledAt: 'asc' }],
@@ -283,13 +295,16 @@ export class EtaService {
       }),
       this.prisma.consultation.groupBy({
         by: ['doctorId'],
-        where: { doctorId: { in: doctorIds } },
+        where: { doctorId: { in: doctorIds }, endedAt: { lte: now } },
         _avg: { durationSec: true },
         _count: { _all: true },
       }),
       this.prisma.consultation.groupBy({
         by: ['doctorId'],
-        where: { doctorId: { in: doctorIds }, endedAt: { gte: startOfToday } },
+        where: {
+          doctorId: { in: doctorIds },
+          endedAt: { gte: startOfToday, lte: now },
+        },
         _avg: { durationSec: true },
         _count: { _all: true },
       }),
@@ -319,10 +334,3 @@ export class EtaService {
     );
   }
 }
-
-/**
- * Statuses where a wait can be estimated at all. A COMPLETED or CANCELLED session has
- * no queue to join, and SCHEDULED has not opened - saying "about 20 minutes" for any
- * of them would be inventing a number.
- */
-const ETA_IS_MEANINGFUL = new Set(['OPEN_FOR_REGISTRATION', 'ACTIVE']);

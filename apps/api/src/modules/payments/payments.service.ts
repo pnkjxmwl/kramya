@@ -12,7 +12,6 @@ import {
   type MyQueueEntry,
   type Paginated,
   type QueueEntryStatus,
-  type SessionStatus,
   type StaffCancelEntryRequest,
   type StaffCancelEntryResponse,
   type WebhookAck,
@@ -29,6 +28,7 @@ import {
 } from '../queue/queue.service';
 import { QueuePolicyService } from '../config/queue-policy.service';
 import { EtaService } from '../eta/eta.service';
+import { isEtaAvailable } from '../eta/eta.engine';
 import { endSession } from '../queue/commands/end-session';
 import { joinQueue } from '../queue/commands/join';
 import { applyPaymentConfirmation, whyPaymentCannotBook } from '../queue/commands/confirm-payment';
@@ -171,7 +171,6 @@ const AWAITING_A_TURN: QueueEntryStatus[] = [
   'READY',
   'CALLED',
 ];
-const SESSION_RUNNING: SessionStatus[] = ['OPEN_FOR_REGISTRATION', 'ACTIVE'];
 
 @Injectable()
 export class PaymentsService implements OnModuleInit {
@@ -949,7 +948,7 @@ export class PaymentsService implements OnModuleInit {
           // the pool - still at home - means everyone present is ahead of them.
           aheadCount: position === -1 ? live.eligibleOrder.length : position,
           currentStartedAt: live.consultingSince,
-          estimable: AWAITING_A_TURN.includes(row.status) && SESSION_RUNNING.includes(row.session.status),
+          estimable: AWAITING_A_TURN.includes(row.status) && isEtaAvailable(row.session),
         };
       }),
       now,

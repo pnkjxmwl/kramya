@@ -27,6 +27,8 @@ export const MY_ENTRY_INCLUDE = {
     select: {
       id: true,
       status: true,
+      doctorPresence: true,
+      pausedAt: true,
       scheduledStart: true,
       scheduledEnd: true,
       feePaise: true,
