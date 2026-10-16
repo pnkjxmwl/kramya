@@ -543,8 +543,8 @@ function PatientApp() {
           </span>
         </h2>
         <p className="mx-auto mt-5 max-w-[50ch] text-[16px] leading-[1.65] text-white/60">
-          Kramya is in pilot with its first hospitals. The iOS and Android apps arrive with them —
-          if you would like to know when, tell us where to write.
+          We’re preparing our first clinic pilots. The patient apps are being readied alongside
+          them. If you run an OPD and would like to try Kramya, let’s talk.
         </p>
 
         {/*
@@ -557,7 +557,7 @@ function PatientApp() {
             href={WAITLIST_MAILTO}
             className="inline-flex rounded-full bg-white px-6 py-3.5 text-[15px] font-medium text-brand-ink transition-[opacity,transform] hover:opacity-90 active:scale-[0.98]"
           >
-            Tell me when it launches
+            Talk about a pilot
           </a>
           <Link
             href="/demo"
@@ -674,4 +674,4 @@ function SectionLabel({ children }: { children: string }) {
 */
 const CONTACT = 'hello@kramya.app';
 const DEMO_MAILTO = `mailto:${CONTACT}?subject=${encodeURIComponent('Kramya demo for our hospital')}`;
-const WAITLIST_MAILTO = `mailto:${CONTACT}?subject=${encodeURIComponent('Tell me when the Kramya app launches')}`;
+const WAITLIST_MAILTO = `mailto:${CONTACT}?subject=${encodeURIComponent('Kramya clinic pilot')}`;

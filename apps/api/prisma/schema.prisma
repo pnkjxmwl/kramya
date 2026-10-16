@@ -356,6 +356,7 @@ model OPDSession {
   @@index([hospitalId, status])
   @@index([departmentId])
   @@index([scheduleId])
+  @@index([currentProviderDoctorId])
 }
 
 // ---------------------------------------------------------------------------
@@ -898,4 +899,5 @@ model Notification {
   @@index([status, createdAt])
   @@index([accountId])
   @@index([sourceEventId])
+  @@index([entryId])
 }
