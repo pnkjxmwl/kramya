@@ -2,6 +2,8 @@
 // The canonical migration executes under a CREATEROLE owner without SUPERUSER,
 // REPLICATION or BYPASSRLS. Every probe object and role is rolled back.
 import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
+import process from 'node:process';
 
 const migration = await readFile(
   new URL(
