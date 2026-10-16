@@ -1,12 +1,12 @@
 # Production safeguard rollout
 
-16 October 2026. The hosted service remains fictional staging. Phone acceptance, visual review and the complete patient/staff journey are deliberately deferred to [TESTING.md](../TESTING.md). Development security/build checks continue now.
+Updated 17 October 2026 (Asia/Kolkata). The hosted service remains fictional staging. Phone acceptance, visual review and the complete patient/staff journey are deliberately deferred to [TESTING.md](../TESTING.md). Development security/build checks continue now.
 
 ## Database credentials and deployment boundary
 
-Migration `202610160005_runtime_database_role` prepares `kramya_runtime` as **NOLOGIN**, with explicit access to the 18 current app tables. It cannot own objects, inherit role memberships, create schema objects, manage roles/databases, replicate, bypass RLS, read `_prisma_migrations`, truncate tables, or acquire automatic access to future tables. Audit/event/consultation history permits SELECT/INSERT only. New models require explicit grant migrations.
+Migration `202610160005_runtime_database_role` initially prepared `kramya_runtime` as **NOLOGIN**, with explicit access to the 18 current app tables. The operator has now enabled LOGIN with a separate generated password and saved its Session Pooler URI directly in Render. It cannot own app objects, inherit role memberships, create app schema objects, manage roles/databases, replicate, bypass RLS, read `_prisma_migrations`, truncate tables, or acquire automatic access to future tables. Audit/event/consultation history permits SELECT/INSERT only. New models require explicit grant migrations.
 
-This does **not** add tenant RLS. API guards and scoped queries still enforce account/clinic boundaries. The current hosted API still uses the migration-owner connection until the cutover below is completed. See [the data-access design](security/data-access-model.md) for the separate RLS/context work.
+This does **not** add tenant RLS. API guards and scoped queries still enforce account/clinic boundaries. The hosted API now uses `kramya_runtime`; the owner credential is stored in GitHub's migration environment. Rotation of the previous runtime-exposed owner password remains pending. See [the data-access design](security/data-access-model.md) for the separate RLS/context work.
 
 The manual **Migrate and deploy staging** GitHub workflow checks passing `verify` and `native` checks on the exact main commit, applies migrations, then triggers Render with that same SHA. Owner credentials are scoped to its migration step. GitHub environment `staging-database` is restricted to the main branch; both required secrets were saved privately. Run [38956356781](https://github.com/pnkjxmwl/kramya/actions/runs/38956356781) proved the migration connection and deploy hook for `ef476f37636b6a2afa8e0814d440977503538f2f`. Never expose migration secrets to PR workflows. Additional reviewer protection can be configured according to operator ownership.
 
@@ -19,7 +19,9 @@ Cutover order:
 5. Deploy through the workflow. Verify readiness, actual connected database role, exact SHA, role grants and app/job behavior with fictional fixtures. Run the runtime-grant SQL on an isolated database, not on hosted patient data. Keep the owner credential only in the protected migration environment/operator secret store.
 6. Revoke/rotate the old runtime-exposed owner credential after the migration environment has its replacement and both paths are proven. Recheck secrets, rollback instructions and the API's limited grants.
 
-The SQL checks in CI exercise allowed reads/inserts/updates/deletes and denied history edits, DDL and migration access under `SET LOCAL ROLE kramya_runtime`; all probes roll back. A second probe runs the canonical migration with a non-superuser owner, reflecting [Supabase's owner restrictions](https://supabase.com/docs/guides/database/postgres/roles-superuser). They do not prove a live credential cutover or tenant RLS. No script automatically enables LOGIN or rewires hosted credentials.
+The SQL checks in CI exercise allowed reads/inserts/updates/deletes and denied history edits, DDL and migration access under `SET LOCAL ROLE kramya_runtime`; all probes roll back. A second probe runs the canonical migration with a non-superuser owner, reflecting [Supabase's owner restrictions](https://supabase.com/docs/guides/database/postgres/roles-superuser). CI alone does not prove a live credential cutover or tenant RLS.
+
+Live cutover evidence: workflow [38958710636](https://github.com/pnkjxmwl/kramya/actions/runs/38958710636) deployed commit `6b2dd2da6ab4653f2c2b5e07b4009ec121a2c264` through the hook; Render deploy `dep-db983j8m7kps73bglleg` reached live. The API build command contains no migration command and automatic deploys are off. Postgres showed actual runtime-role connections; readiness reported database/Redis up. Fictional-account API checks passed login, discovery, temporary profile CRUD, staff queue reads and cross-account/clinic rejection. Proof JSON is local and Git-ignored in `.backups/hosted-runtime-cutover-20261017.proof.json`. No owner credential, generated runtime URL or password is stored in these documents.
 
 ## Encrypted backup and isolated restore
 
@@ -50,11 +52,11 @@ Roles and ACLs are deliberately excluded. After a disaster restore, reapply the 
 
 After restoration, compare row counts, migration history and representative relations, then run an isolated app smoke check. Record measured recovery time and recovery point. Back up the hosted project and rehearse that exact artifact before marking the production recovery gate complete. A rehearsal using local fictional data proves the tooling only.
 
-Local rehearsal, 16 October 2026: an encrypted fictional development snapshot restored into a separate PostgreSQL 17 container. All 19 table row counts matched, including 17 migration records, nine clinics and 25 doctor/hospital joins; 37 foreign keys and 80 indexes matched. A second restore into the occupied database was rejected and temporary plaintext was removed. The proof JSON, encrypted archive and separate key are Git-ignored local files. Hosted backup, off-machine custody and an app recovery smoke check remain unchecked in `TESTING.md`.
+Local rehearsal, 16 October 2026: an encrypted fictional development snapshot restored into a separate PostgreSQL 17 container. All 19 table row counts and migration names/checksums matched, including 17 migration records, nine clinics and 25 doctor/hospital joins; 37 foreign keys and 80 indexes matched. A second restore into the occupied database was rejected and temporary plaintext was removed. A real API recovery smoke check then passed with a restricted local-role login (workers disabled). The proof JSON, encrypted archive and separate key are Git-ignored local files. Hosted backup, off-machine custody and recovery from that hosted artifact remain unchecked in `TESTING.md`.
 
 ## Remaining operational gates
 
 - Define and demonstrate clinic-hour API/worker availability; current Render Free sleeps.
 - Agree recovery point/time objectives, backup frequency, retention, operator ownership and failure escalation. No scheduled backup or paid upgrade is activated by this change.
-- Complete the database context/RLS design, least-privilege live connection, access review, privacy/retention operations and clinic fallback procedure.
+- Rotate the old owner password and complete the database context/RLS design, access review, privacy/retention operations and clinic fallback procedure. The least-privilege live connection is now verified.
 - Verify release signing, Firebase delivery, test-mode checkout/webhooks and the final acceptance file before a supervised clinic pilot.

@@ -1,10 +1,12 @@
 # Kramya data access model
 
-Reviewed 16 October 2026. Row policies and the live runtime credential split remain
-pending. Migration `202610160005` prepares a restricted NOLOGIN role and CI verifies
-its grants, append-only history, and compatibility with a non-superuser migration
-owner. The deployed API still uses its owner connection and enforces ownership
-through NestJS authorization and scoped Prisma queries. Follow the
+Reviewed 17 October 2026. Row policies remain pending. Migration `202610160005`
+prepared a restricted NOLOGIN role; the operator enabled LOGIN and the deployed API
+now connects as `kramya_runtime`. CI verifies its grants, append-only history, and
+compatibility with a non-superuser migration owner. Application ownership still
+depends on NestJS authorization and scoped Prisma queries. The owner credential
+is separate in GitHub's main-only migration environment; its old runtime-exposed
+password still needs rotation. Follow the
 [production safeguard runbook](../production-readiness.md) for the credential cutover.
 
 ## Verified boundaries
@@ -18,8 +20,9 @@ through NestJS authorization and scoped Prisma queries. Follow the
   all table/sequence grants for these unused roles, plus the migration owner's
   per-schema defaults for future objects. It leaves Supabase-managed roles and
   schema USAGE alone. That is a grant boundary, not tenant row isolation.
-- `postgres` has BYPASSRLS. The current backend connection uses that project role.
-  Enabling RLS alone therefore would not constrain backend requests.
+- `postgres` has BYPASSRLS and is now used only for migrations/operator access.
+  The live backend uses `kramya_runtime`, with no BYPASSRLS or elevated role attributes.
+  Tables still have no tenant RLS policies; restricted grants do not provide row isolation.
 - `TenantGuard` resolves active membership from hospital/session route parameters.
   `RolesGuard` checks the role within that membership. Patient services scope by
   authenticated account. Existing tenant/config/payment tests cover several
