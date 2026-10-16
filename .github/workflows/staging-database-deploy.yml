@@ -44,8 +44,7 @@ jobs:
           DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: |
           test -n "$DATABASE_URL" || { echo 'Missing staging-database MIGRATION_DATABASE_URL'; exit 1; }
-          node scripts/verify-migration-target.mjs
-          pnpm --filter @opd/api prisma:deploy
+          node scripts/run-staging-migrations.mjs
       - name: Deploy the exact migrated commit
         env:
           DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
