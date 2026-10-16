@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { Mark } from '../components/mark';
+import { HeroScene } from './hero-scene';
 import { QueueDemo, Reveal } from './reveal';
 import { WaitingRoom } from './waiting-room';
 
@@ -56,22 +57,15 @@ export const viewport: Viewport = {
 
 export default function Landing() {
   return (
-    // `landing-root` is not styled itself - it is the hook `html:has(.landing-root)`
-    // in globals.css uses to drop the scrollbar on this page and nowhere else.
     <div className="landing-root min-h-screen bg-brand-canvas font-sans text-brand-ink antialiased">
       {/*
-        Header and hero share one ink block.
-
-        The page used to open on the same pale canvas as everything below it, so the
-        first screenful had no more presence than the footer. Opening dark and landing
-        on light is the oldest trick in a premium marketing page for a reason: the fold
-        becomes an object rather than the top of a scroll, and it carries the same
-        language as the sign-in screen, which is the next thing a hospital sees.
+        The header is sticky and frosted, outside the hero so it can stay with the
+        reader down the page. It used to live inside the ink block and scroll away
+        with it, which left the long white middle of the page with no way to the
+        demo or to sign-in short of scrolling back to the top.
       */}
-      <div className="bg-brand-ink">
-        <Header />
-        <Hero />
-      </div>
+      <Header />
+      <Hero />
       <main>
         <Proof />
         <HowItWorks />
@@ -88,10 +82,8 @@ export default function Landing() {
 
 function Header() {
   return (
-    // Not sticky. A dark bar following you down a light page is a strip of the hero
-    // that refused to leave; the way back up is the browser's own scroll.
-    <header className="relative z-20">
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-6">
+    <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-brand-ink/80 backdrop-blur-md supports-[backdrop-filter]:bg-brand-ink/70">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link
           href="/"
           className="flex items-center gap-2.5 text-white transition-opacity hover:opacity-75"
@@ -103,19 +95,19 @@ function Header() {
         <nav className="flex items-center gap-1">
           <Link
             href="/demo"
-            className="hidden rounded-xl px-4 py-2 text-[14px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:block"
+            className="hidden rounded-full px-4 py-2 text-[14px] font-medium text-white/65 transition-colors hover:text-white sm:block"
           >
-            Demo
+            Live demo
           </Link>
           <Link
             href="/login"
-            className="rounded-xl px-4 py-2 text-[14px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="whitespace-nowrap rounded-full px-3 py-2 text-[14px] font-medium text-white/65 transition-colors hover:text-white sm:px-4"
           >
             Staff sign-in
           </Link>
           <a
             href={DEMO_MAILTO}
-            className="ml-1 rounded-xl bg-white px-4 py-2 text-[14px] font-medium text-brand-ink transition-opacity hover:opacity-85"
+            className="ml-1 whitespace-nowrap rounded-full bg-white px-3.5 py-2 text-[14px] font-medium text-brand-ink transition-[opacity,transform] hover:opacity-90 active:scale-[0.97] sm:px-4"
           >
             Book a demo
           </a>
@@ -128,92 +120,57 @@ function Header() {
 /* -------------------------------------------------------------------- hero */
 
 /**
- * Sentence left, room right.
+ * Sentence left, the product running on the right.
  *
- * Four folds got tried. Copy beside a product screenshot; a centred headline over a
- * glowing card - the composition every AI-assisted page converges on; then the drawing
- * beneath the words, and behind them. The last two failed the same way: a background
- * has to be faint enough to read through, which makes it a texture, and it gets
- * covered by the very sentence it sits under.
+ * Earlier versions tried a centred headline over a glowing card (the composition
+ * every generated page converges on), a line drawing behind the words, and then the
+ * drawing beside them. The drawing said "empty corridor" but not how; the scene on
+ * the right now shows how - a desk calling people in and a phone telling one of them
+ * to leave home - and the drawing has moved down to the section that makes that claim.
  *
- * So it is a column of its own. What keeps this from being the first, generic version
- * is what is IN the right-hand column - not a screenshot of a dashboard, but a room
- * that draws itself and empties while you read the claim that it will.
- *
- * **The headline no longer describes the picture.** "Your waiting room, mostly empty"
- * said in words exactly what the chairs say in lines, so one of them was redundant.
- * The drawing shows the room; the sentence says where those people went.
+ * **One serif word.** "on time." is set in Instrument Serif italic, and nothing else
+ * in the fold is. It is the half of the sentence a hospital is buying, and a single
+ * change of voice is how an editorial page puts weight on a phrase without reaching
+ * for colour or a gradient. The outlined first line it replaces measured about 2.4:1.
  */
 function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      <div className="mx-auto max-w-6xl px-6 pb-16 pt-14 sm:pt-20">
-        {/*
-          Words left, room right - and the room is an ELEMENT now, not a background.
-
-          It spent two versions as a layer behind the text, which meant it had to be
-          faint enough to read through and kept getting covered by the very words it
-          was under. Beside the sentence instead of beneath it, it needs no apology:
-          at 50% it is a drawing somebody is meant to look at.
-
-          The right column is the only thing in the fold that bleeds. Cutting the room
-          off at the viewport edge says it continues, which is the point - it is a
-          room, not a picture of one.
-        */}
-        <div className="grid items-center gap-y-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-x-12">
+    <section className="relative -mt-16 overflow-hidden bg-brand-ink pt-16 text-white">
+      <div aria-hidden="true" className="ledger-grid pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-14 sm:pt-20 lg:pb-24">
+        <div className="grid items-center gap-y-16 lg:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] lg:gap-x-8">
           <div>
-            {/* A rule and a label, not a pill. A bordered rounded-full chip is the
-                default badge every page opens with; a hairline running out of the
-                text is the same information set like an editorial standfirst - and
-                it rhymes with the line art rather than fighting it. */}
-            <span className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[1.6px] text-white/45">
-              <span aria-hidden="true" className="h-px w-9 bg-white/25" />
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-live" />
-              OPD queue management
+            <span className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-2.5 pr-3.5 text-[12px] font-medium text-white/70">
+              <span className="live-dot text-brand-live" style={{ height: 6, width: 6 }} />
+              Live OPD queues for Indian hospitals
             </span>
 
-            {/*
-              Two sentences, two lines, no cleverness.
-
-              The drawing carries the feeling - a room emptying - so the words do not
-              have to. Earlier versions tried: "Your waiting room, mostly empty" said
-              in words what the chairs already say in lines, and "The waiting happens
-              at home" was a turn of phrase where a plain fact reads better.
-
-              The second line is the half a hospital cares about. "Queue from home" on
-              its own is a patient convenience; "walk in on time" is the thing that
-              empties a corridor, so it gets the white.
-            */}
-            <h1 className="mt-7 text-balance text-[44px] font-semibold leading-[1.04] tracking-[-2px] text-white sm:text-[64px] sm:tracking-[-3px]">
-              <span className="type-outline">Queue from home.</span>
+            <h1 className="mt-7 text-balance text-[46px] font-semibold leading-[1.02] tracking-[-2px] sm:text-[62px] sm:tracking-[-2.8px]">
+              Queue from home.
               <br />
-              Walk in on time.
+              Walk in{' '}
+              <span className="font-serif text-[1.08em] font-normal italic tracking-[-1px]">
+                on time.
+              </span>
             </h1>
 
             <p className="mt-7 max-w-[44ch] text-[17px] leading-[1.65] text-white/60">
-              Your OPD runs exactly as it does today — same queue, same order, same
-              desk. Patients simply stop spending the morning in a corridor to hold
-              their place.
+              Your OPD runs exactly as it does today — same queue, same order, same desk. Patients
+              simply stop spending the morning in a corridor to hold their place.
             </p>
 
-            {/* The demo leads, not the mailto: somebody who can see the board working
-                in one click is a better lead than somebody asked to write an email. */}
-            {/*
-              One filled button and one underlined link, not two buttons.
-
-              Two equally-weighted pills is the default, and it makes a visitor choose
-              between them before they know what either does. The demo is the thing
-              worth clicking, so it is the only object; "Book a demo" is a sentence you
-              can read past. The arrow moves on hover - the one piece of motion in the
-              fold that responds to a person rather than a timer.
-            */}
-            <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
+            {/* One filled button and one underlined link: the demo is the thing worth
+                clicking, so it is the only object. */}
+            <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link
                 href="/demo"
-                className="group inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[15px] font-medium text-brand-ink transition-opacity hover:opacity-85"
+                className="group inline-flex items-center gap-2 rounded-full bg-white py-3.5 pl-6 pr-5 text-[15px] font-medium text-brand-ink shadow-[0_8px_30px_-8px_rgba(255,255,255,0.35)] transition-[opacity,transform] hover:opacity-90 active:scale-[0.98]"
               >
-                See the console
-                <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
+                See the live console
+                <span
+                  aria-hidden="true"
+                  className="grid h-6 w-6 place-items-center rounded-full bg-brand-ink text-[13px] text-white transition-transform duration-200 group-hover:translate-x-0.5"
+                >
                   →
                 </span>
               </Link>
@@ -225,46 +182,75 @@ function Hero() {
               </a>
             </div>
 
-            <p className="mt-6 text-[13px] text-white/35">
-              No sign-in needed — the demo runs on sample data.
-            </p>
+            {/* Three things true today, not a trust-badge row. */}
+            <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-white/45">
+              {['No sign-in for the demo', 'Runs in any browser', 'UPI & cards via Razorpay'].map(
+                (fact) => (
+                  <li key={fact} className="flex items-center gap-2">
+                    <Check />
+                    {fact}
+                  </li>
+                ),
+              )}
+            </ul>
           </div>
 
-          <div
-            aria-hidden="true"
-            className="h-[240px] text-white/50 sm:h-[300px] lg:-mr-[16vw] lg:h-[360px]"
-          >
-            <WaitingRoom />
-          </div>
+          <HeroScene />
         </div>
       </div>
+      {/* The fold ends on a hairline, not a hard colour change. */}
+      <div
+        aria-hidden="true"
+        className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+      />
     </section>
+  );
+}
+
+function Check() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-brand-live" aria-hidden="true">
+      <path
+        d="M3.5 8.5l3 3 6-7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
 /* ------------------------------------------------------------------- proof */
 
 /**
- * One idea, at full width, with nothing beside it to dilute it.
+ * One idea, at full width - and now the drawing that illustrates it.
  *
  * Deliberately carries no invented statistic. Every "hospitals see a 40% reduction"
  * on a pre-pilot site is a number somebody made up, and a hospital administrator has
- * read a hundred of them. What we can say without inventing anything is what the
- * product does differently, so that is what it says.
+ * read a hundred of them. The waiting room drawing itself empties as it scrolls into
+ * view: six people sit down, five of them leave. That is the claim, drawn.
  */
 function Proof() {
   return (
-    <section className="border-y border-brand-line bg-white py-24">
+    <section className="border-b border-brand-line bg-white pb-10 pt-24">
       <Reveal className="mx-auto max-w-3xl px-6 text-center">
-        <p className="text-balance text-[28px] font-semibold leading-[1.25] tracking-[-1px] sm:text-[36px] sm:tracking-[-1.4px]">
-          A token is a promise about <em className="not-italic text-brand-muted">when</em>, not a
-          licence to sit in a corridor for three hours.
+        <p className="text-balance text-[30px] font-semibold leading-[1.2] tracking-[-1.1px] sm:text-[40px] sm:tracking-[-1.6px]">
+          A token is a promise about{' '}
+          <span className="font-serif text-[1.1em] font-normal italic tracking-[-0.5px]">when</span>
+          , not a licence to sit in a corridor for three hours.
         </p>
         <p className="mx-auto mt-6 max-w-[54ch] text-[16px] leading-[1.65] text-brand-soft">
-          Every OPD already issues numbers. What it cannot issue is a believable time — so
-          everybody arrives at opening and waits. Kramya computes that time continuously
-          from the queue as it actually moves, and tells the patient when to leave home.
+          Every OPD already issues numbers. What it cannot issue is a believable time — so everybody
+          arrives at opening and waits. Kramya computes that time continuously from the queue as it
+          actually moves, and tells the patient when to leave home.
         </p>
+      </Reveal>
+      <Reveal delay={120} className="mx-auto mt-10 max-w-4xl px-6">
+        <div aria-hidden="true" className="h-[200px] text-brand-ink/35 sm:h-[260px]">
+          <WaitingRoom />
+        </div>
       </Reveal>
     </section>
   );
@@ -274,22 +260,22 @@ function Proof() {
 
 function HowItWorks() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24">
+    <section className="mx-auto max-w-6xl px-6 py-28">
       <Reveal>
         <SectionLabel>How it works</SectionLabel>
-        <h2 className="mt-4 max-w-[20ch] text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[42px] sm:tracking-[-1.8px]">
-          Watch a queue actually move.
+        <h2 className="mt-4 max-w-[20ch] text-balance text-[34px] font-semibold leading-[1.1] tracking-[-1.3px] sm:text-[46px] sm:tracking-[-2px]">
+          Watch a queue{' '}
+          <span className="font-serif text-[1.08em] font-normal italic tracking-[-0.5px]">
+            actually
+          </span>{' '}
+          move.
         </h2>
         <p className="mt-5 max-w-[52ch] text-[16px] leading-[1.65] text-brand-soft">
-          This is the patient&rsquo;s screen, running. Nothing here is a mockup of a
-          feature we are planning — it is the card the app draws, with the numbers the
-          queue engine produces.
+          This is the patient&rsquo;s screen, running. Nothing here is a mockup of a feature we are
+          planning — it is the card the app draws, with the numbers the queue engine produces.
         </p>
       </Reveal>
 
-      {/* The demonstration replaces what used to be three paragraphs describing it.
-          A queue is a thing that moves, and three static bullets about movement is
-          the one format guaranteed not to convey it. */}
       <Reveal delay={120} className="mt-14">
         <QueueDemo />
       </Reveal>
@@ -299,96 +285,203 @@ function HowItWorks() {
 
 /* ---------------------------------------------------------------- for staff */
 
-function ForStaff() {
-  const items = [
-    {
-      title: 'One board per session',
-      body: 'Who is here, who is booked, who is next. Call, start, complete, skip — every action on one screen.',
-    },
-    {
-      title: 'Check-in by QR',
-      body: 'Scan the patient’s token at the desk. The code is signed and carries no personal data. Camera declined? Search by name or number.',
-    },
-    {
-      title: 'Walk-ins still walk in',
-      body: 'Register someone at the counter and they take their place in the same queue — no second system, no parallel list.',
-    },
-    {
-      title: 'Emergencies jump, on the record',
-      body: 'Priority insertion is one action and it is audited. Other patients are told the queue changed, never why.',
-    },
-  ];
+const STAFF_FEATURES = [
+  {
+    title: 'One board per session',
+    body: 'Who is here, who is booked, who is next. Call, start, complete, skip — every action on one screen.',
+    icon: 'M4 5h16M4 12h16M4 19h10',
+  },
+  {
+    title: 'Check-in by QR',
+    body: 'Scan the patient’s token at the desk. The code is signed and carries no personal data.',
+    icon: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2',
+  },
+  {
+    title: 'Walk-ins still walk in',
+    body: 'Register someone at the counter and they join the same queue — no second system.',
+    icon: 'M12 5v14M5 12h14',
+  },
+  {
+    title: 'Emergencies jump, on the record',
+    body: 'Priority insertion is one action, and it is audited. Other patients are told the queue changed, never why.',
+    icon: 'M12 3l9 16H3zM12 10v4M12 17h.01',
+  },
+];
 
+function ForStaff() {
   return (
-    <section className="border-y border-brand-line bg-white py-24">
+    <section className="border-y border-brand-line bg-white py-28">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="grid gap-14 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:gap-16">
           <Reveal>
             <SectionLabel>For your staff</SectionLabel>
-            <h2 className="mt-4 text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[40px] sm:tracking-[-1.6px]">
-              The desk keeps working the way the desk works.
+            <h2 className="mt-4 text-balance text-[34px] font-semibold leading-[1.1] tracking-[-1.3px] sm:text-[44px] sm:tracking-[-1.9px]">
+              The desk keeps working the way the desk{' '}
+              <span className="font-serif text-[1.08em] font-normal italic tracking-[-0.5px]">
+                works.
+              </span>
             </h2>
             <p className="mt-5 text-[16px] leading-[1.65] text-brand-soft">
-              Reception is not asked to learn a new job. The console runs in a browser,
-              needs no install, and is designed to be readable across a counter.
+              Reception is not asked to learn a new job. The console runs in a browser, needs no
+              install, and is designed to be readable across a counter — the patient being seen is
+              the biggest thing on the screen.
             </p>
-            <Link
-              href="/login"
-              className="mt-7 inline-flex rounded-2xl bg-brand-fill px-5 py-3 text-[15px] font-medium transition-colors hover:bg-brand-line"
-            >
-              Staff sign-in
-            </Link>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link
+                href="/demo/queue"
+                className="group inline-flex items-center gap-2 rounded-full bg-brand-ink px-5 py-3 text-[15px] font-medium text-white transition-[opacity,transform] hover:opacity-90 active:scale-[0.98]"
+              >
+                Try the board
+                <span
+                  aria-hidden="true"
+                  className="transition-transform group-hover:translate-x-0.5"
+                >
+                  →
+                </span>
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-full px-5 py-3 text-[15px] font-medium text-brand-soft transition-colors hover:bg-brand-fill hover:text-brand-ink"
+              >
+                Staff sign-in
+              </Link>
+            </div>
           </Reveal>
 
-          <dl className="grid gap-x-10 gap-y-9 sm:grid-cols-2">
-            {items.map((it, i) => (
-              <Reveal key={it.title} delay={i * 70}>
-                <dt className="text-[17px] font-semibold tracking-[-0.4px]">{it.title}</dt>
-                <dd className="mt-2 text-[15px] leading-[1.6] text-brand-soft">{it.body}</dd>
-              </Reveal>
-            ))}
-          </dl>
+          <Reveal delay={120}>
+            <ConsolePreview />
+          </Reveal>
         </div>
+
+        <dl className="mt-20 grid gap-x-10 gap-y-10 border-t border-brand-line pt-12 sm:grid-cols-2 lg:grid-cols-4">
+          {STAFF_FEATURES.map((it, i) => (
+            <Reveal key={it.title} delay={i * 70}>
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-fill text-brand-ink">
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                  <path
+                    d={it.icon}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <dt className="mt-4 text-[16px] font-semibold tracking-[-0.3px]">{it.title}</dt>
+              <dd className="mt-2 text-[14.5px] leading-[1.6] text-brand-soft">{it.body}</dd>
+            </Reveal>
+          ))}
+        </dl>
       </div>
     </section>
+  );
+}
+
+/**
+ * The board, in miniature, inside a browser frame.
+ *
+ * Static markup, not a screenshot: a PNG of the console goes stale the day the
+ * console changes, and it is blurry on every screen but the one it was taken on. This
+ * is drawn with the same shapes the real board uses - the ticket stub for who is in
+ * the room, keycap tokens, labelled status pills - so it cannot drift far from it.
+ */
+function ConsolePreview() {
+  const rows = [
+    { token: 'G004', name: 'Deepa Nair', via: 'App' },
+    { token: 'G005', name: 'Harpreet Singh', via: 'Walk-in' },
+    { token: 'G006', name: 'Lata Mishra', via: 'App' },
+  ];
+  return (
+    <div className="overflow-hidden rounded-2xl border border-brand-line bg-brand-canvas shadow-[0_1px_2px_rgba(11,12,13,0.05),0_30px_70px_-30px_rgba(11,12,13,0.35)]">
+      {/* Browser chrome */}
+      <div className="flex items-center gap-3 border-b border-brand-line bg-white px-4 py-3">
+        <span className="flex gap-1.5" aria-hidden="true">
+          <span className="h-2.5 w-2.5 rounded-full bg-brand-faint" />
+          <span className="h-2.5 w-2.5 rounded-full bg-brand-faint" />
+          <span className="h-2.5 w-2.5 rounded-full bg-brand-faint" />
+        </span>
+        <span className="mx-auto rounded-md bg-brand-canvas px-10 py-1 text-[11px] text-brand-muted">
+          kramya.app/queue
+        </span>
+      </div>
+
+      <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)] sm:p-5">
+        {/* The stub */}
+        <div className="overflow-hidden rounded-xl border border-brand-ink bg-white">
+          <div className="bg-brand-ink px-4 pb-4 pt-3 text-white">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-semibold uppercase tracking-[1.2px] text-white/50">
+                With doctor
+              </span>
+              <span className="live-dot text-brand-live" style={{ height: 6, width: 6 }} />
+            </div>
+            <p className="mt-3 text-[36px] font-semibold leading-none tracking-[-1.5px] tabular-nums">
+              G003
+            </p>
+            <p className="mt-1.5 text-[12px] text-white/70">Imtiaz Khan</p>
+          </div>
+          <div className="p-3">
+            <span className="flex h-8 items-center justify-center gap-1.5 rounded-lg bg-brand-ink text-[11px] font-semibold text-white">
+              ✓ Complete consultation
+            </span>
+          </div>
+        </div>
+
+        {/* The roster */}
+        <div className="rounded-xl border border-brand-line bg-white">
+          <div className="flex items-center gap-2 border-b border-brand-line px-4 py-2.5">
+            <span className="text-[12px] font-semibold">Waiting here</span>
+            <span className="rounded-full bg-brand-fill px-1.5 text-[10px] font-semibold tabular-nums text-brand-soft">
+              3
+            </span>
+          </div>
+          <ul className="divide-y divide-brand-line">
+            {rows.map((r) => (
+              <li key={r.token} className="flex items-center gap-2.5 px-4 py-2.5">
+                <span className="rounded-md border border-brand-line px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums shadow-[inset_0_-1px_0_rgba(10,10,12,0.06)]">
+                  {r.token}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[12px]">{r.name}</span>
+                <span className="hidden text-[10.5px] text-brand-muted sm:inline">{r.via}</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-fill px-1.5 py-0.5 text-[10px] font-medium text-brand-soft">
+                  ✓ Checked in
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 }
 
 /* ----------------------------------------------------------------- fairness */
 
 /**
- * The objection section.
- *
- * The first question any hospital asks about a remote queue is "so people with the
- * app skip the line?". Answering it early, in the product's own terms, is worth more
- * than another feature grid.
- */
-/**
- * The objection, answered - and not as three cards in a row.
- *
- * It was a generic eyebrow ("The part that matters" - which says nothing) over three
- * equal bordered boxes, which is the layout every SaaS page uses for every trio of
- * anything. Three boxes side by side also flatten these into peers, and they are not:
- * the first is a promise, the second is why the promise holds, and the third is how
- * you would catch us breaking it. That is a sequence, so it is set as one.
- *
- * Sticky statement on the left, hairline-separated answers on the right. No boxes -
- * on a page that already has a token card and a board, three more rounded rectangles
- * is the point at which everything starts looking like a card.
+ * The objection, answered - the first question any hospital asks about a remote
+ * queue. Sticky statement on the left, hairline-separated answers on the right: the
+ * first is a promise, the second is why the promise holds, and the third is how you
+ * would catch us breaking it. That is a sequence, so it is set as one, not as three
+ * equal cards.
  */
 function Fairness() {
   return (
-    <section className="border-y border-brand-line bg-white py-24">
+    <section className="py-28">
       <div className="mx-auto grid max-w-6xl gap-12 px-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-20">
         <Reveal>
-          <div className="lg:sticky lg:top-16">
+          <div className="lg:sticky lg:top-28">
             <SectionLabel>The first question we get</SectionLabel>
-            <h2 className="mt-4 text-balance text-[34px] font-semibold leading-[1.1] tracking-[-1.4px] sm:text-[46px] sm:tracking-[-2px]">
-              &ldquo;So people with the app skip the line?&rdquo;
+            <h2 className="mt-4 text-balance text-[36px] font-semibold leading-[1.08] tracking-[-1.4px] sm:text-[48px] sm:tracking-[-2px]">
+              &ldquo;So people with the app{' '}
+              <span className="font-serif text-[1.08em] font-normal italic tracking-[-0.5px]">
+                skip the line?
+              </span>
+              &rdquo;
             </h2>
             <p className="mt-6 max-w-[42ch] text-[17px] leading-[1.65] text-brand-soft">
-              No. Booking from home buys you the right to wait somewhere else — never an
-              earlier turn. Here is what that rests on.
+              No. Booking from home buys you the right to wait somewhere else — never an earlier
+              turn. Here is what that rests on.
             </p>
           </div>
         </Reveal>
@@ -396,14 +489,14 @@ function Fairness() {
         <dl className="flex flex-col">
           {FACTS.map((f, i) => (
             <Reveal key={f.title} delay={i * 90}>
-              <div className="border-t border-brand-line py-8 first:border-t-0 first:pt-0 lg:py-9">
+              <div className="border-t border-brand-line py-8 first:border-t-0 first:pt-0 lg:py-10">
                 <dt className="flex items-baseline gap-4">
-                  <span className="text-[12px] font-semibold tabular-nums tracking-[1px] text-brand-faint">
+                  <span className="font-serif text-[22px] italic tabular-nums text-brand-faint">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span className="text-[21px] font-semibold tracking-[-0.6px]">{f.title}</span>
+                  <span className="text-[22px] font-semibold tracking-[-0.6px]">{f.title}</span>
                 </dt>
-                <dd className="mt-3 pl-[28px] text-[16px] leading-[1.65] text-brand-soft">
+                <dd className="mt-3 pl-[42px] text-[16px] leading-[1.65] text-brand-soft">
                   {f.body}
                 </dd>
               </div>
@@ -430,41 +523,49 @@ const FACTS = [
   },
 ];
 
-/* `Fact` is gone with the card layout it existed for - the answers are a definition
-   list now, set inline in Fairness, because a <dt>/<dd> pair is what they are. */
-
 /* -------------------------------------------------------------- patient app */
 
 function PatientApp() {
   return (
-    <section className="border-t border-brand-line bg-brand-ink py-24 text-white">
-      <div className="mx-auto max-w-3xl px-6 text-center">
-        <Mark className="mx-auto h-8 w-8 text-white" />
-        <h2 className="mt-7 text-balance text-[32px] font-semibold leading-[1.15] tracking-[-1.2px] sm:text-[40px] sm:tracking-[-1.6px]">
-          The patient app is coming.
+    <section className="relative overflow-hidden bg-brand-ink py-28 text-white">
+      <div
+        aria-hidden="true"
+        className="ledger-grid pointer-events-none absolute inset-0 opacity-70"
+      />
+      <div className="relative mx-auto max-w-3xl px-6 text-center">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.05]">
+          <Mark className="h-7 w-7 text-white" />
+        </span>
+        <h2 className="mt-8 text-balance text-[36px] font-semibold leading-[1.1] tracking-[-1.4px] sm:text-[48px] sm:tracking-[-2px]">
+          The patient app is{' '}
+          <span className="font-serif text-[1.08em] font-normal italic tracking-[-0.5px]">
+            coming.
+          </span>
         </h2>
-        <p className="mx-auto mt-5 max-w-[50ch] text-[16px] leading-[1.65] text-white/65">
-          Kramya is in pilot with its first hospitals. The iOS and Android apps arrive with
-          them — if you would like to know when, tell us where to write.
+        <p className="mx-auto mt-5 max-w-[50ch] text-[16px] leading-[1.65] text-white/60">
+          Kramya is in pilot with its first hospitals. The iOS and Android apps arrive with them —
+          if you would like to know when, tell us where to write.
         </p>
 
         {/*
-          A mailto, not a form.
-
-          "Notify me" needs somewhere to put the address, and the API has no waitlist
-          table or endpoint. A styled input that quietly dropped what people typed
-          would be the worst option on this page - so until that endpoint exists, the
-          button opens a real message to a real person, which loses nothing.
-
-          Upgrading it is a small, separate job: one Prisma model, one public rate-
-          limited POST, one server action here.
+          A mailto, not a form. "Notify me" needs somewhere to put the address, and
+          the API has no waitlist table or endpoint. A styled input that quietly
+          dropped what people typed would be the worst option on this page.
         */}
-        <a
-          href={WAITLIST_MAILTO}
-          className="mt-9 inline-flex rounded-2xl bg-white px-6 py-3.5 text-[15px] font-medium text-brand-ink transition-opacity hover:opacity-90"
-        >
-          Tell me when it launches
-        </a>
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={WAITLIST_MAILTO}
+            className="inline-flex rounded-full bg-white px-6 py-3.5 text-[15px] font-medium text-brand-ink transition-[opacity,transform] hover:opacity-90 active:scale-[0.98]"
+          >
+            Tell me when it launches
+          </a>
+          <Link
+            href="/demo"
+            className="inline-flex rounded-full px-6 py-3.5 text-[15px] font-medium text-white/70 ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            Explore the demo
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -474,25 +575,85 @@ function PatientApp() {
 
 function Footer() {
   return (
-    <footer className="border-t border-brand-line bg-brand-canvas py-12">
-      <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-6 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-2.5">
-          <Mark className="h-[18px] w-[18px]" />
-          <span className="text-[14px] font-semibold tracking-[-0.3px]">Kramya</span>
-          <span className="text-[13px] text-brand-muted">
-            · OPD queues for Indian hospitals
-          </span>
+    <footer className="bg-brand-canvas">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-16">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <Mark className="h-5 w-5" />
+            <span className="text-[16px] font-semibold tracking-[-0.3px]">Kramya</span>
+          </div>
+          <p className="mt-3 max-w-[34ch] text-[14px] leading-[1.6] text-brand-soft">
+            Live OPD queues for Indian hospitals. Patients wait at home and arrive when their turn
+            is near.
+          </p>
+          {/* Where the name comes from - said once, quietly, at the bottom. */}
+          <p className="mt-5 text-[13px] text-brand-muted">
+            <span lang="sa" className="text-brand-soft">
+              क्रम
+            </span>{' '}
+            <span className="font-serif italic">krama</span> — order, sequence.
+          </p>
         </div>
-        <nav className="flex items-center gap-6 text-[14px] text-brand-soft">
-          <Link href="/login" className="transition-colors hover:text-brand-ink">
-            Staff sign-in
-          </Link>
-          <a href={DEMO_MAILTO} className="transition-colors hover:text-brand-ink">
-            Book a demo
-          </a>
-        </nav>
+        <FooterColumn
+          title="Product"
+          links={[
+            { href: '/demo', label: 'Live demo' },
+            { href: '/demo/queue', label: 'Queue board' },
+            { href: '/login', label: 'Staff sign-in' },
+          ]}
+        />
+        <FooterColumn
+          title="Company"
+          links={[
+            { href: DEMO_MAILTO, label: 'Book a demo' },
+            { href: `mailto:${CONTACT}`, label: CONTACT },
+          ]}
+        />
+      </div>
+      <div className="border-t border-brand-line">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-[13px] text-brand-muted">
+          <span>© {new Date().getFullYear()} Kramya</span>
+          <span>Built for OPDs in India</span>
+        </div>
       </div>
     </footer>
+  );
+}
+
+function FooterColumn({
+  title,
+  links,
+}: {
+  title: string;
+  links: { href: string; label: string }[];
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[1.4px] text-brand-muted">
+        {title}
+      </p>
+      <ul className="mt-4 flex flex-col gap-2.5">
+        {links.map((l) => (
+          <li key={l.label}>
+            {l.href.startsWith('/') ? (
+              <Link
+                href={l.href}
+                className="text-[14px] text-brand-soft transition-colors hover:text-brand-ink"
+              >
+                {l.label}
+              </Link>
+            ) : (
+              <a
+                href={l.href}
+                className="text-[14px] text-brand-soft transition-colors hover:text-brand-ink"
+              >
+                {l.label}
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

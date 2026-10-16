@@ -136,6 +136,23 @@ export const rupees = (paise: number): string => (paise / 100).toFixed(2);
  * not get to decide that. `en-CA` formats as YYYY-MM-DD, which is exactly the
  * CalendarDate the API wants.
  */
+/**
+ * Minutes since IST midnight - the one unit the overview's timeline is drawn in.
+ * `h23` so midnight is 0 and not 24, which en-GB alone does not promise.
+ */
+const IST_HM = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+export const istMinutes = (value: Date | string): number => {
+  const [h = 0, m = 0] = IST_HM.format(typeof value === 'string' ? new Date(value) : value)
+    .split(':')
+    .map(Number);
+  return h * 60 + m;
+};
+
 const IST_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' });
 export const istToday = (): string => IST_DATE.format(new Date());
 

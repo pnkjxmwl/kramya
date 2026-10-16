@@ -237,7 +237,7 @@ function SessionCard({ session, doctor }: { session: OPDSession; doctor: string 
   return (
     <Link
       href={`${PATH}/${session.id}`}
-      className="group rounded-lg border border-line bg-surface p-4 shadow-xs transition-colors hover:border-line-strong hover:bg-hover"
+      className="group rounded-xl border border-line bg-surface p-5 shadow-xs transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised"
     >
       {body}
       <span className="mt-3 inline-flex items-center gap-1 text-label font-semibold text-primary">

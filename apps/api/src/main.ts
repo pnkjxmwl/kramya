@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { RedisIoAdapter } from './realtime/redis-io.adapter';
 import { initSentry } from './common/sentry';
 import helmet from 'helmet';
+import { applyHttpSettings } from './common/http-settings';
 
 async function bootstrap(): Promise<void> {
   // Validate configuration before anything else boots. Fail loudly, fail early.
@@ -22,9 +23,9 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
 
-  // Express announces itself on every response. It tells an attacker which stack to
-  // look up known issues for and tells a legitimate client nothing at all.
-  app.getHttpAdapter().getInstance().disable('x-powered-by');
+  // x-powered-by off, and `trust proxy` so the rate limiter sees clients rather
+  // than the load balancer. Shared with the test bootstrap (common/http-settings.ts).
+  applyHttpSettings(app, { trustProxyHops: config.TRUST_PROXY_HOPS });
 
   // Security headers (Phase 10). Two of helmet's defaults are wrong for an API and
   // are set deliberately rather than inherited:

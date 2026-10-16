@@ -24,6 +24,7 @@ import {
   label,
 } from '../../../../components/ui';
 import { PriorityPill, SessionStatusBadge, StatusPill, istTime } from '../ui';
+import { RosterShell, RowMenu, Stage, UpNext } from '../stage';
 import { Live } from '../live';
 import {
   callNext,
@@ -233,269 +234,298 @@ export default async function BoardPage({
 
         It collapses back to one column below `lg`, in the original order.
       */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+      {/*
+        `grid-cols-[minmax(0,1fr)]` below lg is not decoration. With no template the
+        grid's one implicit column is `auto`, which grows to its widest child - a
+        roster row - so on a 390px phone the whole board was 533px wide and the page
+        scrolled sideways. `minmax(0, …)` lets the column be narrower than its content.
+      */}
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         {/*
           `max-h` + its own scroll, not bare `sticky`. A sticky column taller than
           the viewport pins its TOP and leaves the bottom permanently unreachable -
           which on this page is the End-session control, on a laptop, once the
           pace panel is expanded.
         */}
-        <div className="flex flex-col gap-4 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-3.5rem)] lg:overflow-y-auto lg:pb-1 lg:pr-1">
+        {/*
+          Below lg this column dissolves (`contents`) so its parts join the page's one
+          column in the order a phone wants: who is in the room, then who is waiting,
+          THEN the pace and the controls - which are wrapped below and sent last.
+          On a desktop it is the sticky left column, unchanged.
+        */}
+        <div className="flex flex-col gap-4 max-lg:contents lg:sticky lg:top-0 lg:max-h-[calc(100dvh-3.5rem)] lg:overflow-y-auto lg:pb-1 lg:pr-1">
           {/* ------------------------------------------------------------------
               The one dominant action (docs/Design.md 5.7). Exactly one of these
               three states is true, and each has a single obvious next step.
           ------------------------------------------------------------------- */}
-          <Card title="Now with" tone="accent">
-            {inConsultation !== null ? (
-              <>
-                <Patient entry={inConsultation} />
-                <form action={completeConsultation} className="mt-4">
-                  {sessionField}
-                  {hidden('entryId', inConsultation.id)}
-                  <button
-                    type="submit"
-                    className={btn('primary', 'lg') + ' w-full'}
-                    disabled={clinicalDenied}
-                  >
-                    <Icon name="check" className="h-4 w-4" />
-                    Complete consultation
-                  </button>
-                </form>
-                {clinicalDenied && <ClinicalNote />}
-              </>
-            ) : called !== null ? (
-              <>
-                <Patient entry={called} />
-                <p className="mt-2 flex items-center gap-1.5 text-caption text-warning">
-                  <Icon name="bell" className="h-3.5 w-3.5" />
-                  Called{called.recallCount > 0 && ` · not seen ${called.recallCount}×`}. Waiting
-                  for them to come in.
-                </p>
-                <form action={startConsultation} className="mt-4">
-                  {sessionField}
-                  {hidden('entryId', called.id)}
-                  <button
-                    type="submit"
-                    className={btn('primary', 'lg') + ' w-full'}
-                    disabled={doctorAway || clinicalDenied}
-                  >
-                    <Icon name="play" className="h-4 w-4" />
-                    Start consultation
-                  </button>
-                </form>
-                {clinicalDenied && <ClinicalNote />}
-                {/*
-                  Same guard as call-next: the server refuses START_CONSULTATION unless
-                  the doctor is present. Completing is deliberately NOT guarded - a
-                  patient already in the room must always be closable.
-                */}
-                {doctorAway && (
-                  <div className="mt-2.5">
-                    <p className="flex items-start gap-1.5 text-caption text-warning">
-                      <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
-                      {AWAY_REASON[session.doctorPresence] ?? 'The doctor is not available.'}
-                    </p>
-                    <form action={setPresence} className="mt-2">
-                      {sessionField}
-                      <input type="hidden" name="presence" value="PRESENT" />
-                      <button type="submit" className={btn('quiet')}>
-                        <Icon name="user" className="h-4 w-4" />
-                        Mark doctor present
-                      </button>
-                    </form>
-                  </div>
-                )}
-                <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line-soft pt-3">
-                  <form action={skipPatient} className="flex flex-1 items-end gap-2">
+          {inConsultation !== null ? (
+            <Stage
+              state={{
+                label: 'In consultation',
+                icon: 'stethoscope',
+                live: true,
+              }}
+              token={inConsultation.tokenLabel}
+              name={inConsultation.patientName}
+              meta={<EntryMeta entry={inConsultation} />}
+            >
+              <form action={completeConsultation}>
+                {sessionField}
+                {hidden('entryId', inConsultation.id)}
+                <button
+                  type="submit"
+                  className={btn('primary', 'lg') + ' w-full'}
+                  disabled={clinicalDenied}
+                >
+                  <Icon name="check" className="h-4 w-4" />
+                  Complete consultation
+                </button>
+              </form>
+              {clinicalDenied && <ClinicalNote />}
+              <UpNext entries={nextUp(eligible)} />
+            </Stage>
+          ) : called !== null ? (
+            <Stage
+              state={{ label: 'Called', icon: 'bell' }}
+              token={called.tokenLabel}
+              name={called.patientName}
+              meta={<EntryMeta entry={called} />}
+            >
+              <p className="flex items-center gap-1.5 text-caption text-warning">
+                <Icon name="bell" className="h-3.5 w-3.5" />
+                Called
+                {called.recallCount > 0 && ` · not seen ${called.recallCount}×`}. Waiting for them
+                to come in.
+              </p>
+              <form action={startConsultation} className="mt-3">
+                {sessionField}
+                {hidden('entryId', called.id)}
+                <button
+                  type="submit"
+                  className={btn('primary', 'lg') + ' w-full'}
+                  disabled={doctorAway || clinicalDenied}
+                >
+                  <Icon name="play" className="h-4 w-4" />
+                  Start consultation
+                </button>
+              </form>
+              {clinicalDenied && <ClinicalNote />}
+              {/*
+                Same guard as call-next: the server refuses START_CONSULTATION unless
+                the doctor is present. Completing is deliberately NOT guarded - a
+                patient already in the room must always be closable.
+              */}
+              {doctorAway && (
+                <div className="mt-2.5">
+                  <p className="flex items-start gap-1.5 text-caption text-warning">
+                    <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
+                    {AWAY_REASON[session.doctorPresence] ?? 'The doctor is not available.'}
+                  </p>
+                  <form action={setPresence} className="mt-2">
                     {sessionField}
-                    {hidden('entryId', called.id)}
-                    <div className="min-w-0 flex-1">
-                      <label className={label + ' sr-only'} htmlFor="skip-reason">
-                        Reason for skipping
-                      </label>
-                      <input
-                        id="skip-reason"
-                        name="reason"
-                        placeholder="Reason (optional)"
-                        className={input}
-                      />
-                    </div>
+                    <input type="hidden" name="presence" value="PRESENT" />
                     <button type="submit" className={btn('quiet')}>
-                      Skip for now
-                    </button>
-                  </form>
-                  <form action={markNoShow}>
-                    {sessionField}
-                    {hidden('entryId', called.id)}
-                    <button type="submit" className={btn('danger')}>
-                      No-show
+                      <Icon name="user" className="h-4 w-4" />
+                      Mark doctor present
                     </button>
                   </form>
                 </div>
-              </>
-            ) : (
-              <>
-                <p className="text-body text-ink-muted">
-                  {eligible.length === 0
-                    ? 'Nobody has checked in yet. Patients become callable once reception checks them in.'
-                    : `${eligible.length} patient${eligible.length === 1 ? '' : 's'} waiting to be called.`}
-                </p>
-                <form action={callNext} className="mt-4">
+              )}
+              <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line-soft pt-3">
+                <form action={skipPatient} className="flex flex-1 items-end gap-2">
                   {sessionField}
-                  <button
-                    type="submit"
-                    className={btn('primary', 'lg') + ' w-full'}
-                    disabled={eligible.length === 0 || paused || doctorAway}
-                  >
-                    <Icon name="bell" className="h-4 w-4" />
-                    Call next
-                  </button>
-                </form>
-                {paused && (
-                  <p className="mt-2.5 flex items-start gap-1.5 text-caption text-warning">
-                    <Icon name="pause" className="mt-0.5 h-3.5 w-3.5" />
-                    The queue is paused — resume it below before calling anyone.
-                  </p>
-                )}
-                {doctorAway && (
-                  <div className="mt-2.5">
-                    <p className="flex items-start gap-1.5 text-caption text-warning">
-                      <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
-                      {AWAY_REASON[session.doctorPresence] ?? 'The doctor is not available.'} Nobody
-                      can be called in until someone marks them present.
-                    </p>
-                    {/*
-                      The remedy, next to the thing it unblocks. The presence dropdown
-                      further down can still set any of the four states; this is the
-                      one a desk actually needs, in one press, where they are looking.
-                    */}
-                    <form action={setPresence} className="mt-2">
-                      {sessionField}
-                      <input type="hidden" name="presence" value="PRESENT" />
-                      <button type="submit" className={btn('quiet')}>
-                        <Icon name="user" className="h-4 w-4" />
-                        Mark doctor present
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* The muted "Next:" row from docs/Design.md 5.7, in the server's order. */}
-            {eligible.length > 0 && (
-              <div className="mt-4 border-t border-line-soft pt-3">
-                <p className="text-eyebrow uppercase text-ink-muted">Next</p>
-                <p className="mt-1.5 text-caption leading-relaxed text-ink-muted">
-                  {eligible.slice(0, 5).map((e, i) => (
-                    <span key={e.id}>
-                      {i > 0 && ' · '}
-                      <span className="font-semibold tabular-nums text-ink">{e.tokenLabel}</span>{' '}
-                      {e.patientName}
-                    </span>
-                  ))}
-                  {eligible.length > 5 && ` · +${eligible.length - 5} more`}
-                </p>
-              </div>
-            )}
-          </Card>
-
-          <Pace eta={eta} />
-
-          <Card title="Session controls">
-            <div className="flex flex-col gap-3">
-              {paused ? (
-                <form action={resumeQueue}>
-                  {sessionField}
-                  <button type="submit" className={btn('quiet') + ' w-full'}>
-                    <Icon name="play" className="h-4 w-4" />
-                    Resume queue
-                  </button>
-                </form>
-              ) : (
-                <form action={pauseQueue} className="flex items-end gap-2">
-                  {sessionField}
+                  {hidden('entryId', called.id)}
                   <div className="min-w-0 flex-1">
-                    <label className={label + ' mb-1 block'} htmlFor="pause-reason">
-                      Pause reason
+                    <label className={label + ' sr-only'} htmlFor="skip-reason">
+                      Reason for skipping
                     </label>
                     <input
-                      id="pause-reason"
+                      id="skip-reason"
                       name="reason"
-                      placeholder="Optional"
+                      placeholder="Reason (optional)"
                       className={input}
                     />
                   </div>
                   <button type="submit" className={btn('quiet')}>
-                    Pause queue
+                    Skip for now
                   </button>
                 </form>
-              )}
-
-              <form action={setPresence} className="flex items-end gap-2">
+                <form action={markNoShow}>
+                  {sessionField}
+                  {hidden('entryId', called.id)}
+                  <button type="submit" className={btn('danger')}>
+                    No-show
+                  </button>
+                </form>
+              </div>
+              <UpNext entries={nextUp(eligible)} />
+            </Stage>
+          ) : (
+            // Nobody in the room: the stub previews who a call would bring in, in a
+            // quieter ink, so "Call next" says whom it is about to call.
+            <Stage
+              state={
+                eligible.length > 0
+                  ? { label: 'Ready to call', icon: 'bell' }
+                  : { label: 'Nobody waiting', icon: 'clock' }
+              }
+              token={eligible[0]?.tokenLabel ?? null}
+              name={eligible[0]?.patientName ?? 'Nobody checked in yet'}
+              meta={
+                eligible.length > 0
+                  ? `Next up · ${eligible.length} checked in`
+                  : 'Patients become callable once they are checked in'
+              }
+              dim
+            >
+              <form action={callNext}>
                 {sessionField}
-                <div className="min-w-0 flex-1">
-                  <label className={label + ' mb-1 block'} htmlFor="presence">
-                    Doctor presence
-                  </label>
-                  <select
-                    id="presence"
-                    name="presence"
-                    defaultValue={session.doctorPresence}
-                    className={input}
-                  >
-                    <option value="NOT_PRESENT">Not present</option>
-                    <option value="PRESENT">Present</option>
-                    <option value="ON_BREAK">On break</option>
-                    <option value="LEFT">Left for the day</option>
-                  </select>
-                </div>
-                <button type="submit" className={btn('quiet')}>
-                  Update
+                <button
+                  type="submit"
+                  className={btn('primary', 'lg') + ' w-full'}
+                  disabled={eligible.length === 0 || paused || doctorAway}
+                >
+                  <Icon name="bell" className="h-4 w-4" />
+                  {/* "Call next", not "Call B004": the stub above already names who that is,
+                    and this is the command's name on the board, in the docs and in
+                    the console walkthrough that presses it. */}
+                  Call next
                 </button>
               </form>
-
-              <div className="border-t border-line-soft pt-3">
-                <Disclosure summary="End this session" tone="danger">
-                  <p className="text-caption text-ink-muted">
-                    Everyone still outstanding is resolved: patients who were here but not seen are
-                    rescheduled, patients who never arrived are marked no-show, and unpaid holds are
-                    cancelled. This cannot be undone.
+              {paused && (
+                <p className="mt-2.5 flex items-start gap-1.5 text-caption text-warning">
+                  <Icon name="pause" className="mt-0.5 h-3.5 w-3.5" />
+                  The queue is paused — resume it below before calling anyone.
+                </p>
+              )}
+              {doctorAway && (
+                <div className="mt-2.5">
+                  <p className="flex items-start gap-1.5 text-caption text-warning">
+                    <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
+                    {AWAY_REASON[session.doctorPresence] ?? 'The doctor is not available.'} Nobody
+                    can be called in until someone marks them present.
                   </p>
-                  <form action={endSession} className="mt-3 flex items-end gap-2">
+                  {/*
+                    The remedy, next to the thing it unblocks. The presence control
+                    further down can still set any of the four states; this is the one
+                    a desk actually needs, in one press, where they are looking.
+                  */}
+                  <form action={setPresence} className="mt-2">
+                    {sessionField}
+                    <input type="hidden" name="presence" value="PRESENT" />
+                    <button type="submit" className={btn('quiet')}>
+                      <Icon name="user" className="h-4 w-4" />
+                      Mark doctor present
+                    </button>
+                  </form>
+                </div>
+              )}
+              {/* The whole order, including the one previewed above: the list reads the
+                  same in every state, and it is the server's order end to end. */}
+              <UpNext entries={nextUp(eligible)} />
+            </Stage>
+          )}
+
+          <div className="flex flex-col gap-4 max-lg:order-1">
+            <Pace eta={eta} />
+
+            <Card title="Session controls">
+              <div className="flex flex-col gap-3">
+                {paused ? (
+                  <form action={resumeQueue}>
+                    {sessionField}
+                    <button type="submit" className={btn('quiet') + ' w-full'}>
+                      <Icon name="play" className="h-4 w-4" />
+                      Resume queue
+                    </button>
+                  </form>
+                ) : (
+                  <form action={pauseQueue} className="flex items-end gap-2">
                     {sessionField}
                     <div className="min-w-0 flex-1">
-                      <label className={label + ' mb-1 block'} htmlFor="end-reason">
-                        Reason
+                      <label className={label + ' mb-1 block'} htmlFor="pause-reason">
+                        Pause reason
                       </label>
                       <input
-                        id="end-reason"
+                        id="pause-reason"
                         name="reason"
                         placeholder="Optional"
                         className={input}
                       />
                     </div>
-                    <button type="submit" className={btn('danger')}>
-                      End session
+                    <button type="submit" className={btn('quiet')}>
+                      Pause queue
                     </button>
                   </form>
-                </Disclosure>
-              </div>
-            </div>
-          </Card>
+                )}
 
-          {/*
+                <form action={setPresence} className="flex items-end gap-2">
+                  {sessionField}
+                  <div className="min-w-0 flex-1">
+                    <label className={label + ' mb-1 block'} htmlFor="presence">
+                      Doctor presence
+                    </label>
+                    <select
+                      id="presence"
+                      name="presence"
+                      defaultValue={session.doctorPresence}
+                      className={input}
+                    >
+                      <option value="NOT_PRESENT">Not present</option>
+                      <option value="PRESENT">Present</option>
+                      <option value="ON_BREAK">On break</option>
+                      <option value="LEFT">Left for the day</option>
+                    </select>
+                  </div>
+                  <button type="submit" className={btn('quiet')}>
+                    Update
+                  </button>
+                </form>
+
+                <div className="border-t border-line-soft pt-3">
+                  <Disclosure summary="End this session" tone="danger">
+                    <p className="text-caption text-ink-muted">
+                      Everyone still outstanding is resolved: patients who were here but not seen
+                      are rescheduled, and patients who never arrived are marked no-show. Paid
+                      patients are refunded the percentage your queue policy sets for each. This
+                      cannot be undone.
+                    </p>
+                    <form action={endSession} className="mt-3 flex items-end gap-2">
+                      {sessionField}
+                      <div className="min-w-0 flex-1">
+                        <label className={label + ' mb-1 block'} htmlFor="end-reason">
+                          Reason
+                        </label>
+                        <input
+                          id="end-reason"
+                          name="reason"
+                          placeholder="Optional"
+                          className={input}
+                        />
+                      </div>
+                      <button type="submit" className={btn('danger')}>
+                        End session
+                      </button>
+                    </form>
+                  </Disclosure>
+                </div>
+              </div>
+            </Card>
+
+            {/*
             P7-WEB-01. This replaces StaleDataNote, which existed to admit that the
             board did not update itself. It does now - and when the connection drops,
             this says so rather than going quiet, because a board that has silently
             stopped moving is the thing that gets a patient called twice.
           */}
-          <Live sessionId={sessionId} />
+            <Live sessionId={sessionId} />
+          </div>
         </div>
 
         {/* The rosters. Only this side scrolls. */}
         <div className="flex flex-col gap-4">
           <Roster
+            emphasis
             title="Waiting here"
             icon="check-circle"
             entries={eligible}
@@ -566,26 +596,36 @@ export default async function BoardPage({
  */
 function ClinicalNote() {
   return (
-    <p className="mt-2.5 flex items-start gap-1.5 text-caption text-muted">
+    <p className="mt-2.5 flex items-start gap-1.5 text-caption text-ink-muted">
       <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
       Consultations are recorded by the doctor. Ask them to sign in, or an admin.
     </p>
   );
 }
 
-function Patient({ entry }: { entry: QueueEntryView }) {
+/** Under the name on the stage: priority, then where they came from and when. */
+function EntryMeta({ entry }: { entry: QueueEntryView }) {
+  const since =
+    entry.status === 'IN_CONSULTATION' && entry.consultStartedAt !== null
+      ? `started ${istTime(entry.consultStartedAt)}`
+      : entry.calledAt !== null
+        ? `called ${istTime(entry.calledAt)}`
+        : null;
   return (
-    <div className="flex items-center gap-3">
-      <TokenChip size="lg">{entry.tokenLabel}</TokenChip>
-      <div className="min-w-0">
-        <p className="truncate text-h2 text-ink">{entry.patientName}</p>
-        <div className="mt-1">
-          <PriorityPill priority={entry.priority} />
-        </div>
-      </div>
-    </div>
+    <>
+      {entry.priority !== 'NORMAL' && (
+        <span className="mr-1.5 font-semibold text-white">
+          {entry.priority === 'EMERGENCY' ? 'Emergency' : 'Priority'} ·
+        </span>
+      )}
+      {TYPE_LABEL[entry.type] ?? 'Booked'}
+      {since !== null && ` · ${since}`}
+    </>
   );
 }
+
+const nextUp = (entries: QueueEntryView[]) =>
+  entries.map((e) => ({ id: e.id, token: e.tokenLabel, name: e.patientName }));
 
 const TYPE_LABEL: Record<string, string> = {
   WALK_IN: 'Walk-in',
@@ -612,6 +652,7 @@ function Roster({
   sessionId,
   actions,
   empty,
+  emphasis = false,
 }: {
   title: string;
   icon: 'check-circle' | 'skip-forward' | 'home' | 'clock' | 'check';
@@ -620,98 +661,86 @@ function Roster({
   sessionId: string;
   actions: 'eligible' | 'skipped' | 'notArrived' | 'none';
   empty?: React.ReactNode;
+  emphasis?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-line bg-surface shadow-xs">
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line-soft px-4 py-3">
-        <h2 className="flex items-center gap-2 text-h3 text-ink">
-          <Icon name={icon} className="h-4 w-4 text-ink-muted" />
-          {title}
-          <span className="rounded-full bg-sunken px-1.5 py-0.5 text-caption tabular-nums text-ink-muted">
-            {entries.length}
-          </span>
-        </h2>
-        {description !== undefined && (
-          <p className="w-full text-caption text-ink-muted">{description}</p>
-        )}
-      </header>
-
+    <RosterShell
+      title={title}
+      icon={icon}
+      count={entries.length}
+      description={description}
+      emphasis={emphasis}
+    >
       {entries.length === 0 ? (
         (empty ?? null)
       ) : (
         <ul className="divide-y divide-line-soft">
           {entries.map((entry) => (
-            <li key={entry.id} className="px-4 py-3 transition-colors hover:bg-hover">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <TokenChip>{entry.tokenLabel}</TokenChip>
-                <span className="min-w-0 flex-1 truncate text-body font-medium text-ink">
-                  {entry.patientName}
+            <li
+              key={entry.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3 transition-colors last:rounded-b-xl hover:bg-hover"
+            >
+              <TokenChip>{entry.tokenLabel}</TokenChip>
+              <span className="min-w-[8rem] flex-1 truncate text-body font-medium text-ink">
+                {entry.patientName}
+              </span>
+              {TYPE_LABEL[entry.type] !== undefined && (
+                <span className="hidden text-caption text-ink-disabled sm:inline">
+                  {TYPE_LABEL[entry.type]}
                 </span>
-                <PriorityPill priority={entry.priority} />
-                <StatusPill status={entry.status} />
-                {TYPE_LABEL[entry.type] !== undefined && (
-                  <span className="text-caption text-ink-disabled">{TYPE_LABEL[entry.type]}</span>
-                )}
+              )}
+              <PriorityPill priority={entry.priority} />
+              <StatusPill status={entry.status} />
 
-                {actions === 'notArrived' && (
-                  // Checks this one patient in on the spot. To scan a QR instead,
-                  // that is the check-in desk - hence the different wording.
-                  <form action={checkInEntry}>
+              {actions === 'notArrived' && (
+                <form action={checkInEntry}>
+                  <input type="hidden" name="sessionId" value={sessionId} />
+                  <input type="hidden" name="tokenNumber" value={entry.tokenNumber} />
+                  <button type="submit" className={btn('quiet', 'sm')}>
+                    Check in
+                  </button>
+                </form>
+              )}
+
+              {actions === 'skipped' && (
+                <>
+                  <form action={requeuePatient}>
                     <input type="hidden" name="sessionId" value={sessionId} />
-                    <input type="hidden" name="tokenNumber" value={entry.tokenNumber} />
+                    <input type="hidden" name="entryId" value={entry.id} />
                     <button type="submit" className={btn('quiet', 'sm')}>
-                      Check in
+                      Put back in queue
                     </button>
                   </form>
-                )}
-
-                {actions === 'skipped' && (
-                  <>
-                    <form action={requeuePatient}>
-                      <input type="hidden" name="sessionId" value={sessionId} />
-                      <input type="hidden" name="entryId" value={entry.id} />
-                      <button type="submit" className={btn('quiet', 'sm')}>
-                        Put back in queue
-                      </button>
-                    </form>
-                    <form action={markNoShow}>
-                      <input type="hidden" name="sessionId" value={sessionId} />
-                      <input type="hidden" name="entryId" value={entry.id} />
-                      <button type="submit" className={btn('danger', 'sm')}>
-                        No-show
-                      </button>
-                    </form>
-                  </>
-                )}
-              </div>
+                  <form action={markNoShow}>
+                    <input type="hidden" name="sessionId" value={sessionId} />
+                    <input type="hidden" name="entryId" value={entry.id} />
+                    <button type="submit" className={btn('danger', 'sm')}>
+                      No-show
+                    </button>
+                  </form>
+                </>
+              )}
 
               {actions !== 'none' && (
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                <RowMenu label={`More actions for ${entry.tokenLabel}`}>
                   <PriorityForm entry={entry} sessionId={sessionId} />
-                  <CancelForm entry={entry} sessionId={sessionId} />
-                </div>
+                  <div className="border-t border-line-soft pt-3">
+                    <CancelForm entry={entry} sessionId={sessionId} />
+                  </div>
+                </RowMenu>
               )}
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </RosterShell>
   );
 }
 
-/**
- * P6-WEB-04 · audited escalation (docs/PRD.md 8.7).
- *
- * The reason is `required` on the form as well as on the DTO. That audit trail is
- * the only control against this feature being used to jump paying patients, so it
- * must not be something a hurried receptionist can skip and discover later.
- *
- * `<details>` rather than a modal: no client JavaScript, and the row stays readable
- * when it is closed.
- */
 function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: string }) {
   return (
-    <Disclosure summary="Priority">
+    <div>
+      <p className="mb-2 text-label font-semibold text-ink">Priority</p>
       <form action={changePriority} className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="sessionId" value={sessionId} />
         <input type="hidden" name="entryId" value={entry.id} />
@@ -730,7 +759,7 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
             <option value="EMERGENCY">Emergency</option>
           </select>
         </div>
-        <div className="min-w-[16rem] flex-1">
+        <div className="min-w-[12rem] flex-1">
           <label className={label + ' mb-1 block'} htmlFor={`priority-reason-${entry.id}`}>
             Reason
           </label>
@@ -751,7 +780,7 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
         Recorded in the audit log with your name. Other patients are told only that the queue
         changed for a priority case.
       </p>
-    </Disclosure>
+    </div>
   );
 }
 
@@ -764,7 +793,8 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
  */
 function CancelForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: string }) {
   return (
-    <Disclosure summary="Cancel booking" tone="danger">
+    <div>
+      <p className="mb-2 text-label font-semibold text-danger">Cancel booking</p>
       <form action={cancelEntry} className="flex flex-col gap-3">
         <input type="hidden" name="sessionId" value={sessionId} />
         <input type="hidden" name="entryId" value={entry.id} />
@@ -788,7 +818,7 @@ function CancelForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: st
           </label>
         </fieldset>
         <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[16rem] flex-1">
+          <div className="min-w-[12rem] flex-1">
             <label className={label + ' mb-1 block'} htmlFor={`cancel-reason-${entry.id}`}>
               Reason
             </label>
@@ -806,6 +836,6 @@ function CancelForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: st
           </button>
         </div>
       </form>
-    </Disclosure>
+    </div>
   );
 }

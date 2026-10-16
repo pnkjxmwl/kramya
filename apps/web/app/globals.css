@@ -184,28 +184,75 @@
 .wr-still .wr-leave-4 { opacity: 0; }
 
 /* --------------------------------------------------------------------------
-   Outlined display type, for the hero's first line.
+   Page entrance: children arrive in order, 40ms apart.
 
-   The artwork beside it is line art, so the type is drawn the same way: line
-   one is a stroked outline, line two is solid. It ties the two halves of the
-   fold into one language instead of "a headline, and separately a picture".
-
-   **The @supports guard is load-bearing, not caution.** The effect needs
-   `color: transparent` plus a stroke - and in a browser without
-   -webkit-text-stroke that pair leaves an invisible headline, which is the
-   worst possible failure for the first line on the page. Unsupported browsers
-   get a dimmed solid fill instead, which is what the previous version looked
-   like anyway.
+   Motion that explains structure - the header, then the summary, then the
+   detail - rather than motion for its own sake. Capped at eight steps so a long
+   page never makes somebody wait for its bottom half; everything after the
+   eighth child simply arrives with it. `both` so nothing flashes before its
+   delay starts. The reduced-motion block above already flattens it to nothing.
 -------------------------------------------------------------------------- */
-.type-outline {
-  color: rgba(255, 255, 255, 0.34);
+@keyframes k-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
 }
 
-@supports (-webkit-text-stroke: 1px white) {
-  .type-outline {
-    color: transparent;
-    -webkit-text-stroke: 1.4px rgba(255, 255, 255, 0.5);
-  }
+.enter > * {
+  animation: k-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.enter > *:nth-child(2) { animation-delay: 40ms; }
+.enter > *:nth-child(3) { animation-delay: 80ms; }
+.enter > *:nth-child(4) { animation-delay: 120ms; }
+.enter > *:nth-child(5) { animation-delay: 160ms; }
+.enter > *:nth-child(6) { animation-delay: 200ms; }
+.enter > *:nth-child(7) { animation-delay: 240ms; }
+.enter > *:nth-child(n + 8) { animation-delay: 280ms; }
+
+/* --------------------------------------------------------------------------
+   A live indicator: a solid dot with a ring leaving it.
+
+   The dot never moves or fades, so the state is readable in a still frame and
+   under reduced motion; only the halo animates. Always paired with a word
+   ("Live", "Running") - colour is never the whole message (docs/Design.md 8).
+-------------------------------------------------------------------------- */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: currentColor;
+}
+@keyframes k-halo {
+  0%        { transform: scale(1);   opacity: 0.55; }
+  80%, 100% { transform: scale(2.6); opacity: 0; }
+}
+
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: k-halo 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* --------------------------------------------------------------------------
+   The hero's ground: a fine ledger grid that fades out toward the edges.
+
+   A grid rather than a glow, because a queue is a ledger - rows and columns of
+   people and times - and a soft coloured blob behind a headline is the single
+   most recognisable sign of a page nobody designed. Masked so it has no hard
+   edge and sits well under the type.
+-------------------------------------------------------------------------- */
+.ledger-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 65% 40%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 65% 40%, #000 20%, transparent 75%);
 }
 
 /* --------------------------------------------------------------------------

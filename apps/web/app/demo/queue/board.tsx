@@ -3,21 +3,10 @@
 import { useEffect, useState } from 'react';
 import type { SessionEta } from '@opd/contracts';
 import { Icon } from '../../../components/icon';
-import {
-  Badge,
-  Card,
-  EmptyState,
-  PageHeader,
-  TableCard,
-  TokenChip,
-  btn,
-  table,
-  td,
-  th,
-  tr,
-} from '../../../components/ui';
+import { Badge, Card, EmptyState, PageHeader, TokenChip, btn } from '../../../components/ui';
 import { Pace } from '../../(console)/queue/pace';
 import { StatusPill } from '../../(console)/queue/ui';
+import { RosterShell, Stage, UpNext } from '../../(console)/queue/stage';
 import { HOSPITAL, INITIAL_QUEUE, NEXT_WALK_IN, demoEta, type DemoEntry } from '../fixtures';
 
 /**
@@ -116,7 +105,12 @@ export function Board() {
             <Badge tone="success" icon="check-circle">
               Doctor in
             </Badge>
-            <button type="button" onClick={addWalkIn} disabled={walkInAdded} className={btn('quiet')}>
+            <button
+              type="button"
+              onClick={addWalkIn}
+              disabled={walkInAdded}
+              className={btn('quiet')}
+            >
               <Icon name="plus" className="h-4 w-4" />
               Walk-in
             </button>
@@ -125,74 +119,113 @@ export function Board() {
       />
 
       {note !== null && (
-        <p className="mb-4 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5 text-body text-ink-soft">
+        // Keyed on the message so each new one arrives rather than silently replacing
+        // the last - the only feedback a demo visitor gets that their press worked.
+        <p
+          key={note}
+          role="status"
+          className="mb-4 flex animate-fade-up items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-body text-ink-soft shadow-xs"
+        >
+          <Icon name="check-circle" className="h-4 w-4 text-success" />
           {note}
         </p>
       )}
 
       {/* The real board's split: the thing you came here to do stays put on the left
           while only the rosters move. */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-4">
+      {/* minmax(0,1fr) below lg - see the real board: without it the column grows to
+          the widest row and a phone scrolls sideways. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        {/* Dissolves below lg so the rosters follow the stage - see the real board. */}
+        <div className="flex flex-col gap-4 max-lg:contents">
           {/* Exactly one of these two states is true, and each has one obvious next
               step - the real board's rule (docs/Design.md 5.7). */}
-          <Card title="Now with" tone="accent">
-            {inRoom !== null ? (
-              <>
-                <Patient entry={inRoom} />
-                <button
-                  type="button"
-                  onClick={complete}
-                  className={btn('primary', 'lg') + ' mt-4 w-full'}
-                >
-                  <Icon name="check" className="h-4 w-4" />
-                  Complete consultation
+          {inRoom !== null ? (
+            <Stage
+              state={{
+                label: 'In consultation',
+                icon: 'stethoscope',
+                live: true,
+              }}
+              token={inRoom.token}
+              name={inRoom.patient}
+              meta={
+                <>
+                  {inRoom.type === 'ONLINE' ? 'Booked on the app' : 'Registered at the counter'}
+                  {inRoom.waitingMins !== null && ` · waited ${inRoom.waitingMins}m`}
+                </>
+              }
+            >
+              <button type="button" onClick={complete} className={btn('primary', 'lg') + ' w-full'}>
+                <Icon name="check" className="h-4 w-4" />
+                Complete consultation
+              </button>
+              <UpNext
+                entries={waiting.map((e) => ({
+                  id: e.id,
+                  token: e.token,
+                  name: e.patient,
+                }))}
+              />
+            </Stage>
+          ) : (
+            <Stage
+              state={
+                waiting.length > 0
+                  ? { label: 'Ready to call', icon: 'bell' }
+                  : { label: 'Nobody waiting', icon: 'clock' }
+              }
+              token={waiting[0]?.token ?? null}
+              name={waiting[0]?.patient ?? 'Nobody checked in yet'}
+              meta={
+                waiting.length > 0
+                  ? `Next up · ${waiting.length} checked in`
+                  : 'Check somebody in to make them callable'
+              }
+              dim
+            >
+              <button
+                type="button"
+                onClick={callNext}
+                disabled={callBlocked !== undefined}
+                title={callBlocked}
+                className={btn('primary', 'lg') + ' w-full'}
+              >
+                <Icon name="bell" className="h-4 w-4" />
+                Call next patient
+              </button>
+              <UpNext
+                entries={waiting.map((e) => ({ id: e.id, token: e.token, name: e.patient }))}
+              />
+            </Stage>
+          )}
+
+          <div className="flex flex-col gap-4 max-lg:order-1">
+            {/* The console's own pace panel, rendered from a contract-shaped fixture. */}
+            {eta !== null && <Pace eta={eta} />}
+
+            <Card title="Session controls">
+              <div className="flex flex-col gap-3">
+                <button type="button" disabled className={btn('quiet') + ' w-full'}>
+                  <Icon name="pause" className="h-4 w-4" />
+                  Pause queue
                 </button>
-              </>
-            ) : (
-              <>
-                <p className="text-body text-ink-muted">
-                  Nobody is with the doctor. {waiting.length > 0
-                    ? `${waiting[0]?.token} is next.`
-                    : 'Check somebody in to make them callable.'}
+                <button type="button" disabled className={btn('danger') + ' w-full'}>
+                  <Icon name="x" className="h-4 w-4" />
+                  End session
+                </button>
+                <p className="text-caption text-ink-muted">
+                  Disabled in the demo — ending a session is irreversible, and there is nothing here
+                  to end.
                 </p>
-                <button
-                  type="button"
-                  onClick={callNext}
-                  disabled={callBlocked !== undefined}
-                  title={callBlocked}
-                  className={btn('primary', 'lg') + ' mt-4 w-full'}
-                >
-                  <Icon name="arrow-right" className="h-4 w-4" />
-                  Call next patient
-                </button>
-              </>
-            )}
-          </Card>
-
-          {/* The console's own pace panel, rendered from a contract-shaped fixture. */}
-          {eta !== null && <Pace eta={eta} />}
-
-          <Card title="Session controls">
-            <div className="flex flex-col gap-3">
-              <button type="button" disabled className={btn('quiet') + ' w-full'}>
-                <Icon name="pause" className="h-4 w-4" />
-                Pause queue
-              </button>
-              <button type="button" disabled className={btn('danger') + ' w-full'}>
-                <Icon name="x" className="h-4 w-4" />
-                End session
-              </button>
-              <p className="text-caption text-ink-muted">
-                Disabled in the demo — ending a session is irreversible, and there is
-                nothing here to end.
-              </p>
-            </div>
-          </Card>
+              </div>
+            </Card>
+          </div>
         </div>
 
         <div className="flex flex-col gap-5">
           <Roster
+            emphasis
             title="Waiting here"
             icon="check-circle"
             entries={waiting}
@@ -229,81 +262,46 @@ function Roster({
   entries,
   onCheckIn,
   empty,
+  emphasis = false,
 }: {
   title: string;
   icon: 'check-circle' | 'home' | 'check';
   entries: DemoEntry[];
   onCheckIn?: (entry: DemoEntry) => void;
   empty?: React.ReactNode;
+  emphasis?: boolean;
 }) {
+  // The real board's rows, not a table: the same shape a receptionist will meet on
+  // the day, which is the point of a demo.
   return (
-    <TableCard title={title} description={`${entries.length}`}>
+    <RosterShell title={title} icon={icon} count={entries.length} emphasis={emphasis}>
       {entries.length === 0 ? (
         (empty ?? <EmptyState icon={icon} title="Nothing here yet" />)
       ) : (
-        <table className={table}>
-          <thead>
-            <tr>
-              <th className={th}>Token</th>
-              <th className={th}>Patient</th>
-              <th className={th}>Source</th>
-              <th className={th}>Waiting</th>
-              <th className={th}>Status</th>
+        <ul className="divide-y divide-line-soft">
+          {entries.map((e) => (
+            <li
+              key={e.id}
+              className="flex animate-fade-up flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3 transition-colors last:rounded-b-xl hover:bg-hover"
+            >
+              <TokenChip>{e.token}</TokenChip>
+              <span className="min-w-[8rem] flex-1 truncate text-body font-medium text-ink">
+                {e.patient}
+              </span>
+              <span className="hidden text-caption text-ink-disabled sm:inline">
+                {e.type === 'ONLINE' ? 'App' : 'Walk-in'}
+                {e.waitingMins !== null && e.status === 'CHECKED_IN' && ` · ${e.waitingMins}m`}
+              </span>
+              <StatusPill status={e.status} />
               {onCheckIn !== undefined && (
-                <th className={th}>
-                  <span className="sr-only">Actions</span>
-                </th>
+                <button type="button" onClick={() => onCheckIn(e)} className={btn('quiet', 'sm')}>
+                  Check in
+                </button>
               )}
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr key={e.id} className={tr}>
-                <td className={td}>
-                  <TokenChip>{e.token}</TokenChip>
-                </td>
-                <td className={td + ' font-medium'}>{e.patient}</td>
-                <td className={td + ' text-ink-muted'}>
-                  {e.type === 'ONLINE' ? 'App' : 'Counter'}
-                </td>
-                <td className={td + ' tabular-nums text-ink-muted'}>
-                  {e.waitingMins === null ? '—' : `${e.waitingMins}m`}
-                </td>
-                <td className={td}>
-                  <StatusPill status={e.status} />
-                </td>
-                {onCheckIn !== undefined && (
-                  <td className={td + ' text-right'}>
-                    <button
-                      type="button"
-                      onClick={() => onCheckIn(e)}
-                      className={btn('quiet', 'sm')}
-                    >
-                      Check in
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </li>
+          ))}
+        </ul>
       )}
-    </TableCard>
-  );
-}
-
-/** The patient block inside "Now with", as the real board draws it. */
-function Patient({ entry }: { entry: DemoEntry }) {
-  return (
-    <div className="flex items-center gap-3">
-      <TokenChip size="lg">{entry.token}</TokenChip>
-      <div className="min-w-0">
-        <p className="truncate text-h3 text-ink">{entry.patient}</p>
-        <p className="mt-0.5 text-caption text-ink-muted">
-          {entry.type === 'ONLINE' ? 'Booked on the app' : 'Registered at the counter'}
-          {entry.waitingMins !== null && ` · waited ${entry.waitingMins}m`}
-        </p>
-      </div>
-    </div>
+    </RosterShell>
   );
 }

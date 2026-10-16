@@ -114,3 +114,53 @@ describe('rate limiting (P9-BE-01)', () => {
     expect(statuses).not.toContain(429);
   });
 });
+
+/**
+ * The same limiter, behind a load balancer - which is where it runs in production.
+ *
+ * Every test above talks to the API directly, so `req.ip` is the real caller and
+ * the limiter looked correct. Behind Render's balancer, with `trust proxy` unset,
+ * `req.ip` was the BALANCER for every request: the whole platform shared one
+ * bucket, and the eleventh login in any minute, from anyone, locked out everyone.
+ */
+describe('rate limiting behind one proxy hop (TRUST_PROXY_HOPS=1)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+
+  beforeAll(async () => {
+    ({ app, prisma } = await createTestApp([], { trustProxyHops: 1 }));
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await resetDb(prisma);
+  });
+
+  /** What the balancer forwards: whatever the client sent, then the address it saw. */
+  const loginVia = (forwardedFor: string) =>
+    request(app.getHttpServer())
+      .post('/auth/login')
+      .set('x-forwarded-for', forwardedFor)
+      .send({ email: 'nobody@example.test', password: 'wrong-password-here' });
+
+  it('gives each client its own bucket, so one guesser does not lock out everyone', async () => {
+    for (let i = 0; i < 12; i += 1) await loginVia('203.0.113.7');
+    expect((await loginVia('203.0.113.7')).status).toBe(429);
+
+    // A different patient, through the same balancer, in the same minute.
+    expect((await loginVia('198.51.100.23')).status).not.toBe(429);
+  });
+
+  it('cannot be dodged by forging X-Forwarded-For', async () => {
+    // The client controls everything LEFT of what the balancer appends. Trusting a
+    // hop count rather than `true` is what makes that part worthless to forge.
+    const codes: number[] = [];
+    for (let i = 0; i < 12; i += 1) {
+      codes.push((await loginVia(`10.0.0.${i}, 203.0.113.7`)).status);
+    }
+    expect(codes).toContain(429);
+  });
+});

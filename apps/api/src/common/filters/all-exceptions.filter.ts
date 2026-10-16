@@ -61,6 +61,30 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    // The body parser runs before Nest and throws its own errors (http-errors, which
+    // mark themselves `expose`). An oversized body used to land in the branch below
+    // and answer 500 - telling the caller WE broke, logging at error level and paging
+    // Sentry, for a request the client got wrong. The parser's own message is not
+    // passed through: it names the parser and the byte offset, which is internals.
+    const parser = asBodyParserError(exception);
+    if (parser !== null) {
+      return {
+        status: parser.status,
+        body: {
+          error: {
+            code: 'VALIDATION_FAILED',
+            message:
+              parser.status === 413
+                ? 'Request body is too large'
+                : parser.type === 'entity.parse.failed'
+                  ? 'Request body is not valid JSON'
+                  : 'Request body could not be read',
+            ...withId,
+          },
+        },
+      };
+    }
+
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       return {
@@ -79,7 +103,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
                     ? 'VALIDATION_FAILED'
                     : 'INTERNAL_ERROR',
             message:
-              status === 429 ? 'Too many requests. Please wait and try again.' : exception.message,
+              status === 429
+                ? 'Too many requests. Please wait and try again.'
+                : status === 400
+                  ? malformedRequestMessage(exception.message)
+                  : exception.message,
             ...withId,
           },
         },
@@ -92,4 +120,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
       body: { error: { code: 'INTERNAL_ERROR', message: 'Internal server error', ...withId } },
     };
   }
+}
+
+/** An error from Express's body parser - a client fault, with a 4xx of its own. */
+function asBodyParserError(exception: unknown): { status: number; type: string } | null {
+  if (typeof exception !== 'object' || exception === null) return null;
+  const e = exception as { status?: unknown; type?: unknown; expose?: unknown };
+  if (e.expose !== true || typeof e.type !== 'string' || !e.type.startsWith('entity.')) return null;
+  if (typeof e.status !== 'number' || e.status < 400 || e.status >= 500) return null;
+  return { status: e.status, type: e.type };
+}
+
+/**
+ * Nest turns a body-parser SyntaxError (bad JSON) or an Express URIError (a bad
+ * %-escape in the path) into `new BadRequestException(err.message)` - the parser's
+ * own sentence, byte offset included - and throws the original away. Nothing in
+ * this API throws a bare BadRequestException itself (validation is an AppError),
+ * so a 400 arriving here is always one of those two, and gets a sentence of ours.
+ */
+function malformedRequestMessage(raw: string): string {
+  return /JSON/.test(raw) ? 'Request body is not valid JSON' : 'Request could not be read';
 }

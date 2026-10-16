@@ -29,6 +29,31 @@
 > into `apps/mobile/theme.ts` above the token. Every mobile screen reads that one token,
 > so the fix is one line whenever the call is made.
 
+> ### Web, as built (2026-09-26) — read this before the teal tables below
+>
+> The console moved onto the same **ink** palette as the patient app on 2026-09-13
+> (`tailwind.config.ts` `primary: #0B0B0C`); the teal values in §2 describe no current
+> screen. `tailwind.config.ts` is the authority for every web value, as `theme.ts` is for
+> mobile. What the 2026-09-26 pass added, and why:
+>
+> - **The token is drawn as a ticket.** The board's "now with the doctor" is an ink stub
+>   with the token at 56px, a notched tear line, and a white body for the actions
+>   (`app/(console)/queue/stage.tsx`). §5.7's "one dominant element" was a card like
+>   every other card, with the token at 17px. Roster tokens are keycaps (`shadow-keycap`).
+> - **Rare row actions live behind one ⋯ per row** (`RowMenu`). Every row used to show
+>   two open disclosures, half of them red.
+> - **The overview draws the day** (`DayTimeline`): sessions as bars on an IST axis with
+>   a Now line, each with its status badge in words beside it (colour is never alone).
+> - **Motion is structural and small:** pages stagger in 40ms apart (`.enter`), live
+>   states use a halo that leaves a still dot (`.live-dot`), changed numbers settle
+>   (`animate-tick`), buttons press to 98%. All of it collapses under reduced motion.
+> - **Instrument Serif, italic, public pages only** — one or two words per headline
+>   (`font-serif`). Never in the console, never for body text.
+> - **Shadows and the focus ring lost their last teal/slate tint.** The focus ring was
+>   teal at 55% (1.9:1 on white, under the 3:1 WCAG 2.4.11 asks); it is ink now.
+> - **No gradients** still holds (§2.5). The hero's texture is a masked 1px ledger grid,
+>   not a glow.
+
 **Status:** Draft v1 (web); mobile superseded by the handoff above
 **Theme:** Calm clinical · Light mode (MVP) · Inter
 **Companion docs:** PRD.md · Architecture.md · Rules.md · Phases.md

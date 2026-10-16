@@ -90,10 +90,10 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
             onClick={onNavigate}
             aria-current={active ? 'page' : undefined}
             className={
-              'group relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-label transition-colors duration-100 ' +
+              'group relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-label transition-colors duration-100 ' +
               (active
-                ? 'bg-brand-50 font-semibold text-primary'
-                : 'text-ink-muted hover:bg-sunken hover:text-ink')
+                ? 'bg-sunken font-semibold text-ink'
+                : 'text-ink-muted hover:bg-hover hover:text-ink')
             }
           >
             {/*
@@ -108,7 +108,10 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
                 (active ? 'opacity-100' : 'opacity-0')
               }
             />
-            <Icon name={link.icon} className="h-[18px] w-[18px]" />
+            <Icon
+              name={link.icon}
+              className={'h-[18px] w-[18px] ' + (active ? 'text-ink' : 'text-ink-disabled group-hover:text-ink-muted')}
+            />
             {link.label}
           </Link>
         );
@@ -118,26 +121,88 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
 }
 
 function Identity({ viewer }: { viewer: Viewer }) {
+  const name = viewer.hospitalName ?? 'No active hospital';
   return (
-    <div className="min-w-0">
-      {/* The hospital and the role, together and always visible. An admin at two
-          hospitals needs to know which one this action is about to change. */}
-      <p className="truncate text-label font-medium text-ink" title={viewer.hospitalName ?? undefined}>
-        {viewer.hospitalName ?? 'No active hospital'}
-      </p>
-      <p className="mt-0.5 flex items-center gap-1.5 text-caption text-ink-muted">
-        {viewer.role !== null && (
-          <span className="rounded bg-sunken px-1.5 py-px text-eyebrow uppercase text-ink-muted">
-            {viewer.role}
+    <div className="flex min-w-0 items-center gap-3">
+      {/* The hospital as a mark of its own - initials on ink - so the one fact that
+          must never be misread (which hospital this is) is also the most visible
+          thing in the rail, not a line of body text under the logo. */}
+      <span
+        aria-hidden="true"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink text-[13px] font-semibold tracking-tight text-white shadow-button"
+      >
+        {initials(name)}
+      </span>
+      <div className="min-w-0">
+        {/* The hospital and the role, together and always visible. An admin at two
+            hospitals needs to know which one this action is about to change. */}
+        <p className="truncate text-label font-semibold text-ink" title={name}>
+          {name}
+        </p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-caption text-ink-muted">
+          {viewer.role !== null && (
+            <span className="shrink-0 text-eyebrow uppercase text-ink-soft">{viewer.role}</span>
+          )}
+          {viewer.role !== null && <span aria-hidden="true">·</span>}
+          <span className="truncate" title={viewer.email}>
+            {viewer.email}
           </span>
-        )}
-        <span className="truncate" title={viewer.email}>
-          {viewer.email}
-        </span>
-      </p>
+        </p>
+      </div>
     </div>
   );
 }
+
+/** "Apollo Clinic" -> "AC"; one word -> its first two letters. */
+function initials(name: string): string {
+  const words = name.split(/\s+/).filter((w) => /^[A-Za-z]/.test(w));
+  if (words.length === 0) return 'K';
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return (words[0]![0]! + words[1]![0]!).toUpperCase();
+}
+
+/**
+ * The time in India, in the rail.
+ *
+ * A queue desk runs on the clock - "seen by 11:40" means nothing if the screen does
+ * not say what time it is now - and the console is often opened on a machine whose
+ * own clock is set to some other zone. Every time on every board is IST, so this is
+ * too. Rendered after mount only: a server-rendered time is stale by the time it
+ * arrives and would hydrate as a mismatch.
+ */
+function IstClock() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 15_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-caption text-ink-muted">
+      <span className="flex items-center gap-2">
+        <Icon name="clock" className="h-3.5 w-3.5 text-ink-disabled" />
+        {now === null ? '\u00a0' : IST_DAY.format(now)}
+      </span>
+      <span className="font-semibold tabular-nums text-ink">
+        {now === null ? '' : IST_CLOCK.format(now)}
+        <span className="ml-1 font-medium text-ink-disabled">IST</span>
+      </span>
+    </div>
+  );
+}
+
+const IST_DAY = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+});
+const IST_CLOCK = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Kolkata',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 
 function SignOut({ compact = false }: { compact?: boolean }) {
   const [pending, setPending] = useState(false);
@@ -151,7 +216,7 @@ function SignOut({ compact = false }: { compact?: boolean }) {
         await fetch('/api/auth/logout', { method: 'POST' });
         window.location.href = '/login';
       }}
-      className={btn('quiet', 'sm') + (compact ? '' : ' w-full')}
+      className={btn('ghost', 'sm') + (compact ? '' : ' h-8 w-full justify-start px-2.5')}
     >
       <Icon name="log-out" className="h-3.5 w-3.5" />
       {pending ? 'Signing out…' : 'Sign out'}
@@ -168,7 +233,10 @@ export function ConsoleChrome({
    * root so a visitor with no session is not bounced to /login by their own logo.
    */
   homeHref = '/overview',
+  /** Off in the demo, whose sample day is a fixed Friday - a real clock beside it contradicts it. */
+  clock = true,
 }: {
+  clock?: boolean;
   links: NavLink[];
   viewer: Viewer;
   homeHref?: string;
@@ -200,17 +268,21 @@ export function ConsoleChrome({
       {/* ------------------------------------------------------------------
           Desktop: the rail. Fixed, and it does not scroll with the content.
       ------------------------------------------------------------------- */}
-      <aside className="hidden w-[240px] shrink-0 flex-col border-r border-line bg-surface lg:flex">
-        <div className="px-4 py-4">
+      <aside className="hidden w-[252px] shrink-0 flex-col border-r border-line bg-surface lg:flex">
+        <div className="flex h-14 items-center px-5">
           <Brand href={homeHref} />
         </div>
-        <div className="border-y border-line-soft bg-canvas px-4 py-3">
-          <Identity viewer={viewer} />
+        <div className="px-3">
+          <div className="rounded-xl border border-line bg-canvas px-3 py-3">
+            <Identity viewer={viewer} />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-3 py-3">
+        <div className="flex-1 overflow-y-auto px-3 pb-3 pt-5">
+          <p className="mb-1.5 px-2.5 text-eyebrow uppercase text-ink-disabled">Workspace</p>
           <Links links={links} />
         </div>
-        <div className="border-t border-line-soft px-3 py-3">
+        <div className="flex flex-col gap-1 border-t border-line-soft px-3 py-3">
+          {clock && <IstClock />}
           <SignOut />
         </div>
       </aside>
@@ -254,13 +326,16 @@ export function ConsoleChrome({
                 <Icon name="x" className="h-4 w-4" title="Close navigation" />
               </button>
             </div>
-            <div className="border-y border-line-soft bg-canvas px-4 py-3">
-              <Identity viewer={viewer} />
+            <div className="px-3">
+              <div className="rounded-xl border border-line bg-canvas px-3 py-3">
+                <Identity viewer={viewer} />
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="flex-1 overflow-y-auto px-3 pb-3 pt-5">
               <Links links={links} onNavigate={() => setOpen(false)} />
             </div>
-            <div className="border-t border-line-soft px-3 py-3">
+            <div className="flex flex-col gap-1 border-t border-line-soft px-3 py-3">
+              {clock && <IstClock />}
               <SignOut />
             </div>
           </div>
@@ -281,7 +356,7 @@ export function ConfigTabs({ tabs }: { tabs: { href: string; label: string }[] }
 
   return (
     <nav
-      className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-line bg-canvas p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-xl border border-line bg-sunken p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="Configuration"
     >
       {tabs.map((tab) => {
@@ -292,7 +367,7 @@ export function ConfigTabs({ tabs }: { tabs: { href: string; label: string }[] }
             href={tab.href}
             aria-current={active ? 'page' : undefined}
             className={
-              'whitespace-nowrap rounded-md px-3 py-1.5 text-label transition-colors duration-100 ' +
+              'whitespace-nowrap rounded-lg px-3 py-1.5 text-label transition-colors duration-100 ' +
               (active
                 ? 'bg-surface font-semibold text-ink shadow-xs'
                 : 'text-ink-muted hover:text-ink')

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   RazorpayWebhookEvent,
@@ -21,12 +21,17 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { env } from '../../config/env';
 import { NotFoundError, ValidationFailedError } from '../../common/errors';
 import { isUniqueViolation } from '../../common/prisma-errors';
-import { QueueService, type CommandContext, type QueueActor } from '../queue/queue.service';
+import {
+  QueueService,
+  type CommandContext,
+  type QueueActor,
+  type RecordInput,
+} from '../queue/queue.service';
 import { QueuePolicyService } from '../config/queue-policy.service';
 import { EtaService } from '../eta/eta.service';
 import { endSession } from '../queue/commands/end-session';
 import { joinQueue } from '../queue/commands/join';
-import { applyPaymentConfirmation } from '../queue/commands/confirm-payment';
+import { applyPaymentConfirmation, whyPaymentCannotBook } from '../queue/commands/confirm-payment';
 import { applyCancellation } from '../queue/commands/cancel-entry';
 import { toCommandResult } from '../queue/commands/result';
 import { RazorpayClient } from './razorpay.client';
@@ -169,7 +174,7 @@ const AWAITING_A_TURN: QueueEntryStatus[] = [
 const SESSION_RUNNING: SessionStatus[] = ['OPEN_FOR_REGISTRATION', 'ACTIVE'];
 
 @Injectable()
-export class PaymentsService {
+export class PaymentsService implements OnModuleInit {
   private readonly log = new Logger(PaymentsService.name);
 
   constructor(
@@ -179,6 +184,67 @@ export class PaymentsService {
     private readonly razorpay: RazorpayClient,
     private readonly eta: EtaService,
   ) {}
+
+  onModuleInit(): void {
+    this.queue.registerHook((ctx, records) => this.settleOutcomes(ctx, records));
+  }
+
+  /**
+   * The refund a hospital configured for how a paid booking ENDED, raised in the
+   * transaction that ended it.
+   *
+   * `cancellationRules` has always had two outcome percentages - `noShowRefundPct`
+   * (docs/PRD.md 8.9) and `sessionCancelledRefundPct` (8.11, default 100%) - and the
+   * console lets an admin set both. Nothing ever read them. A doctor who left early
+   * sent every paid patient still in the waiting room to RESCHEDULED with no refund,
+   * whatever the hospital had configured; a no-show got nothing whatever its setting.
+   *
+   * A patient who was present but left unseen is recorded as ENTRY_CANCELLED with
+   * `atSessionEnd: true`; that event receives the full refund promised by END_SESSION.
+   *
+   * `refundForCancellation` is the same arithmetic the cancel paths use - it refunds
+   * the percentage MINUS anything already refunded, so it can never pay twice.
+   */
+  private async settleOutcomes(
+    ctx: CommandContext,
+    records: readonly RecordInput[],
+  ): Promise<(() => Promise<void>) | null> {
+    const rules = ctx.policy.cancellationRules;
+    const raised: RaisedRefund[] = [];
+
+    for (const record of records) {
+      if (typeof record.entryId !== 'string') continue;
+      const pct =
+        record.type === 'ENTRY_NO_SHOW'
+          ? rules.noShowRefundPct
+          : record.type === 'ENTRY_RESCHEDULED'
+            ? rules.sessionCancelledRefundPct
+        : record.type === 'ENTRY_CANCELLED' && record.metadata?.atSessionEnd === true
+          ? 100
+            : 0;
+      if (pct <= 0) continue;
+
+      const refund = await refundForCancellation(ctx, {
+        entryId: record.entryId,
+        hospitalId: ctx.session.hospitalId,
+        pct,
+        reason:
+          record.type === 'ENTRY_NO_SHOW'
+            ? `No-show (${pct}% per hospital policy)`
+            : record.metadata?.atSessionEnd === true
+              ? 'Session ended before consultation: full refund'
+              : `Not seen before the session ended (${pct}% per hospital policy)`,
+      });
+      if (refund !== null) raised.push(refund);
+    }
+
+    if (raised.length === 0) return null;
+    return async () => {
+      for (const refund of raised) {
+        await this.sendRefundToGateway(refund.refundId, refund.paymentId, refund.amountPaise);
+      }
+    };
+  }
 
   // -------------------------------------------------------------------------
   // Join
@@ -520,10 +586,11 @@ export class PaymentsService {
           select: { id: true },
         });
         await ctx.tx.payment.update({ where: { id: payment.id }, data: { status: 'SUCCESS', razorpayPaymentId: entity.id } });
-        if (!live || (entry.status !== 'RESERVED' && !expired)) {
+        const refusal = live ? await whyPaymentCannotBook(ctx, entry) : 'Session ended before the payment was confirmed';
+        if (!live || refusal !== null) {
           const refund = await refundForCancellation(ctx, {
             entryId: entry.id, hospitalId: payment.hospitalId, pct: 100,
-            reason: 'Payment arrived after the booking was cancelled or the session ended',
+            reason: refusal ?? 'Session ended before the payment was confirmed',
           });
           return { ack: { handled: 'REFUND_UPDATED' }, refund };
         }
@@ -533,6 +600,15 @@ export class PaymentsService {
     });
     if (outcome.refund) await this.sendRefundToGateway(outcome.refund.refundId, outcome.refund.paymentId, outcome.refund.amountPaise);
     return outcome.ack;
+  }
+
+  /** After a committed claim: send the refund, or report that someone else already did. */
+  private async refunded(raised: RaisedRefund | null): Promise<WebhookAck> {
+    if (raised === null) {
+      return { handled: 'DUPLICATE' };
+    }
+    await this.sendRefundToGateway(raised.refundId, raised.paymentId, raised.amountPaise);
+    return { handled: 'REFUND_UPDATED' };
   }
 
   /** Marks the attempt failed. The hold stays live so the patient can simply retry. */
@@ -823,19 +899,8 @@ export class PaymentsService {
   }
 
   async endSession(sessionId: string, actor: QueueActor, input: EndSessionRequest): Promise<QueueCommandResult> {
-    const refunds: RaisedRefund[] = [];
-    const result = await endSession(this.queue, sessionId, actor, input, async (ctx, entryId, target) => {
-      const refund = await refundForCancellation(ctx, {
-        entryId, hospitalId: actor.hospitalId,
-        pct: target === 'NO_SHOW' ? ctx.policy.cancellationRules.noShowRefundPct : 100,
-        reason: target === 'NO_SHOW' ? 'Session ended: no-show refund per clinic policy' : 'Session ended before consultation: full refund',
-      });
-      if (refund) refunds.push(refund);
-    });
-    for (const refund of refunds) await this.sendRefundToGateway(refund.refundId, refund.paymentId, refund.amountPaise);
-    return result;
+    return endSession(this.queue, sessionId, actor, input);
   }
-
   async readMyEntry(entryId: string): Promise<MyQueueEntry> {
     const row = await this.prisma.queueEntry.findUniqueOrThrow({
       where: { id: entryId },
