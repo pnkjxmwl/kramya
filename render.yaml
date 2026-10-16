@@ -1,88 +1,23 @@
-# Render Blueprint — the API, its Postgres and its Key Value store (P10-INFRA-01/02, P10-BE-01).
-#
-# Backend only, deliberately. The console goes to Vercel (P10-WEB-01) and the mobile
-# app to EAS; neither belongs in here.
-#
-# Apply it: Render Dashboard → New → Blueprint → point at this repo. Render prompts
-# once for every `sync: false` value below, and ONLY on the first apply — after that
-# they are edited in the dashboard, never here.
-#
-# ---------------------------------------------------------------------------
-# FREE TIER — what it costs, and the date that matters
-# ---------------------------------------------------------------------------
-# All three resources are on Render's free plans. That is a deliberate choice for a
-# first deploy, and it disables things this product genuinely depends on:
-#
-#   1. The web service SPINS DOWN after 15 minutes idle and cold-starts on the next
-#      request. While it is down there are no WebSockets and no sweepers - no ETA
-#      ticks, no reservation expiry, no no-show timers, no arrival nudges. Realtime
-#      will look broken on this plan. It is not; it is asleep. Do not judge Phase 7
-#      or Phase 8 behaviour here.
-#
-#   2. **The Postgres EXPIRES 30 DAYS AFTER CREATION** (14-day grace, then deleted).
-#      Write the date down. Anything in it on that day is gone. This is fine for a
-#      throwaway staging database and is never acceptable under a real hospital.
-#
-#   3. Key Value is 25 MB with no persistence. This one is genuinely fine: it holds
-#      Socket.IO pub/sub and rate-limit counters, neither of which is durable state.
-#
-#   4. 750 free instance-hours per workspace per month, shared across services.
-#
-# Going paid is three `plan:` values and moving the migration step back out of
-# buildCommand into `preDeployCommand:` - a pre-deploy command is ignored on free.
-#
-# ---------------------------------------------------------------------------
-# REGION — read this before applying
-# ---------------------------------------------------------------------------
-# Render has no India region; Singapore is the closest it offers. CLAUDE.md 8 and
-# Phase 10's risk list both ask for India-region hosting for DPDP data residency, so
-# this is a deliberate, recorded deviation, not an oversight.
-#
-# It is fine for THIS deployment: a staging pilot on Razorpay test keys holds no real
-# patient and no real money. It stops being fine the day a live hospital's patients
-# are in this database - at which point the choice is a Mumbai region on a provider
-# that has one (AWS/GCP/Azure, or DigitalOcean Bangalore) and this file is replaced.
-# Do not quietly promote this to production.
-
+# Kramya backend with external Supabase PostgreSQL.
+# Use with docs/supabase-migration-plan.md. Preserve existing service identities.
+# Strictly a free staging/demo bridge: API sleeps; workers pause while asleep.
+# DATABASE_URL must be a private Supabase session-pooler connection with TLS.
+# The expired Render Postgres remains declared temporarily to avoid deleting it
+# during Blueprint sync. It is not wired to the API and is not a rollback target.
 services:
-  # ---------------------------------------------------------------------------
-  # The API
-  # ---------------------------------------------------------------------------
   - name: opd-api
     type: web
     runtime: node
     region: singapore
-    # Free, deliberately, and it costs three things - see FREE TIER at the top.
-    # To go paid later this becomes `0.5c-512mb` and the migration step moves back
-    # out of buildCommand into a `preDeployCommand:` line.
     plan: free
     healthCheckPath: /health
-
-    # Turbo builds @opd/contracts first because @opd/api depends on it; filtering to
-    # the API keeps web and mobile out of the deploy entirely.
-    #
-    # `--prod=false` is load-bearing, not belt-and-braces. NODE_ENV=production is set
-    # below and applies during the BUILD too, and pnpm honours it by skipping
-    # devDependencies - which is where nest, tsc, turbo AND the prisma CLI all live.
-    # Without this the build fails on its first command. Verified, not assumed.
-    #
-    # `prisma:deploy` is the LAST step here rather than a `preDeployCommand:`, which
-    # is the correct place for it but is **paid-only**. On a free instance Render
-    # ignores a pre-deploy command, so the migration would never run and the API
-    # would boot against an empty database - failing as mystery 500s rather than as
-    # anything that names the cause. Move it back out when this goes paid.
-    #
-    # It is `migrate deploy`, never `dev` or `reset`; scripts/no-migrate-dev.mjs
-    # refuses those against a non-local host anyway.
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @opd/api prisma:generate &&
       pnpm exec turbo run build --filter=@opd/api &&
       pnpm --filter @opd/api prisma:deploy
-
     startCommand: node apps/api/dist/main.js
-
     envVars:
       - key: NODE_ENV
         value: production
@@ -96,76 +31,48 @@ services:
       # PORT is injected by Render; env.ts reads it and main.ts listens on it.
 
       - key: DATABASE_URL
-        fromDatabase:
-          name: opd-postgres
-          property: connectionString
-
+        sync: false
       - key: REDIS_URL
         fromService:
           name: opd-keyvalue
           type: keyvalue
           property: connectionString
-
-      # 256-bit base64, generated once by Render and never seen by anyone. All three
-      # clear the >=32-char floor env.ts enforces. Never reuse the local values.
+      # Supply/preserve existing environment secrets. Do not unintentionally rotate.
       - key: JWT_ACCESS_SECRET
-        generateValue: true
+        sync: false
       - key: JWT_REFRESH_SECRET
-        generateValue: true
+        sync: false
       - key: CHECKIN_SECRET
-        generateValue: true
-
-      # Razorpay TEST keys for the pilot. The webhook secret must be this
-      # environment's OWN - sharing one with local means a laptop tunnel can process
-      # this environment's payments.
+        sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
-
-      # This service's own public origin, e.g. https://opd-api.onrender.com - needed
-      # for the redirect-mode checkout return URL. Set by hand AFTER the first deploy,
-      # because the URL does not exist until then. env() memoises at first call, so
-      # changing it requires a restart, not just a save.
       - key: PUBLIC_BASE_URL
         sync: false
-
-      # Optional. Empty is a valid, supported state for all three:
-      #   SENTRY_DSN        empty disables error reporting entirely (common/sentry.ts)
-      #   GOOGLE_CLIENT_IDS empty disables POST /auth/google rather than failing boot
-      #   EXPO_ACCESS_TOKEN only needed once push goes out from this environment
+      # Optional: empty values are supported by the current env schema.
       - key: SENTRY_DSN
         sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
       - key: EXPO_ACCESS_TOKEN
         sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
 
-  # ---------------------------------------------------------------------------
-  # Redis, for the Socket.IO adapter and rate limiting
-  # ---------------------------------------------------------------------------
   - name: opd-keyvalue
     type: keyvalue
     region: singapore
-    # Free: 25 MB and no persistence. Fine for what this is actually used for - the
-    # Socket.IO adapter's pub/sub holds no durable state, and rate-limit counters are
-    # meant to be short-lived. Losing them on a restart costs nothing.
     plan: free
-    # Reachable only from inside this Render account's network. The API connects over
-    # the private URL; nothing outside needs to.
     ipAllowList: []
 
+# Retain the old expired database until the Supabase cutover is verified. Keeping
+# its existing resource identity avoids an accidental deletion during the first sync.
 databases:
-  # ---------------------------------------------------------------------------
-  # Postgres
-  # ---------------------------------------------------------------------------
   - name: opd-postgres
     region: singapore
-    # Free, and this is the one with a real deadline: a free Render Postgres EXPIRES
-    # 30 DAYS AFTER CREATION, with a 14-day grace period before deletion. Whatever is
-    # in it on day 30 is gone. Never let a hospital's queue live here.
     plan: free
     postgresMajorVersion: "16"
     databaseName: opd

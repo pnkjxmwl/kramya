@@ -178,6 +178,23 @@ describe('auth (P1-BE-01, P1-BE-02)', () => {
     }
   });
 
+  it('coalesces concurrent refreshes bound to the same client without revoking the successor', async () => {
+    const login = await http().post('/auth/signup').send({ email: 'tabs@test.local', password: 'correct-horse-battery' }).expect(201);
+    const body = { refreshToken: login.body.refreshToken, rotationKey: login.body.rotationKey };
+    const replies = await Promise.all(Array.from({ length: 4 }, () => http().post('/auth/refresh').send(body)));
+    expect(replies.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+    expect(new Set(replies.map((r) => r.body.refreshToken)).size).toBe(1);
+    const next = replies[0]!.body;
+    await http().post('/auth/refresh').send({ refreshToken: next.refreshToken, rotationKey: next.rotationKey }).expect(200);
+  });
+
+  it('a replay without the client binding still kills the whole family', async () => {
+    const login = await http().post('/auth/signup').send({ email: 'stolen@test.local', password: 'correct-horse-battery' }).expect(201);
+    const next = await http().post('/auth/refresh').send({ refreshToken: login.body.refreshToken, rotationKey: login.body.rotationKey }).expect(200);
+    await http().post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(401);
+    await http().post('/auth/refresh').send({ refreshToken: next.body.refreshToken, rotationKey: next.body.rotationKey }).expect(401);
+  });
+
   it('rejects a date of birth in the future', async () => {
     const { accessToken } = await signup(app, 'dob@example.com');
     const tomorrow = new Date(Date.now() + 86_400_000).toISOString();

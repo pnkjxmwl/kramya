@@ -15,7 +15,7 @@ import { toCommandResult } from './result';
  * Resolves everyone still outstanding, and the split is the interesting part:
  *
  *   never arrived     -> NO_SHOW      (docs/PRD.md 8.9, refunded per policy)
- *   present, not seen -> RESCHEDULED  (docs/PRD.md 8.11, the doctor left early)
+ *   present, not seen -> CANCELLED (full refund; no replacement visit is fabricated)  (docs/PRD.md 8.11, the doctor left early)
  *   never paid        -> CANCELLED    (a RESERVED hold was never a booking)
  *
  * docs/PRD.md 8.9 and docs/Phases.md P4-BE-05 look like they disagree about this and
@@ -33,6 +33,7 @@ export function endSession(
   sessionId: string,
   actor: QueueActor,
   input: EndSessionRequest,
+  settle?: (ctx: CommandContext, entryId: string, target: QueueEntryStatus) => Promise<void>,
 ): Promise<QueueCommandResult> {
   return queue.runCommand({
     sessionId,
@@ -47,7 +48,7 @@ export function endSession(
         throw new InvalidQueueTransitionError('END_SESSION', 'IN_CONSULTATION');
       }
 
-      await resolveOutstanding(ctx, sessionId);
+      await resolveOutstanding(ctx, sessionId, settle);
 
       // Early = the doctor stopped before the session was scheduled to end. Patients
       // are told a different thing in each case (docs/PRD.md 8.11), so the two are
@@ -70,7 +71,7 @@ export function endSession(
 /** How each end-of-session outcome is narrated on the timeline. */
 const END_OF_SESSION_EVENT: Partial<Record<QueueEntryStatus, QueueEventType>> = {
   NO_SHOW: 'ENTRY_NO_SHOW',
-  RESCHEDULED: 'ENTRY_RESCHEDULED',
+  CANCELLED: 'ENTRY_CANCELLED',
 };
 
 /**
@@ -81,14 +82,9 @@ const END_OF_SESSION_EVENT: Partial<Record<QueueEntryStatus, QueueEventType>> = 
  * so the difference is between a transaction that closes promptly and one that holds
  * up every other console in the department.
  */
-async function resolveOutstanding(ctx: CommandContext, sessionId: string): Promise<void> {
+async function resolveOutstanding(ctx: CommandContext, sessionId: string, settle?: (ctx: CommandContext, entryId: string, target: QueueEntryStatus) => Promise<void>): Promise<void> {
   const outstanding = await ctx.tx.queueEntry.findMany({
-    // RESERVED is excluded, not forgotten. The state machine maps it to CANCELLED,
-    // correctly - but nothing creates a RESERVED entry until Phase 5 introduces the
-    // pre-payment hold, and cancelling one needs the ENTRY_CANCELLED event and the
-    // refund path that arrive with it. Resolving reservations belongs to the phase
-    // that can actually finish the job (docs/Rules.md 15.8).
-    where: { sessionId, status: { notIn: [...TERMINAL_ENTRY_STATUSES, 'RESERVED'] } },
+    where: { sessionId, status: { notIn: [...TERMINAL_ENTRY_STATUSES] } },
     select: { id: true, status: true, tokenLabel: true },
   });
 
@@ -109,6 +105,7 @@ async function resolveOutstanding(ctx: CommandContext, sessionId: string): Promi
       ids.push(entry.id);
     }
 
+    await settle?.(ctx, entry.id, to);
     ctx.record({
       type: event,
       entryId: entry.id,
@@ -117,6 +114,6 @@ async function resolveOutstanding(ctx: CommandContext, sessionId: string): Promi
   }
 
   for (const [to, ids] of byTarget) {
-    await ctx.tx.queueEntry.updateMany({ where: { id: { in: ids } }, data: { status: to } });
+    await ctx.tx.queueEntry.updateMany({ where: { id: { in: ids } }, data: { status: to, reservationExpiresAt: null } });
   }
 }

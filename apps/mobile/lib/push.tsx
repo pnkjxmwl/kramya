@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { useAuth } from './auth';
+import { useAuth, PUSH_TOKEN_KEY } from './auth';
+import * as SecureStore from 'expo-secure-store';
 
 /**
  * P8-MOB-01 · push notifications on the patient's phone.
@@ -51,10 +52,13 @@ export function usePushRegistration(): void {
   const registered = useRef(false);
 
   useEffect(() => {
-    if (!signedIn || registered.current) return;
-    registered.current = true;
+    if (!signedIn) { registered.current = false; return; }
+    let cancelled = false;
+    let busy = false;
 
-    void (async () => {
+    const register = async () => {
+      if (cancelled || busy || registered.current) return;
+      busy = true;
       try {
         // A simulator has no push service and never will. Asking would prompt a
         // developer for permission that cannot produce a token.
@@ -87,10 +91,14 @@ export function usePushRegistration(): void {
           projectId === undefined ? {} : { projectId },
         );
 
-        await authedFetch('/me/push-tokens', {
+        if (cancelled) return;
+        await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
+        const response = await authedFetch('/me/push-tokens', {
           method: 'POST',
           body: JSON.stringify({ token, platform: Platform.OS === 'ios' ? 'ios' : 'android' }),
         });
+        if (!response.ok) throw new Error('Notification registration failed');
+        if (!cancelled) registered.current = true;
       } catch (error) {
         // **Never surfaced to the patient.** The queue works without push, and an
         // error about notifications on a booking screen is noise about something
@@ -114,8 +122,11 @@ export function usePushRegistration(): void {
             `        removed in SDK 53 and iOS never had it. Push needs a development\n` +
             `        build: eas build --profile development`,
         );
-      }
-    })();
+      } finally { busy = false; }
+    };
+    void register();
+    const retry = setInterval(() => { void register(); }, 60_000);
+    return () => { cancelled = true; registered.current = false; clearInterval(retry); };
   }, [signedIn, authedFetch]);
 
   // Tapping a notification opens the booking it is about.

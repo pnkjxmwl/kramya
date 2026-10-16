@@ -116,6 +116,7 @@ data class AuthTokens(
     val refreshToken: String,
     /** Seconds until the access token expires. */
     val expiresIn: Int = 0,
+    val rotationKey: String? = null,
 )
 
 /**
@@ -472,7 +473,7 @@ data class SignupRequest(
 )
 
 @Serializable
-data class RefreshRequest(val refreshToken: String)
+data class RefreshRequest(val refreshToken: String, val rotationKey: String? = null)
 
 @Serializable
 data class LogoutRequest(val refreshToken: String)

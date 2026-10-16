@@ -35,7 +35,6 @@ export function Live({ sessionId }: { sessionId: string }) {
   const [status, setStatus] = useState<Status>('connecting');
 
   useEffect(() => {
-    let socket: Socket | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cancelled = false;
     // Ignore an event describing a state older than one already rendered. An equal
@@ -48,46 +47,48 @@ export function Live({ sessionId }: { sessionId: string }) {
       timer = setTimeout(() => router.refresh(), COALESCE_MS);
     };
 
-    void (async () => {
-      // The token is fetched, used for the handshake, and never stored. See
-      // app/api/socket-token/route.ts for why the console holds one at all.
-      const res = await fetch('/api/socket-token', { cache: 'no-store' }).catch(() => null);
-      if (res === null || !res.ok || cancelled) {
-        setStatus('offline');
-        return;
-      }
-      const { token } = (await res.json()) as { token: string };
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const socket: Socket = io(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000', {
+      autoConnect: false,
+      // Socket.IO invokes this for every handshake, including reconnects.
+      auth: (done) => {
+        void fetch('/api/socket-token', { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+          .then(async (res) => {
+            if (!res.ok) throw new Error('Session unavailable');
+            const { token } = await res.json() as { token: string };
+            if (!cancelled) done({ token });
+          }).catch(() => { if (!cancelled) done({ token: '' }); });
+      },
+      transports: ['websocket'], withCredentials: true,
+    });
+    socket.on('connect', () => {
+      void socket?.timeout(10_000).emitWithAck('subscribe', { sessionId })
+        .then((ack: { ok: boolean }) => {
+          if (cancelled) return;
+          setStatus(ack?.ok ? 'live' : 'offline');
+          refresh();
+        }).catch(() => { if (!cancelled) setStatus('offline'); });
+    });
+    socket.on(REALTIME_EVENT.sessionUpdated, (event: SessionUpdatedEvent) => {
+      if (event.sessionId !== sessionId || event.version < seen) return;
+      seen = event.version;
+      refresh();
+    });
+    socket.on('disconnect', () => { if (!cancelled) setStatus('offline'); });
+    socket.on('connect_error', () => {
       if (cancelled) return;
-
-      socket = io(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000', {
-        auth: { token },
-        transports: ['websocket'],
-        withCredentials: true,
-      });
-
-      socket.on('connect', () => {
-        setStatus('live');
-        // Subscribe, then refresh once: anything that changed between the server
-        // render and this connection would otherwise sit on screen unnoticed. This
-        // is the snapshot-after-connect rule, done in the order that cannot miss.
-        void socket?.emitWithAck('subscribe', { sessionId }).then((ack: { ok: boolean }) => {
-          if (ack?.ok) refresh();
-          else setStatus('offline');
-        });
-      });
-
-      socket.on(REALTIME_EVENT.sessionUpdated, (event: SessionUpdatedEvent) => {
-        if (event.sessionId !== sessionId || event.version < seen) return;
-        seen = event.version;
-        refresh();
-      });
-
-      socket.on('disconnect', () => setStatus('offline'));
-      socket.on('connect_error', () => setStatus('offline'));
-    })();
+      setStatus('offline');
+      // Authentication rejection does not trigger Socket.IO's automatic retry.
+      if (retry) clearTimeout(retry);
+      retry = setTimeout(() => { if (!cancelled) socket?.connect(); }, 10_000);
+    });
+    socket.connect();
+    const poll = setInterval(() => { if (!socket?.connected) refresh(); }, 15_000);
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
+      if (retry) clearTimeout(retry);
       if (timer !== undefined) clearTimeout(timer);
       socket?.close();
     };

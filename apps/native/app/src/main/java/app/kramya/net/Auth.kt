@@ -70,6 +70,8 @@ class AuthStore(private val store: TokenStorage) {
      * guarantee: the server never sees one refresh token presented twice.
      */
     private val rotation = Mutex()
+    var onIdentityChanged: () -> Unit = {}
+    @Volatile private var generation = 0L
 
     init {
         // Read synchronously in the constructor rather than in a coroutine.
@@ -89,13 +91,13 @@ class AuthStore(private val store: TokenStorage) {
     // -----------------------------------------------------------------------------
 
     suspend fun signIn(email: String, password: String) {
-        persist(post("/auth/login", Api.json.encodeToString(LoginRequest.serializer(), LoginRequest(email, password))))
+        persist(post("/auth/login", Api.json.encodeToString(LoginRequest.serializer(), LoginRequest(email, password))), newIdentity = true)
     }
 
     suspend fun signUp(email: String, password: String, name: String?) {
         // The name creates the account holder's own SELF patient profile server-side.
         val body = SignupRequest(email, password, name?.takeIf { it.isNotBlank() })
-        persist(post("/auth/signup", Api.json.encodeToString(SignupRequest.serializer(), body)))
+        persist(post("/auth/signup", Api.json.encodeToString(SignupRequest.serializer(), body)), newIdentity = true)
     }
 
     suspend fun signOut() {
@@ -141,7 +143,8 @@ class AuthStore(private val store: TokenStorage) {
             val refreshed = rotate(staleAccessToken = sent)
             first.close()
             call(path, method, body, refreshed.accessToken)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (error !is ApiException || error.status != 401) { first.close(); throw error }
             // `rotate` has already cleared the session; hand back the original 401 so the
             // caller surfaces the server's own message rather than inventing one.
             first
@@ -160,12 +163,14 @@ class AuthStore(private val store: TokenStorage) {
         val held = tokens ?: throw ApiException("Signed out")
         if (held.accessToken != staleAccessToken) return@withLock held
 
+        val started = generation
         try {
-            val next = post("/auth/refresh", Api.json.encodeToString(RefreshRequest.serializer(), RefreshRequest(held.refreshToken)))
+            val next = post("/auth/refresh", Api.json.encodeToString(RefreshRequest.serializer(), RefreshRequest(held.refreshToken, held.rotationKey)))
+            if (started != generation) throw ApiException("Account changed")
             persist(next)
             next
         } catch (error: Exception) {
-            persist(null)
+            if (error is ApiException && error.status == 401 && started == generation) persist(null)
             throw error
         }
     }
@@ -196,7 +201,8 @@ class AuthStore(private val store: TokenStorage) {
             Api.json.decodeFromString(AuthTokens.serializer(), response.body!!.string())
         }
 
-    private fun persist(next: AuthTokens?) {
+    private fun persist(next: AuthTokens?, newIdentity: Boolean = false) {
+        if (next == null || newIdentity) { generation++; onIdentityChanged() }
         // The volatile field first: a concurrent request checking whether its token is
         // already stale must see the new one immediately, not after a flow has emitted.
         tokens = next
@@ -225,23 +231,12 @@ interface TokenStorage {
     fun save(tokens: AuthTokens?)
 }
 
-/**
- * The OS keystore, with a plain-preferences fallback.
- *
- * **The fallback is not a security shortcut, it is an "the app must open" guarantee.**
- * EncryptedSharedPreferences fails hard on a small number of real devices - a corrupted
- * keystore entry after a restore-from-backup is the usual cause - and it throws on OPEN,
- * which would mean an app that crashes on launch and cannot even be signed out of.
- * Dropping to plain preferences degrades token storage to what most apps do anyway, and
- * these tokens are short-lived and server-revocable.
- *
- * ponytail: androidx.security.crypto is an alpha and Jetpack Security is no longer
- * actively developed. If it is withdrawn, the replacement is ~60 lines - generate an
- * AES-GCM key in the AndroidKeyStore and wrap the two strings by hand.
- */
+/** Secure persistence only. If the keystore fails, sessions remain in memory. */
 class KeystoreTokenStorage(context: Context) : TokenStorage {
 
-    private val prefs: SharedPreferences = try {
+    private var ephemeral: AuthTokens? = null
+    init { context.getSharedPreferences("kramya.session.fallback", Context.MODE_PRIVATE).edit().clear().apply() }
+    private val prefs: SharedPreferences? = try {
         val key = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
@@ -253,27 +248,31 @@ class KeystoreTokenStorage(context: Context) : TokenStorage {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     } catch (_: Exception) {
-        context.getSharedPreferences("kramya.session.fallback", Context.MODE_PRIVATE)
+        null
     }
 
     override fun load(): AuthTokens? {
-        val access = prefs.getString(ACCESS_KEY, null) ?: return null
-        val refresh = prefs.getString(REFRESH_KEY, null) ?: return null
+        val storage = prefs ?: return ephemeral
+        val access = storage.getString(ACCESS_KEY, null) ?: return null
+        val refresh = storage.getString(REFRESH_KEY, null) ?: return null
         // expiresIn is not persisted: it is a duration, and a duration read back after the
         // process was killed for an hour is a lie. Expiry is discovered from a 401.
-        return AuthTokens(access, refresh)
+        return AuthTokens(access, refresh, rotationKey = storage.getString(ROTATION_KEY, null))
     }
 
     override fun save(tokens: AuthTokens?) {
-        prefs.edit().apply {
+        ephemeral = tokens
+        prefs?.edit()?.apply {
             if (tokens == null) {
                 remove(ACCESS_KEY)
                 remove(REFRESH_KEY)
+                remove(ROTATION_KEY)
             } else {
                 putString(ACCESS_KEY, tokens.accessToken)
                 putString(REFRESH_KEY, tokens.refreshToken)
+                putString(ROTATION_KEY, tokens.rotationKey)
             }
-        }.apply()
+        }?.apply()
     }
 
     private companion object {
@@ -282,5 +281,6 @@ class KeystoreTokenStorage(context: Context) : TokenStorage {
         // possible to be signed in as different patients in each while comparing them.
         const val ACCESS_KEY = "opd.accessToken"
         const val REFRESH_KEY = "opd.refreshToken"
+        const val ROTATION_KEY = "opd.rotationKey"
     }
 }

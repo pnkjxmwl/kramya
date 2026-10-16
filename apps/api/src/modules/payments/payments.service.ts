@@ -2,6 +2,8 @@ import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   RazorpayWebhookEvent,
+  type EndSessionRequest,
+  type QueueCommandResult,
   type CancelEntryRequest,
   type CancelEntryResponse,
   type JoinRequest,
@@ -27,6 +29,7 @@ import {
 } from '../queue/queue.service';
 import { QueuePolicyService } from '../config/queue-policy.service';
 import { EtaService } from '../eta/eta.service';
+import { endSession } from '../queue/commands/end-session';
 import { joinQueue } from '../queue/commands/join';
 import { applyPaymentConfirmation, whyPaymentCannotBook } from '../queue/commands/confirm-payment';
 import { applyCancellation } from '../queue/commands/cancel-entry';
@@ -157,56 +160,6 @@ async function refundForCancellation(
 }
 
 /**
- * Take a captured payment onto the books and give all of it back, in one write -
- * for money that arrived when there was no booking left for it to buy.
- *
- * **A conditional claim, not a read-then-write.** This used to be two separate
- * statements outside any transaction: mark the payment SUCCESS, then raise the
- * refund. A crash between them left it SUCCESS with no refund, and Razorpay's retry
- * then matched the duplicate check and was acknowledged - the patient's money kept
- * for good, with no row anywhere saying it was owed. And two deliveries of the same
- * webhook arriving together (or the webhook racing the reconcile sweeper) each
- * passed the check and each raised a full refund.
- *
- * The `updateMany` below only matches a payment nobody has settled yet. Postgres
- * re-checks that condition after waiting out a concurrent writer, so exactly one
- * caller wins; everyone else gets null and answers DUPLICATE. The refund row
- * commits in the same transaction as the claim, so there is no gap to crash in.
- */
-async function claimCaptureForRefund(
-  tx: Prisma.TransactionClient,
-  payment: { id: string; hospitalId: string; amountPaise: number },
-  gatewayPaymentId: string,
-  reason: string,
-): Promise<RaisedRefund | null> {
-  const claimed = await tx.payment.updateMany({
-    where: { id: payment.id, status: { in: ['CREATED', 'PENDING', 'FAILED'] } },
-    data: {
-      status: 'REFUNDED',
-      razorpayPaymentId: gatewayPaymentId,
-      // Increment, never assign: an assignment would erase an earlier partial refund
-      // the day one can exist here, and that is money.
-      refundedPaise: { increment: payment.amountPaise },
-    },
-  });
-  if (claimed.count === 0) {
-    return null;
-  }
-
-  const refund = await tx.refund.create({
-    data: {
-      hospitalId: payment.hospitalId,
-      paymentId: payment.id,
-      amountPaise: payment.amountPaise,
-      status: 'PENDING',
-      reason,
-    },
-    select: { id: true },
-  });
-  return { refundId: refund.id, paymentId: payment.id, amountPaise: payment.amountPaise };
-}
-
-/**
  * Entry statuses where a patient is still waiting for their turn, and session
  * statuses where a queue is actually running. Outside either, there is no honest
  * ETA to give and the card shows none rather than a number that means nothing.
@@ -246,8 +199,8 @@ export class PaymentsService implements OnModuleInit {
    * sent every paid patient still in the waiting room to RESCHEDULED with no refund,
    * whatever the hospital had configured; a no-show got nothing whatever its setting.
    *
-   * RESCHEDULED means present and not reached, early finish or not: someone who paid,
-   * came, and was not seen has had exactly the session-cancelled outcome.
+   * A patient who was present but left unseen is recorded as ENTRY_CANCELLED with
+   * `atSessionEnd: true`; that event receives the full refund promised by END_SESSION.
    *
    * `refundForCancellation` is the same arithmetic the cancel paths use - it refunds
    * the percentage MINUS anything already refunded, so it can never pay twice.
@@ -266,6 +219,8 @@ export class PaymentsService implements OnModuleInit {
           ? rules.noShowRefundPct
           : record.type === 'ENTRY_RESCHEDULED'
             ? rules.sessionCancelledRefundPct
+        : record.type === 'ENTRY_CANCELLED' && record.metadata?.atSessionEnd === true
+          ? 100
             : 0;
       if (pct <= 0) continue;
 
@@ -276,7 +231,9 @@ export class PaymentsService implements OnModuleInit {
         reason:
           record.type === 'ENTRY_NO_SHOW'
             ? `No-show (${pct}% per hospital policy)`
-            : `Not seen before the session ended (${pct}% per hospital policy)`,
+            : record.metadata?.atSessionEnd === true
+              ? 'Session ended before consultation: full refund'
+              : `Not seen before the session ended (${pct}% per hospital policy)`,
       });
       if (refund !== null) raised.push(refund);
     }
@@ -458,16 +415,22 @@ export class PaymentsService implements OnModuleInit {
 
     const stale = await this.prisma.payment.findMany({
       where: {
-        status: { in: ['CREATED', 'PENDING'] },
+        status: { in: ['CREATED', 'PENDING', 'FAILED'] },
+        reconcileAfter: { lte: new Date() },
         createdAt: { lt: olderThan },
       },
-      select: { id: true, razorpayOrderId: true },
-      orderBy: { createdAt: 'asc' },
+      select: { id: true, razorpayOrderId: true, reconcileAfter: true },
+      orderBy: [{ reconcileAfter: 'asc' }, { id: 'asc' }],
       take: limit,
     });
 
     let confirmed = 0;
     for (const payment of stale) {
+      const claim = await this.prisma.payment.updateMany({
+        where: { id: payment.id, reconcileAfter: payment.reconcileAfter },
+        data: { reconcileAfter: new Date(Date.now() + 5 * 60_000) },
+      });
+      if (claim.count !== 1) continue;
       try {
         const attempts = await this.razorpay.paymentsForOrder(payment.razorpayOrderId);
         const captured = attempts.find((attempt) => attempt.status === 'captured');
@@ -513,15 +476,17 @@ export class PaymentsService implements OnModuleInit {
     const stranded = await this.prisma.refund.findMany({
       where: {
         status: 'PENDING',
-        razorpayRefundId: null,
+        reconcileAfter: { lte: new Date() },
         createdAt: { lt: olderThan },
       },
       select: {
         id: true,
         amountPaise: true,
+        reconcileAfter: true,
+        razorpayRefundId: true,
         payment: { select: { id: true, razorpayPaymentId: true } },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ reconcileAfter: 'asc' }, { id: 'asc' }],
       take: limit,
     });
 
@@ -529,6 +494,11 @@ export class PaymentsService implements OnModuleInit {
     let adopted = 0;
 
     for (const refund of stranded) {
+      const claim = await this.prisma.refund.updateMany({
+        where: { id: refund.id, reconcileAfter: refund.reconcileAfter, status: 'PENDING' },
+        data: { reconcileAfter: new Date(Date.now() + 5 * 60_000) },
+      });
+      if (claim.count !== 1) continue;
       const gatewayPaymentId = refund.payment.razorpayPaymentId;
       // Nothing was ever captured, so there is nothing to give back. The row is
       // bookkeeping for a payment that never completed.
@@ -536,12 +506,12 @@ export class PaymentsService implements OnModuleInit {
 
       try {
         const existing = await this.razorpay.refundsForPayment(gatewayPaymentId);
-        const already = existing.find((r) => r.notes?.refundId === refund.id);
+        const already = existing.find((r) => r.id === refund.razorpayRefundId || r.notes?.refundId === refund.id);
 
         if (already !== undefined) {
-          await this.prisma.refund.update({
-            where: { id: refund.id },
-            data: { razorpayRefundId: already.id },
+          await this.prisma.refund.updateMany({
+            where: { id: refund.id, status: 'PENDING' },
+            data: { razorpayRefundId: already.id, status: already.status === 'processed' ? 'PROCESSED' : already.status === 'failed' ? 'FAILED' : 'PENDING' },
           });
           adopted += 1;
           this.log.warn(
@@ -551,6 +521,7 @@ export class PaymentsService implements OnModuleInit {
           continue;
         }
 
+        if (refund.razorpayRefundId !== null) continue;
         await this.sendRefundToGateway(refund.id, refund.payment.id, refund.amountPaise);
         sent += 1;
       } catch (error) {
@@ -598,78 +569,37 @@ export class PaymentsService implements OnModuleInit {
       return { handled: 'IGNORED' };
     }
 
-    if (payment.status === 'SUCCESS' && payment.razorpayPaymentId === entity.id) {
-      return { handled: 'DUPLICATE' };
-    }
-
-    const session = await this.prisma.oPDSession.findUnique({
-      where: { id: payment.entry.sessionId },
-      select: { status: true },
-    });
-    const sessionLive =
-      session !== null && (session.status === 'OPEN_FOR_REGISTRATION' || session.status === 'ACTIVE');
-
-    // There is no queue left to join. Take the money on the books, then give it back
-    // - the alternative is silently keeping it (docs/Phases.md Phase 5 risks).
-    if (!sessionLive) {
-      const raised = await this.prisma.$transaction((tx) =>
-        claimCaptureForRefund(tx, payment, entity.id, 'Session ended before the payment was confirmed'),
-      );
-      return this.refunded(raised);
-    }
-
-    // The hold had already lapsed and the money arrived anyway. The webhook wins:
-    // the token number was never handed to anyone else, so giving the slot back is
-    // a status change. Its own command, so the audit trail says which happened.
-    const reinstating = payment.entry.status === 'CANCELLED';
-
-    let outcome: { booked: true } | { booked: false; raised: RaisedRefund | null };
-    try {
-      outcome = await this.queue.runCommand({
-        sessionId: payment.entry.sessionId,
-        actor: { accountId: payment.accountId, hospitalId: payment.hospitalId, type: 'SYSTEM' },
-        command: reinstating ? 'REINSTATE' : 'CONFIRM_PAYMENT',
-        reason: reinstating ? 'Payment captured after the reservation had expired' : null,
-        handler: async (ctx) => {
-          // Asked under the lock, so a join or a cancel cannot slip in between the
-          // answer and the write.
-          const entry = await ctx.entryInSession(payment.entry.id);
-          const refusal = await whyPaymentCannotBook(ctx, entry);
-          if (refusal !== null) {
-            return {
-              booked: false as const,
-              raised: await claimCaptureForRefund(ctx.tx, payment, entity.id, refusal),
-            };
-          }
-
-          // Queue owns the entry write; this module owns the payment write. One
-          // transaction, so a paid entry with no payment record is impossible.
-          await applyPaymentConfirmation(
-            ctx,
-            payment.entry.id,
-            reinstating ? 'REINSTATE' : 'CONFIRM_PAYMENT',
-          );
-          await ctx.tx.payment.update({
-            where: { id: payment.id },
-            data: { status: 'SUCCESS', razorpayPaymentId: entity.id },
+    const outcome = await this.queue.runCommand({
+      sessionId: payment.entry.sessionId,
+      actor: { accountId: payment.accountId, hospitalId: payment.hospitalId, type: 'SYSTEM' },
+      command: 'SETTLE_PAYMENT',
+      handler: async (ctx): Promise<{ ack: WebhookAck; refund: RaisedRefund | null }> => {
+        // Read under the session lock; a refunded capture is still a capture.
+        const current = await ctx.tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+        if (current.razorpayPaymentId !== null) {
+          return { ack: { handled: current.razorpayPaymentId === entity.id ? 'DUPLICATE' : 'IGNORED' }, refund: null };
+        }
+        const entry = await ctx.entryInSession(payment.entry.id);
+        const live = ctx.session.status === 'OPEN_FOR_REGISTRATION' || ctx.session.status === 'ACTIVE';
+        const expired = entry.status === 'CANCELLED' && await ctx.tx.queueEvent.findFirst({
+          where: { entryId: entry.id, type: 'ENTRY_CANCELLED', metadata: { path: ['via'], equals: 'EXPIRE_RESERVATION' } },
+          select: { id: true },
+        });
+        await ctx.tx.payment.update({ where: { id: payment.id }, data: { status: 'SUCCESS', razorpayPaymentId: entity.id } });
+        const refusal = live ? await whyPaymentCannotBook(ctx, entry) : 'Session ended before the payment was confirmed';
+        if (!live || refusal !== null) {
+          const refund = await refundForCancellation(ctx, {
+            entryId: entry.id, hospitalId: payment.hospitalId, pct: 100,
+            reason: refusal ?? 'Session ended before the payment was confirmed',
           });
-          return { booked: true as const };
-        },
-      });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        // Two copies of the same webhook in flight at once. The unique index on
-        // razorpayPaymentId is the replay guard, and losing that race means the
-        // other one succeeded - which is success, not an error.
-        return { handled: 'DUPLICATE' };
-      }
-      throw error;
-    }
-
-    if (!outcome.booked) {
-      return this.refunded(outcome.raised);
-    }
-    return { handled: reinstating ? 'REINSTATED' : 'CONFIRMED' };
+          return { ack: { handled: 'REFUND_UPDATED' }, refund };
+        }
+        await applyPaymentConfirmation(ctx, entry.id, expired ? 'REINSTATE' : 'CONFIRM_PAYMENT');
+        return { ack: { handled: expired ? 'REINSTATED' : 'CONFIRMED' }, refund: null };
+      },
+    });
+    if (outcome.refund) await this.sendRefundToGateway(outcome.refund.refundId, outcome.refund.paymentId, outcome.refund.amountPaise);
+    return outcome.ack;
   }
 
   /** After a committed claim: send the refund, or report that someone else already did. */
@@ -713,8 +643,8 @@ export class PaymentsService implements OnModuleInit {
     if (refund === null) {
       return { handled: 'IGNORED' };
     }
-    await this.prisma.refund.update({
-      where: { id: refund.id },
+    await this.prisma.refund.updateMany({
+      where: { id: refund.id, status: { not: 'PROCESSED' } },
       data: { status: event === 'refund.processed' ? 'PROCESSED' : 'FAILED' },
     });
     return { handled: 'REFUND_UPDATED' };
@@ -946,21 +876,31 @@ export class PaymentsService implements OnModuleInit {
       return;
     }
 
+    // At most one outbound attempt per obligation. A timeout is ambiguous:
+    // reconcile against gateway records instead of risking a second refund.
+    const claim = await this.prisma.refund.updateMany({
+      where: { id: refundId, status: 'PENDING', razorpayRefundId: null, submittedAt: null },
+      data: { submittedAt: new Date() },
+    });
+    if (claim.count !== 1) return;
     try {
       const result = await this.razorpay.refund({
         paymentId: payment.razorpayPaymentId,
         amountPaise,
         notes: { refundId },
       });
-      await this.prisma.refund.update({
-        where: { id: refundId },
-        data: { razorpayRefundId: result.id },
+      await this.prisma.refund.updateMany({
+        where: { id: refundId, status: 'PENDING' },
+        data: { razorpayRefundId: result.id, status: result.status === 'processed' ? 'PROCESSED' : result.status === 'failed' ? 'FAILED' : 'PENDING' },
       });
     } catch (error) {
       this.log.error({ err: error, refundId }, 'refund request to razorpay failed - left PENDING');
     }
   }
 
+  async endSession(sessionId: string, actor: QueueActor, input: EndSessionRequest): Promise<QueueCommandResult> {
+    return endSession(this.queue, sessionId, actor, input);
+  }
   async readMyEntry(entryId: string): Promise<MyQueueEntry> {
     const row = await this.prisma.queueEntry.findUniqueOrThrow({
       where: { id: entryId },

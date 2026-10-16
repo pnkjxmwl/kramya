@@ -1,4 +1,5 @@
-import { getMe } from '../../lib/tenant';
+import { switchHospital } from './switch-hospital';
+import { getMe, getActiveMembership } from '../../lib/tenant';
 import { ConsoleChrome, type NavLink } from './nav';
 
 /**
@@ -14,7 +15,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   // the shell and its child share one call instead of asking the API twice for the
   // identical answer on every navigation.
   const me = await getMe();
-  const active = me.memberships.find((m) => m.status === 'ACTIVE');
+  const active = await getActiveMembership();
 
   // Queue is open to all three roles: a small hospital's admin genuinely does run
   // reception, and the API has allowed ADMIN, RECEPTION and DOCTOR on every queue
@@ -55,6 +56,15 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
 
       <main className="min-w-0 flex-1 lg:overflow-y-auto">
         <div className="enter mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+          {me.memberships.filter((m) => m.status === 'ACTIVE').length > 1 && (
+            <form action={switchHospital} className="mb-5 flex flex-wrap items-center gap-2">
+              <label htmlFor="hospital">Clinic</label>
+              <select id="hospital" name="hospitalId" defaultValue={active?.hospitalId} className="min-h-11 rounded border border-line bg-surface px-3">
+                {me.memberships.filter((m) => m.status === 'ACTIVE').map((m) => <option key={m.hospitalId} value={m.hospitalId}>{m.hospitalName}</option>)}
+              </select>
+              <button type="submit" className="min-h-11 rounded border border-line px-3">Switch clinic</button>
+            </form>
+          )}
           {children}
         </div>
       </main>

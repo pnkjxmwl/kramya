@@ -147,10 +147,16 @@ export class StaffService {
    */
   async consumeInvitation(
     membershipId: string,
+    token: string,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<boolean> {
     const { count } = await client.hospitalStaff.updateMany({
-      where: { id: membershipId, status: 'INVITED', inviteTokenHash: { not: null } },
+      where: {
+        id: membershipId,
+        status: 'INVITED',
+        inviteTokenHash: hashInviteToken(token),
+        inviteExpiresAt: { gt: new Date() },
+      },
       data: { status: 'ACTIVE', inviteTokenHash: null, inviteExpiresAt: null },
     });
     return count > 0;

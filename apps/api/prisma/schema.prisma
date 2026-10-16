@@ -75,6 +75,7 @@ model RefreshToken {
   /// Shared by every token descended from one login. Revoked as a unit on reuse.
   familyId  String
   tokenHash String    @unique
+  rotationKeyHash String?
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
@@ -599,6 +600,9 @@ model Payment {
   /// on the cancel path, and so PARTIALLY_REFUNDED has a number behind it.
   refundedPaise Int @default(0)
 
+  /// Fair, durable reconciliation scheduling; also leases each check across workers.
+  reconcileAfter DateTime @default(now())
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -613,6 +617,7 @@ model Payment {
   @@index([accountId])
   /// The reservation sweeper and Phase 8's payment-reconcile both scan by status.
   @@index([status])
+  @@index([status, reconcileAfter])
 }
 
 /// One refund raised against one payment.
@@ -633,6 +638,10 @@ model Refund {
   /// refund with no reason is unanswerable three months later.
   reason           String
 
+  reconcileAfter DateTime @default(now())
+  /// Claimed before the outbound POST. Ambiguous requests are reconciled, never blindly resent.
+  submittedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -641,6 +650,7 @@ model Refund {
 
   @@index([hospitalId])
   @@index([paymentId])
+  @@index([status, reconcileAfter])
 }
 
 // ---------------------------------------------------------------------------

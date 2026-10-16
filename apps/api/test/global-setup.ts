@@ -1,4 +1,5 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
@@ -64,7 +65,8 @@ export default async function setup(): Promise<void> {
   // failure surfaces as a baffling ENOENT on cmd.exe rather than on the directory.
   const apiDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-  execSync('pnpm exec prisma migrate deploy', {
+  const require = createRequire(import.meta.url);
+  execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'], {
     cwd: apiDir,
     env: { ...process.env, DATABASE_URL: testUrl },
     stdio: 'pipe',

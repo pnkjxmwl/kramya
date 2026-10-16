@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import type { ApiError, AuthTokens } from '@opd/contracts';
@@ -10,6 +11,8 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000
 
 const ACCESS_KEY = 'opd.accessToken';
 const REFRESH_KEY = 'opd.refreshToken';
+const ROTATION_KEY = 'opd.rotationKey';
+export const PUSH_TOKEN_KEY = 'opd.pushToken';
 
 type AuthState = {
   ready: boolean;
@@ -32,6 +35,8 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
+  const epoch = useRef(0);
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -65,12 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Tokens go in the OS keychain/keystore, never AsyncStorage (docs/Rules.md 10).
   useEffect(() => {
     void (async () => {
-      const [accessToken, refreshToken] = await Promise.all([
+      const [accessToken, refreshToken, rotationKey] = await Promise.all([
         SecureStore.getItemAsync(ACCESS_KEY),
         SecureStore.getItemAsync(REFRESH_KEY),
+        SecureStore.getItemAsync(ROTATION_KEY),
       ]);
       if (accessToken && refreshToken) {
-        const restored = { accessToken, refreshToken, expiresIn: 0 };
+        const restored = { accessToken, refreshToken, rotationKey: rotationKey ?? undefined, expiresIn: 0 };
         tokensRef.current = restored;
         setTokens(restored);
       }
@@ -78,7 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const persist = useCallback(async (next: AuthTokens | null) => {
+  const persist = useCallback(async (next: AuthTokens | null, newIdentity = false) => {
+    if (next === null || newIdentity) {
+      epoch.current += 1;
+      tokensRef.current = null;
+      setTokens(null);
+      await queryClient.cancelQueries();
+      queryClient.clear();
+    }
     // The ref first and synchronously: a concurrent request checking whether its
     // token is already stale must see the new one immediately, not after React has
     // scheduled a render.
@@ -88,14 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await Promise.all([
         SecureStore.setItemAsync(ACCESS_KEY, next.accessToken),
         SecureStore.setItemAsync(REFRESH_KEY, next.refreshToken),
+        next.rotationKey ? SecureStore.setItemAsync(ROTATION_KEY, next.rotationKey) : SecureStore.deleteItemAsync(ROTATION_KEY),
       ]);
     } else {
       await Promise.all([
         SecureStore.deleteItemAsync(ACCESS_KEY),
         SecureStore.deleteItemAsync(REFRESH_KEY),
+        SecureStore.deleteItemAsync(ROTATION_KEY),
       ]);
     }
-  }, []);
+  }, [queryClient]);
 
   const post = useCallback(async (path: string, body: unknown): Promise<AuthTokens> => {
     const res = await fetch(`${API_URL}${path}`, {
@@ -105,19 +120,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as ApiError | null;
-      throw new Error(err?.error.message ?? 'Something went wrong. Please try again.');
+      throw Object.assign(new Error(err?.error.message ?? 'Something went wrong. Please try again.'), { status: res.status });
     }
     return (await res.json()) as AuthTokens;
   }, []);
 
   const signIn = useCallback(
-    async (email: string, password: string) => persist(await post('/auth/login', { email, password })),
+    async (email: string, password: string) => persist(await post('/auth/login', { email, password }), true),
     [persist, post],
   );
 
   const signUp = useCallback(
     async (email: string, password: string, name?: string) =>
-      persist(await post('/auth/signup', { email, password, ...(name ? { name } : {}) })),
+      persist(await post('/auth/signup', { email, password, ...(name ? { name } : {}) }), true),
     [persist, post],
   );
 
@@ -128,7 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetch(`${API_URL}/auth/logout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: held.refreshToken }),
+        body: JSON.stringify({ refreshToken: held.refreshToken, pushToken: await SecureStore.getItemAsync(PUSH_TOKEN_KEY) ?? undefined }),
+        signal: AbortSignal.timeout(5000),
       }).catch(() => undefined);
     }
     await persist(null);
@@ -153,12 +169,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const held = tokensRef.current;
       if (held === null) throw new Error('Signed out');
 
+      const generation = epoch.current;
       try {
-        const next = await post('/auth/refresh', { refreshToken: held.refreshToken });
+        const next = await post('/auth/refresh', { refreshToken: held.refreshToken, rotationKey: held.rotationKey });
+        if (generation !== epoch.current) throw new Error('Account changed');
         await persist(next);
         return next;
       } catch (error) {
-        await persist(null);
+        if ((error as { status?: number }).status === 401 && generation === epoch.current) await persist(null);
         throw error;
       } finally {
         // Cleared as this settles, so the NEXT expiry starts a fresh rotation.
@@ -185,8 +203,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Read at the moment of sending, not from the closure: several of these run
       // concurrently and one of them may rotate while the others are in flight.
+      const generation = epoch.current;
       const sent = tokensRef.current?.accessToken;
       const first = await call(sent);
+      if (generation !== epoch.current) throw new Error('Account changed');
       if (first.status !== 401 || tokensRef.current === null) return first;
 
       // Somebody else already rotated while this request was on the wire, so the
@@ -199,7 +219,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const refreshed = await refreshOnce();
         return call(refreshed.accessToken);
-      } catch {
+      } catch (error) {
+        if ((error as { status?: number }).status !== 401) throw error;
         // refreshOnce has already cleared the session; hand back the original 401 so
         // the caller surfaces the server's own message rather than inventing one.
         return first;

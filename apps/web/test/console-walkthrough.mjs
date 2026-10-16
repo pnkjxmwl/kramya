@@ -576,8 +576,8 @@ check(
   endedAs,
 );
 check(
-  'someone who was HERE but never seen is RESCHEDULED, not marked absent',
-  (await columnOf('QueueEntry', waitedId, 'status')) === 'RESCHEDULED',
+  'someone who was HERE but never seen is CANCELLED, not assigned a fabricated reschedule',
+  (await columnOf('QueueEntry', waitedId, 'status')) === 'CANCELLED',
   await columnOf('QueueEntry', waitedId, 'status'),
 );
 check(

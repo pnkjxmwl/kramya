@@ -78,9 +78,10 @@ const EXPECTED_LEGAL: Triple[] = [
   ['END_SESSION', 'RESERVED', 'CANCELLED'],
   ['END_SESSION', 'CONFIRMED', 'NO_SHOW'],
   ['END_SESSION', 'VIRTUAL_WAITING', 'NO_SHOW'],
-  ['END_SESSION', 'CHECKED_IN', 'RESCHEDULED'],
-  ['END_SESSION', 'READY', 'RESCHEDULED'],
-  ['END_SESSION', 'CALLED', 'RESCHEDULED'],
+  ['END_SESSION', 'SKIPPED', 'NO_SHOW'],
+  ['END_SESSION', 'CHECKED_IN', 'CANCELLED'],
+  ['END_SESSION', 'READY', 'CANCELLED'],
+  ['END_SESSION', 'CALLED', 'CANCELLED'],
   ['END_SESSION', 'COMPLETED', 'COMPLETED'],
   ['END_SESSION', 'CANCELLED', 'CANCELLED'],
   ['END_SESSION', 'NO_SHOW', 'NO_SHOW'],
@@ -113,11 +114,11 @@ describe('entry state machine (P4-BE-01)', () => {
   });
 
   it('covers every command and every status, so a new one cannot slip through untested', () => {
-    expect(QUEUE_COMMANDS).toHaveLength(19);
+    expect(QUEUE_COMMANDS).toHaveLength(20);
     expect(ENTRY_STATUSES).toHaveLength(12);
     // 19 x 12 pairs considered; only these are legal. CLOSE_REGISTRATION (Phase 8)
     // adds none: it shuts the session's doors and moves nobody.
-    expect(EXPECTED_LEGAL).toHaveLength(31);
+    expect(EXPECTED_LEGAL).toHaveLength(32);
   });
 
   it('walks the PRD 7.3 happy path end to end', () => {
@@ -230,6 +231,7 @@ describe('entry state machine (P4-BE-01)', () => {
 /** Which session statuses accept each command - again written out independently. */
 const EXPECTED_SESSION_ACCEPTS: Record<QueueCommand, SessionStatus[]> = {
   JOIN: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
+  SETTLE_PAYMENT: ['SCHEDULED', 'OPEN_FOR_REGISTRATION', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'ENDED_EARLY'],
   CONFIRM_PAYMENT: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   REINSTATE: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   CANCEL_ENTRY: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
@@ -277,7 +279,7 @@ describe('session state machine (P4-BE-01)', () => {
   it('treats a finished session as history - nothing at all is accepted', () => {
     for (const status of ['COMPLETED', 'CANCELLED', 'ENDED_EARLY'] as SessionStatus[]) {
       for (const command of QUEUE_COMMANDS) {
-        expect(() => assertSessionAccepts(command, running(status))).toThrow();
+        if (command !== 'SETTLE_PAYMENT') expect(() => assertSessionAccepts(command, running(status))).toThrow();
       }
     }
   });

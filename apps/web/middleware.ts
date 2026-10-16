@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type { AuthTokens } from '@opd/contracts';
-import { ACCESS_COOKIE, REFRESH_COOKIE, apiUrl, writeSession } from './lib/session';
+import { ACCESS_COOKIE, REFRESH_COOKIE, ROTATION_COOKIE, apiUrl, writeSession } from './lib/session';
 
 /**
  * Route protection + silent token refresh.
@@ -22,21 +22,31 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const upstream = await fetch(apiUrl('/auth/refresh'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: refresh }),
+    body: JSON.stringify({ refreshToken: refresh, rotationKey: req.cookies.get(ROTATION_COOKIE)?.value }),
     cache: 'no-store',
   }).catch(() => null);
 
-  if (!upstream?.ok) {
+  if (!upstream || upstream.status >= 500 || upstream.status === 429) {
+    return new NextResponse('The clinic server is temporarily unavailable. Please retry shortly.', { status: 503, headers: { 'Retry-After': '10', 'Cache-Control': 'no-store' } });
+  }
+
+  if (!upstream.ok) {
     const res = toLogin(req);
     // The API already revoked the family (or never knew the token); drop our copies
     // so the next request does not retry a dead token on every navigation.
     res.cookies.delete(ACCESS_COOKIE);
     res.cookies.delete(REFRESH_COOKIE);
+    res.cookies.delete(ROTATION_COOKIE);
     return res;
   }
 
-  const res = NextResponse.next();
-  writeSession(res.cookies, (await upstream.json()) as AuthTokens);
+  const tokens = (await upstream.json()) as AuthTokens;
+  // Downstream server components must see the renewed token on this same request.
+  req.cookies.set(ACCESS_COOKIE, tokens.accessToken);
+  req.cookies.set(REFRESH_COOKIE, tokens.refreshToken);
+  if (tokens.rotationKey) req.cookies.set(ROTATION_COOKIE, tokens.rotationKey);
+  const res = NextResponse.next({ request: { headers: req.headers } });
+  writeSession(res.cookies, tokens);
   return res;
 }
 

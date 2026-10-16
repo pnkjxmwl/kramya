@@ -47,12 +47,21 @@ export const AcceptInviteRequest = z.object({
 });
 export type AcceptInviteRequest = z.infer<typeof AcceptInviteRequest>;
 
+/** Existing users can accept membership using their authenticated identity. */
+export const AcceptMembershipRequest = z.object({ token: z.string().min(1) });
+export type AcceptMembershipRequest = z.infer<typeof AcceptMembershipRequest>;
+
 export const RefreshRequest = z.object({
   refreshToken: z.string().min(1),
+  /** Independent client secret: binds concurrent retries to the same rotation. */
+  rotationKey: z.string().min(32).max(128).optional(),
 });
 export type RefreshRequest = z.infer<typeof RefreshRequest>;
 
-export const LogoutRequest = RefreshRequest;
+export const LogoutRequest = z.object({
+  refreshToken: z.string().min(1),
+  pushToken: z.string().min(10).max(255).optional(),
+});
 export type LogoutRequest = z.infer<typeof LogoutRequest>;
 
 export const AuthTokens = z.object({
@@ -60,6 +69,7 @@ export const AuthTokens = z.object({
   refreshToken: z.string(),
   /** Seconds until the access token expires. */
   expiresIn: z.number().int().positive(),
+  rotationKey: z.string().optional(),
 });
 export type AuthTokens = z.infer<typeof AuthTokens>;
 

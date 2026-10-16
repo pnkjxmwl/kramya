@@ -1,5 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { TokenService } from '../src/modules/auth/token.service';
+import { StaffService } from '../src/modules/staff/staff.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { auth, createTestApp, request, resetDb, signup } from './helpers';
 
@@ -142,7 +144,12 @@ describe('accept invite', () => {
     await api()
       .post('/auth/accept-invite')
       .send({ token: inviteToken, password: 'attacker-chosen-pw' })
-      .expect(200);
+      .expect(401);
+
+    expect(await prisma.hospitalStaff.findFirst({ where: { accountId: existing.accountId } }))
+      .toMatchObject({ status: 'INVITED' });
+    await api().post('/auth/accept-invite')
+      .send({ token: inviteToken, password: 'their-own-password' }).expect(200);
 
     // The attacker's password does not work...
     await api()
@@ -159,6 +166,26 @@ describe('accept invite', () => {
     const me = await api().get('/me').set(auth(login.body.accessToken)).expect(200);
     expect(me.body.memberships[0].status).toBe('ACTIVE');
     expect(existing.accountId).toBe(me.body.id);
+  });
+
+  it('does not let an inviter set a password on a Google identity', async () => {
+    const account = await prisma.account.create({ data: { email: 'google@test.local', googleId: 'verified-google-sub' } });
+    const { inviteToken } = await invite(account.email);
+    await api().post('/auth/accept-invite').send({ token: inviteToken, password: 'attacker-password' }).expect(401);
+    expect((await prisma.account.findUniqueOrThrow({ where: { id: account.id } })).passwordHash).toBeNull();
+    await api().post('/auth/accept-membership').set(auth(adminToken)).send({ token: inviteToken }).expect(401);
+    const session = await app.get(TokenService).issue(account);
+    await api().post('/auth/accept-membership').set(auth(session.accessToken)).send({ token: inviteToken }).expect(200);
+  });
+
+  it('cannot consume an invitation after its token was replaced or expired', async () => {
+    const first = await invite('raced@test.local');
+    const staff = app.get(StaffService);
+    const invitation = (await staff.findOpenInvitation(first.inviteToken))!;
+    const second = await invite('raced@test.local');
+    expect(await staff.consumeInvitation(invitation.membershipId, first.inviteToken)).toBe(false);
+    await prisma.hospitalStaff.update({ where: { id: invitation.membershipId }, data: { inviteExpiresAt: new Date(0) } });
+    expect(await staff.consumeInvitation(invitation.membershipId, second.inviteToken)).toBe(false);
   });
 
   it('re-invites someone whose invitation is still outstanding', async () => {

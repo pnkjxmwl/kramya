@@ -36,6 +36,7 @@ export default function AcceptInvitePage() {
     // this whole form into a Suspense boundary just to prerender it.
     const token = new URLSearchParams(window.location.search).get('token') ?? '';
 
+    try {
     const res = await fetch('/api/auth/accept-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,19 +45,24 @@ export default function AcceptInvitePage() {
 
     if (res.ok) {
       // Full navigation, not router.push: middleware must see the new cookies.
-      window.location.href = '/';
+      window.location.href = '/overview';
       return;
     }
 
     const body = (await res.json().catch(() => null)) as ApiError | null;
     setError(body?.error.message ?? 'Could not accept this invitation.');
-    setPending(false);
+
+    } catch {
+      setError('Cannot reach the server. Check your connection and try again.');
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
     <AuthShell
       title="Accept your invitation"
-      intro="Choose a password to finish setting up your account."
+      intro="Use your existing password, or choose one if this is your first Kramya account."
       footer={
         <>
           If you already have a Kramya password, it stays as it is — accepting only adds this
@@ -65,7 +71,7 @@ export default function AcceptInvitePage() {
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-        <Field id="password" label="New password" hint="At least 10 characters.">
+        <Field id="password" label="Password" hint="At least 10 characters.">
           <input
             id="password"
             type="password"
@@ -115,7 +121,7 @@ export default function AcceptInvitePage() {
           disabled={pending || mismatch}
           className={btn('primary', 'lg') + ' mt-1 w-full'}
         >
-          {pending ? 'Setting up…' : 'Set password and sign in'}
+          {pending ? 'Setting up…' : 'Accept invitation'}
         </button>
       </form>
     </AuthShell>

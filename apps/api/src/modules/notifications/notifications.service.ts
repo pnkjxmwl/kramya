@@ -26,6 +26,9 @@ const BATCH = 100;
 
 @Injectable()
 export class NotificationsService {
+  async unregisterDevice(accountId: string, token: string): Promise<void> {
+    await this.prisma.pushToken.deleteMany({ where: { accountId, token } });
+  }
   private readonly log = new Logger(NotificationsService.name);
 
   constructor(

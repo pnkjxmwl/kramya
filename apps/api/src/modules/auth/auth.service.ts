@@ -77,19 +77,32 @@ export class AuthService {
 
     const account = await this.prisma.account.findUnique({
       where: { id: invitation.accountId },
-      select: { id: true, email: true, passwordHash: true },
+      select: { id: true, email: true, passwordHash: true, googleId: true },
     });
     if (!account) throw invalid;
 
     // Hashed outside the transaction: Argon2id is deliberately slow, and holding a
     // transaction open across it holds locks for no reason.
+    // The inviter knows this token. It authorizes membership, never a login to an
+    // existing identity. Google-only accounts must use their existing sign-in.
+    if (account.passwordHash) {
+      if (!(await argonVerify(account.passwordHash, input.password))) throw invalid;
+    } else if (account.googleId) {
+      throw invalid;
+    }
     const passwordHash = account.passwordHash ?? (await argonHash(input.password));
 
     await this.prisma.$transaction(async (tx) => {
-      if (!(await this.staff.consumeInvitation(invitation.membershipId, tx))) throw invalid;
+      if (!(await this.staff.consumeInvitation(invitation.membershipId, input.token, tx))) throw invalid;
 
       if (!account.passwordHash) {
-        await tx.account.update({ where: { id: account.id }, data: { passwordHash } });
+        // A concurrent Google login or another invitation must not have established
+        // an identity since our read. Losing this claim rolls back activation too.
+        const claimed = await tx.account.updateMany({
+          where: { id: account.id, passwordHash: null, googleId: null },
+          data: { passwordHash },
+        });
+        if (claimed.count !== 1) throw invalid;
       }
     });
 
@@ -110,6 +123,18 @@ export class AuthService {
     }
 
     return this.tokens.issue({ id: account.id, email: account.email });
+  }
+
+  /** Google-only and password accounts prove identity through their existing session. */
+  async acceptMembership(accountId: string, token: string): Promise<AuthTokens> {
+    const invitation = await this.staff.findOpenInvitation(token);
+    const invalid = new UnauthorizedError('This invitation is not valid');
+    if (!invitation || invitation.accountId !== accountId) throw invalid;
+    const account = await this.prisma.account.findUniqueOrThrow({
+      where: { id: accountId }, select: { id: true, email: true },
+    });
+    if (!(await this.staff.consumeInvitation(invitation.membershipId, token))) throw invalid;
+    return this.tokens.issue(account);
   }
 
   /**

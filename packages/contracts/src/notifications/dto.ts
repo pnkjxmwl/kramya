@@ -57,6 +57,9 @@ export const RegisterPushTokenRequest = z.object({
 });
 export type RegisterPushTokenRequest = z.infer<typeof RegisterPushTokenRequest>;
 
+export const UnregisterPushTokenRequest = z.object({ token: z.string().min(10).max(255) });
+export type UnregisterPushTokenRequest = z.infer<typeof UnregisterPushTokenRequest>;
+
 export const PushTokenResponse = z.object({
   registered: z.boolean(),
 });

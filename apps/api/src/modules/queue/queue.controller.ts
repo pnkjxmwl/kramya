@@ -2,7 +2,6 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   CheckInRequest,
   CompleteConsultationRequest,
-  EndSessionRequest,
   NoShowRequest,
   PauseRequest,
   PresenceRequest,
@@ -30,7 +29,6 @@ import { skip } from './commands/skip';
 import { noShow } from './commands/no-show';
 import { requeue } from './commands/requeue';
 import { pause, resume } from './commands/pause';
-import { endSession } from './commands/end-session';
 import { presence } from './commands/presence';
 import { walkIn } from './commands/walk-in';
 import { setPriority } from './commands/priority';
@@ -172,16 +170,6 @@ export class QueueController {
     @Body(new ZodBody(ResumeRequest)) body: ResumeRequest,
   ): Promise<QueueCommandResult> {
     return resume(this.queue, sessionId, actorOf(account, tenant), body);
-  }
-
-  @Post('end')
-  end(
-    @Param('sessionId') sessionId: string,
-    @CurrentAccount() account: AuthedAccount,
-    @CurrentHospital() tenant: TenantContext,
-    @Body(new ZodBody(EndSessionRequest)) body: EndSessionRequest,
-  ): Promise<QueueCommandResult> {
-    return endSession(this.queue, sessionId, actorOf(account, tenant), body);
   }
 
   @Post('presence')

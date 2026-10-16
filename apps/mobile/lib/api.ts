@@ -31,10 +31,10 @@ export function useApi<T>(path: string, enabled = true, refetchMs?: number) {
     // Default is false, but state it: a phone in someone's pocket must not poll a
     // hospital API every few seconds for a screen nobody is looking at.
     refetchIntervalInBackground: false,
-    queryFn: async (): Promise<T> => {
+    queryFn: async ({ signal }): Promise<T> => {
       let res: Response;
       try {
-        res = await authedFetch(path);
+        res = await authedFetch(path, { signal });
       } catch {
         // fetch() rejects only on a transport failure, which on a phone almost
         // always means no signal. Saying so beats "Network request failed".
