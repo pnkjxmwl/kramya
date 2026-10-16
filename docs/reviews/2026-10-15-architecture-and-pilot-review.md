@@ -12,6 +12,10 @@ Use **Supabase Free in Mumbai as the proposed replacement Postgres for developme
 
 The companion [migration plan](../supabase-migration-plan.md) gives the connection strategy, proposed configuration, verification gates, and cutover sequence. No cloud account, database, deployment, or billing setting was changed in this review.
 
+## Follow-up status — 16 October 2026
+
+PR [#11](https://github.com/pnkjxmwl/kramya/pull/11) has since merged as commit `55dc7df`. It repairs the critical invitation/account takeover, payment capture/refund reconciliation, session closure, and client session/tenant/reconnect defects, with regression coverage and a green CI run. The fresh Supabase project is now migrated and the Render API's readiness check passes. This resolves the code blockers recorded above for staging, not the operational pilot gates below: the database is empty, the full hosted two-tenant journey and real-device flows remain untested, backups have not been restored, and the free API is not dependable during clinic hours. Findings in this document remain historical observations from 15 October; use the current code and the migration plan before treating any individual finding as open or closed.
+
 ## What exists and how it works
 
 | Area            | Actual implementation                                                            | Assessment                                                                                                         |
