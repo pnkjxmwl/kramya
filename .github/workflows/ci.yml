@@ -56,8 +56,17 @@ jobs:
       # The Prisma client is generated code - CI must build it, never assume it.
       - run: pnpm --filter @opd/api prisma:generate
 
+      # Supabase-only roles are absent from plain Postgres. Model their old broad
+      # defaults so the grant-hardening migration is exercised, not just parsed, in CI.
+      - name: Add Supabase API roles to migration test database
+        run: psql postgresql://opd:opd_local_dev@localhost:5433/opd -v ON_ERROR_STOP=1 -f apps/api/test/sql/prepare-client-role-grants.sql
+
       # Integration tests need the schema applied, not just the client generated.
       - run: pnpm --filter @opd/api exec prisma migrate deploy
+
+      # Do not let client roles inherit table access now or from future Prisma migrations.
+      - name: Verify Supabase API roles are locked out
+        run: psql postgresql://opd:opd_local_dev@localhost:5433/opd -v ON_ERROR_STOP=1 -f apps/api/test/sql/verify-client-role-grants.sql
 
       - run: pnpm lint
       - run: pnpm typecheck
