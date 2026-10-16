@@ -53,8 +53,8 @@ must retain their current API checks even after database policies are introduced
 1. Separate migration credentials from runtime credentials. The migration owner runs
    DDL; a dedicated non-owner runtime role must have no CREATE, role-management,
    TRUNCATE or BYPASSRLS privileges. Keep both credentials in deployment secrets.
-   The current Render build runs Prisma migrations using DATABASE_URL, so change the
-   deploy path at the same time; swapping only the runtime URI would break migrations.
+   This boundary is now active: GitHub runs Prisma migrations with its owner secret,
+   and Render builds/deploys the API with the separate runtime connection.
    Render service environment variables are also visible at runtime: putting the
    migration-owner URL beside the runtime URL there would leave the privileged
    credential available to the API process. Move DDL to a protected migration job
