@@ -30,6 +30,11 @@ hosted Supabase. The hosted environment remains disposable staging; see the
 [staging runbook](docs/staging-runbook.md) and
 [security access design](docs/security/data-access-model.md).
 
+Production work follows the [safeguard rollout](docs/production-readiness.md).
+Hands-on phone testing and the complete UI/workflow review are saved for the final
+phase in [TESTING.md](TESTING.md). The current Android visual direction is documented
+[here](docs/design/kramya-android-direction.md).
+
 Start with one supervised clinic pilot and record prediction error, window coverage,
 physical waiting time, late/missed arrivals and staff effort before expanding to
 3–4 clinics. Automated tests verify behavior; observed outcomes establish whether

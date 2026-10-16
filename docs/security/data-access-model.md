@@ -1,8 +1,11 @@
 # Kramya data access model
 
-Reviewed 16 October 2026. This is a rollout design; the row policies and runtime-role
-split below have not been implemented. The deployed API currently enforces ownership
-through NestJS authorization and scoped Prisma queries.
+Reviewed 16 October 2026. Row policies and the live runtime credential split remain
+pending. Migration `202610160005` prepares a restricted NOLOGIN role and CI verifies
+its grants, append-only history, and compatibility with a non-superuser migration
+owner. The deployed API still uses its owner connection and enforces ownership
+through NestJS authorization and scoped Prisma queries. Follow the
+[production safeguard runbook](../production-readiness.md) for the credential cutover.
 
 ## Verified boundaries
 
@@ -28,19 +31,19 @@ through NestJS authorization and scoped Prisma queries.
 These rules describe access intent, not a blanket SQL policy. Role-specific commands
 must retain their current API checks even after database policies are introduced.
 
-| Tables | Required scope |
-| --- | --- |
-| Account | Own account profile; credential lookup and staff invitations require a narrowly defined auth path. Never expose password/Google identity fields through discovery. |
-| Patient | Account-owned profiles belong to that account. Walk-in profiles have no account; hospital access must follow a booking/consultation relationship, not `accountId IS NULL`. A visit at one clinic must not expose another clinic's history. |
-| RefreshToken, PushToken, Notification | Own account, plus explicitly scoped token/notification processing. Refresh-token exchange must work before an access token is available. |
-| Hospital, Department, Doctor, OPDSession | Staff see their hospital's configuration. Discovery sees only the verified/active/listable subset and existing public response fields. Row access does not restrict columns. |
-| HospitalStaff | Own memberships for tenant selection; hospital admins manage memberships within their hospital. Invitation-token acceptance is a separate, single-use authorization path. |
-| DoctorSchedule, QueuePolicy | Hospital-scoped configuration. Discovery reads only the policy information it needs through the API. |
-| QueueEntry, Payment | Account owners see their bookings/payments; staff operate the selected hospital under current role rules. Owner, hospital, session and patient relations must agree on inserts and updates. |
-| Refund | Follow the owning Payment's account/hospital and allowed financial commands. |
-| QueueEvent, Consultation | Staff access within hospital; patient access only through their own booking and the API's allowed response fields. Raw event metadata and other patients' histories stay private. |
-| AuditLog | Append-only operational writes; hospital records restricted to authorized staff, platform records to operators. No general patient read policy. |
-| _prisma_migrations | Migration/operator access only. Runtime code needs no access. |
+| Tables                                   | Required scope                                                                                                                                                                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Account                                  | Own account profile; credential lookup and staff invitations require a narrowly defined auth path. Never expose password/Google identity fields through discovery.                                                                         |
+| Patient                                  | Account-owned profiles belong to that account. Walk-in profiles have no account; hospital access must follow a booking/consultation relationship, not `accountId IS NULL`. A visit at one clinic must not expose another clinic's history. |
+| RefreshToken, PushToken, Notification    | Own account, plus explicitly scoped token/notification processing. Refresh-token exchange must work before an access token is available.                                                                                                   |
+| Hospital, Department, Doctor, OPDSession | Staff see their hospital's configuration. Discovery sees only the verified/active/listable subset and existing public response fields. Row access does not restrict columns.                                                               |
+| HospitalStaff                            | Own memberships for tenant selection; hospital admins manage memberships within their hospital. Invitation-token acceptance is a separate, single-use authorization path.                                                                  |
+| DoctorSchedule, QueuePolicy              | Hospital-scoped configuration. Discovery reads only the policy information it needs through the API.                                                                                                                                       |
+| QueueEntry, Payment                      | Account owners see their bookings/payments; staff operate the selected hospital under current role rules. Owner, hospital, session and patient relations must agree on inserts and updates.                                                |
+| Refund                                   | Follow the owning Payment's account/hospital and allowed financial commands.                                                                                                                                                               |
+| QueueEvent, Consultation                 | Staff access within hospital; patient access only through their own booking and the API's allowed response fields. Raw event metadata and other patients' histories stay private.                                                          |
+| AuditLog                                 | Append-only operational writes; hospital records restricted to authorized staff, platform records to operators. No general patient read policy.                                                                                            |
+| _prisma_migrations                       | Migration/operator access only. Runtime code needs no access.                                                                                                                                                                              |
 
 ## Runtime-role and RLS implementation sequence
 

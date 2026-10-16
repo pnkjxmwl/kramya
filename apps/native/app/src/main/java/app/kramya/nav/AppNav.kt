@@ -1,5 +1,7 @@
 package app.kramya.nav
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,7 +62,11 @@ fun AppNav() {
 @Composable
 private fun AuthNav() {
     val nav = rememberNavController()
-    NavHost(nav, startDestination = Routes.LOGIN) {
+    NavHost(
+        nav, startDestination = Routes.LOGIN,
+        enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None }, popExitTransition = { ExitTransition.None },
+    ) {
         composable(Routes.LOGIN) {
             LoginScreen(onSignup = { nav.navigate(Routes.SIGNUP) })
         }
@@ -100,7 +106,11 @@ private fun SignedInNav() {
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
-            NavHost(nav, startDestination = Routes.DISCOVER_GRAPH) {
+            NavHost(
+                nav, startDestination = Routes.DISCOVER_GRAPH,
+                enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None }, popExitTransition = { ExitTransition.None },
+            ) {
                 discoverGraph(nav)
                 visitsGraph(nav)
                 profileGraph(nav)

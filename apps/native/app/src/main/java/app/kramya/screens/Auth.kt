@@ -80,12 +80,12 @@ fun LoginScreen(onSignup: () -> Unit) {
                 Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(percent = 50))
-                    .background(Theme.Colors.Ink),
+                    .background(Theme.Colors.Primary),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.ACTIVITY, size = 22.dp, tint = androidx.compose.ui.graphics.Color.White) }
             BasicText(
                 text = "KRAMYA",
-                style = Theme.Font.Overline.copy(color = Theme.Colors.InkTertiary),
+                style = Theme.Font.Overline.copy(color = Theme.Colors.Primary),
             )
         }
 
