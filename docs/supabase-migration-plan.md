@@ -52,20 +52,20 @@ Confirm all committed migrations are applied and that the application tables/enu
 
 ## Connect the existing API
 
-The existing `render.yaml` obtains `DATABASE_URL` from the managed Render database. Replace that binding in the eventual deployment change with an externally supplied secret:
+The active `render.yaml` now obtains `DATABASE_URL` from an externally supplied Supabase runtime secret. The original managed Render database binding was replaced during cutover:
 
 ```yaml
 - key: DATABASE_URL
   sync: false
 ```
 
-[render.supabase.example.yaml](deployment/render.supabase.example.yaml) is a complete **review template**, preserving existing service names and startup/build behavior while omitting creation of another expiring Render database. It is not the active root Blueprint and has not been applied. Inspect the Render Blueprint diff before applying it; do not create duplicate services, rotate credentials unintentionally, or delete resources as an incidental migration step.
+[render.supabase.example.yaml](deployment/render.supabase.example.yaml) is a **historical migration review template**, preserving the initial service identities and build behavior while omitting creation of another expiring Render database. It is not the active root Blueprint and has not been applied. Its migration-in-build behavior predates the protected workflow. Use the active root Blueprint and [production safeguard runbook](production-readiness.md) for current deployment settings. Inspect any Blueprint diff before applying it; do not create duplicate services, rotate credentials unintentionally, or delete resources as an incidental migration step.
 
 For an already-existing service, `sync: false` does not automatically prompt again: set the new value in the Render dashboard/environment settings and redeploy/restart. Keep the API public URL unchanged. Then web `API_URL` / `NEXT_PUBLIC_API_URL`, the patient build API URLs, and Razorpay's webhook URL do not change merely because Postgres moved.
 
 Keep JWT/check-in secrets intentional and consistent with that environment. A fresh DB invalidates stored refresh-token rows and removes old demo accounts anyway. Retain Razorpay **test** credentials until integrity and operational gates pass. Free hosting does not make live payment processing fee-free.
 
-The existing free Render build runs migrations after building because a separate pre-deploy command is unavailable there. For a real production rollout, use an ordered migration stage and backward-compatible schema changes; avoid two deployments racing schema updates. Do not promote this free staging template as the final production deployment.
+The original free Render build ran migrations after building because a separate pre-deploy command was unavailable there. The active deployment now uses a main-only GitHub migration job, followed by a hook deploying that exact checked commit; Render's app build no longer runs migrations and automatic commit deploys are off. Keep schema changes backward-compatible. This remains fictional staging and does not establish clinic-hour availability.
 
 ## Bootstrap and validate fictional data
 
@@ -111,15 +111,16 @@ Review storage/egress, DB connections, p95 query/command latency, oldest unresol
 - [x] Account/payment/session-integrity blockers repaired and regression-tested locally.
 - [x] Supabase project created; correct region and Data API disabled.
 - [x] Supabase connection configured privately in Render; API readiness confirms DB and Redis are reachable.
-- [x] All 14 committed migrations applied; no destructive command used; app tables are empty.
+- [x] All 17 committed migrations applied; fictional TEST clinics/accounts now populate staging. No destructive migration command was used.
 - [x] Render API deployed against Supabase; public service URL preserved.
+- [x] Limited hosted checks passed after the runtime-role cutover: login, catalog/profile operations, staff queue reads and cross-account/clinic denial. See [TESTING.md](../TESTING.md) for exact evidence and the remaining full journey.
 - [ ] Fictional two-tenant functional checks pass on a supervised staging dataset.
 - [ ] Payment recovery, real-device push, auth expiry, offline/reconnect verified.
 - [ ] Independent backup restored successfully; RPO/RTO agreed.
 - [ ] Commercial web hosting and clinic-hour API uptime suitable.
 - [ ] One clinic supervised before expanding to the other three.
 
-The API's database connection is working, but this is not a patient-ready release. Supabase's inventory flags RLS disabled on all 19 tables. The Data API is disabled, and a direct privilege audit found no table CRUD grants to `anon` or `authenticated`; migration `202610160004_restrict_supabase_api_roles` removes their remaining table/sequence grants and future defaults. They retain `USAGE` on the `public` schema, which by itself does not grant table access. The backend's `postgres` role bypasses RLS, so this does not provide row-level database isolation for Prisma. Keep the Data API disabled and complete a restricted runtime-role and tenant-context design before real patient data or direct client access. Render Free sleeps and is not suitable for clinic-hour availability.
+The API's database connection is working, but this is not a patient-ready release. RLS remains disabled on all 19 tables. The Data API is disabled, and migration `202610160004_restrict_supabase_api_roles` removes unused `anon`/`authenticated` table/sequence grants and future defaults. Their remaining schema `USAGE` does not grant table access. The backend now uses the restricted `kramya_runtime` role without BYPASSRLS; migrations use a separate owner secret in GitHub. The old runtime-exposed owner password has been rotated and the protected workflow verified the replacement. This grant boundary does not provide tenant row isolation for Prisma. Keep the Data API disabled and finish tenant-context/RLS, backup and acceptance gates before real patient data or direct client access. Render Free sleeps and is not suitable for clinic-hour availability.
 
 The permission-hardening migration is verified in CI with simulated Supabase roles and broad legacy defaults, including a rolled-back future table/sequence probe. After deployment, confirm the migration is finished and `has_table_privilege` reports no table permissions for either client role. Default privileges are scoped to the migration owner; create application objects through Prisma migrations, not as `supabase_admin` in the Dashboard. See the [data access model](security/data-access-model.md) for the role split and row-policy rollout design.
 

@@ -53,9 +53,14 @@ target contains no real activity.
 
 ## Deployment and migration changes
 
-Render deploys the API from `main`. The build command generates Prisma Client, builds the
-API, and runs `prisma migrate deploy`. Keep migration changes additive and backward
-compatible with the currently running API; do not edit a migration that has already run.
+Render releases use the manual **Migrate and deploy staging** GitHub workflow on `main`.
+It requires successful `verify` and `native` CI checks for that exact commit, runs
+`prisma migrate deploy` with the protected migration-owner secret, then requests that
+same commit through the private Render hook. Automatic commit deploys are off. Render's
+build only installs dependencies, generates Prisma Client and builds the API; runtime
+uses `kramya_runtime`. Follow [the safeguard runbook](production-readiness.md).
+Keep migrations additive and backward-compatible with the currently running API;
+do not edit a migration that has already run. Merging to main alone does not deploy the API.
 Review the Render Blueprint diff before syncing it, and preserve the existing service names
 and public URLs.
 
