@@ -48,7 +48,7 @@ export function parseDatabaseUrl(value) {
     throw new Error('Remote backups require TLS; supported modes are require and verify-full');
   }
   if (url.searchParams.has('schema') && url.searchParams.get('schema') !== 'public')
-    throw new Error('This tool backs up the public application schema only');
+    throw new Error('This tool backs up the public application schema and private policy helpers only');
   return {
     host,
     local,
@@ -212,6 +212,7 @@ async function backup(path, key) {
     [
       '--format=custom',
       '--schema=public',
+      '--schema=kramya_private',
       '--no-owner',
       '--no-privileges',
       '--lock-wait-timeout=10s',
@@ -265,7 +266,7 @@ async function restore(path, key) {
         '-v',
         'ON_ERROR_STOP=1',
         '-c',
-        "SELECT count(*) FROM pg_tables WHERE schemaname='public'",
+        "SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace) + (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace) + (SELECT count(*) FROM pg_namespace WHERE nspname NOT IN ('public','information_schema') AND nspname NOT LIKE 'pg_%')",
       ],
       target,
       true,

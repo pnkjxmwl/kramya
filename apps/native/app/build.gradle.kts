@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -26,6 +28,24 @@ fun prop(name: String): String = providers.gradleProperty(name).get()
 val firebaseConfigured = file("google-services.json").exists()
 if (firebaseConfigured) apply(plugin = "com.google.gms.google-services")
 
+val uploadStore = providers.environmentVariable("KRAMYA_UPLOAD_STORE_FILE").orNull
+val uploadStorePassword = providers.environmentVariable("KRAMYA_UPLOAD_STORE_PASSWORD").orNull
+val uploadAlias = providers.environmentVariable("KRAMYA_UPLOAD_KEY_ALIAS").orNull
+val uploadKeyPassword = providers.environmentVariable("KRAMYA_UPLOAD_KEY_PASSWORD").orNull
+val signingValues = listOf(uploadStore, uploadStorePassword, uploadAlias, uploadKeyPassword)
+val releaseSigningConfigured = signingValues.all { !it.isNullOrBlank() }
+check(signingValues.none { !it.isNullOrBlank() } || releaseSigningConfigured) {
+    "Release signing requires all four KRAMYA_UPLOAD_* environment variables."
+}
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.path in setOf(":app:assembleRelease", ":app:bundleRelease", ":app:packageRelease") }) {
+        check(releaseSigningConfigured) { "Release signing is missing. See docs/android-release.md; unsigned release artifacts are refused." }
+        check(firebaseConfigured) { "Release requires the matching Firebase client configuration." }
+        val target = URI(prop("apiUrlRelease"))
+        check(target.scheme == "https" && !target.host.isNullOrBlank() && target.rawUserInfo == null) { "Release API must use HTTPS." }
+    }
+}
+
 android {
     namespace = "app.kramya"
     compileSdk = 36
@@ -46,6 +66,14 @@ android {
         buildConfigField("boolean", "PUSH_ENABLED", firebaseConfigured.toString())
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) create("upload") {
+            storeFile = file(uploadStore!!)
+            storePassword = uploadStorePassword
+            keyAlias = uploadAlias
+            keyPassword = uploadKeyPassword
+        }
+    }
     buildTypes {
         debug {
             versionNameSuffix = "-debug"
@@ -56,8 +84,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "API_URL", "\"${prop("apiUrlRelease")}\"")
-            // Release artifacts remain unsigned until a private upload key is configured.
-            // Use assembleDebug for development/device installation.
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("upload")
         }
     }
 

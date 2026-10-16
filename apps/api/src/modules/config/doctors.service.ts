@@ -50,15 +50,15 @@ export class DoctorsService {
   async list(hospitalId: string, query: ConfigListQuery): Promise<Paginated<Doctor>> {
     const where = { hospitalId, ...(query.includeInactive ? {} : { isActive: true }) };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.doctor.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.doctor.findMany({
         where,
         orderBy: { name: 'asc' },
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.doctor.count({ where }),
-    ]);
+      tx.doctor.count({ where }),
+    ]));
 
     return { items: rows.map(toDto), total, limit: query.limit, offset: query.offset };
   }

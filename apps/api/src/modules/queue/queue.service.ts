@@ -17,6 +17,7 @@ import { assertSessionAccepts, type QueueCommand } from './state-machine';
 import { CALL_ORDER } from './call-order';
 import { toEntryView } from './commands/result';
 import { QueuePolicyService } from '../config/queue-policy.service';
+import { DatabaseIdentityFor } from '../../prisma/database-context';
 
 /**
  * The transaction, locking and accountability skeleton every queue command runs
@@ -198,6 +199,7 @@ export class QueueService {
    * whole transaction back, including the audit trail - which is correct: an action
    * that did not happen must not be recorded as if it did.
    */
+  @DatabaseIdentityFor((params: { sessionId: string; actor: QueueActor }) => params.actor.type === 'PATIENT' ? { purpose: 'patient-command', sessionId: params.sessionId } : {})
   async runCommand<T>(params: {
     sessionId: string;
     actor: QueueActor;
@@ -212,7 +214,7 @@ export class QueueService {
     // Outside the transaction on purpose: configuration, not queue state. It also
     // creates the row on first use, and an upsert has no business running under a
     // lock that other staff are waiting on.
-    const policy = await this.policies.ensure(actor.hospitalId);
+    const policy = await (actor.type === 'PATIENT' ? this.policies.read(actor.hospitalId) : this.policies.ensure(actor.hospitalId));
 
     // Assigned inside the transaction, read AFTER it commits. Realtime is emitted
     // from out here for the reason docs/Phases.md puts first among this phase's

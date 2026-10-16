@@ -1,56 +1,80 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { EnvSchema, loadEnv } from './env';
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { EnvSchema, loadEnv, paymentsConfigured } from "./env";
 
 const valid = {
-  DATABASE_URL: 'postgresql://opd:pw@localhost:5433/opd',
-  REDIS_URL: 'redis://localhost:6380',
-  JWT_ACCESS_SECRET: 'a'.repeat(32),
-  JWT_REFRESH_SECRET: 'b'.repeat(32),
-  CHECKIN_SECRET: 'c'.repeat(32),
+  DATABASE_URL: "postgresql://opd:pw@localhost:5433/opd",
+  REDIS_URL: "redis://localhost:6380",
+  JWT_ACCESS_SECRET: "a".repeat(32),
+  JWT_REFRESH_SECRET: "b".repeat(32),
+  CHECKIN_SECRET: "c".repeat(32),
 };
 
-describe('loadEnv', () => {
-  it('applies defaults when optional vars are absent', () => {
+describe("loadEnv", () => {
+  it("keeps staging from accepting live payment keys accidentally", () => {
+    const values = {
+      ...valid,
+      RAZORPAY_KEY_ID: "rzp_live_fixture",
+      RAZORPAY_KEY_SECRET: "fixture",
+      RAZORPAY_WEBHOOK_SECRET: "fixture",
+    };
+    expect(paymentsConfigured(loadEnv(values))).toBe(false);
+    expect(
+      paymentsConfigured(
+        loadEnv({ ...values, RAZORPAY_KEY_ID: "rzp_test_fixture" }),
+      ),
+    ).toBe(true);
+    expect(
+      paymentsConfigured(loadEnv({ ...values, RAZORPAY_MODE: "live" })),
+    ).toBe(true);
+  });
+  it("applies defaults when optional vars are absent", () => {
     const env = loadEnv(valid as NodeJS.ProcessEnv);
-    expect(env.NODE_ENV).toBe('development');
+    expect(env.NODE_ENV).toBe("development");
     expect(env.PORT).toBe(3000);
-    expect(env.LOG_LEVEL).toBe('info');
+    expect(env.LOG_LEVEL).toBe("info");
   });
 
-  it('coerces PORT to a number', () => {
-    const env = loadEnv({ ...valid, PORT: '8080' } as NodeJS.ProcessEnv);
+  it("coerces PORT to a number", () => {
+    const env = loadEnv({ ...valid, PORT: "8080" } as NodeJS.ProcessEnv);
     expect(env.PORT).toBe(8080);
   });
 
-  it('refuses to boot when a required var is missing', () => {
+  it("refuses to boot when a required var is missing", () => {
     const { DATABASE_URL: _omitted, ...rest } = valid;
     expect(() => loadEnv(rest as NodeJS.ProcessEnv)).toThrow(/DATABASE_URL/);
   });
 
-  it('refuses to boot on a too-short JWT secret', () => {
+  it("refuses to boot on a too-short JWT secret", () => {
     expect(() =>
-      loadEnv({ ...valid, JWT_ACCESS_SECRET: 'too-short' } as NodeJS.ProcessEnv),
+      loadEnv({
+        ...valid,
+        JWT_ACCESS_SECRET: "too-short",
+      } as NodeJS.ProcessEnv),
     ).toThrow(/JWT_ACCESS_SECRET/);
   });
 
-  it('refuses to boot without a check-in signing secret', () => {
+  it("refuses to boot without a check-in signing secret", () => {
     // Not defaulted on purpose: an unsigned QR scheme looks identical to a signed
     // one right up to the moment someone checks in with a code they invented.
     const { CHECKIN_SECRET: _omitted, ...rest } = valid;
     expect(() => loadEnv(rest as NodeJS.ProcessEnv)).toThrow(/CHECKIN_SECRET/);
   });
 
-  it('parses GOOGLE_CLIENT_IDS into a trimmed list', () => {
-    expect(loadEnv({ ...valid, GOOGLE_CLIENT_IDS: ' a , b ,, ' } as NodeJS.ProcessEnv).GOOGLE_CLIENT_IDS)
-      .toEqual(['a', 'b']);
+  it("parses GOOGLE_CLIENT_IDS into a trimmed list", () => {
+    expect(
+      loadEnv({
+        ...valid,
+        GOOGLE_CLIENT_IDS: " a , b ,, ",
+      } as NodeJS.ProcessEnv).GOOGLE_CLIENT_IDS,
+    ).toEqual(["a", "b"]);
     expect(loadEnv(valid as NodeJS.ProcessEnv).GOOGLE_CLIENT_IDS).toEqual([]);
   });
 
-  it('refuses to boot on a malformed url', () => {
-    expect(() => loadEnv({ ...valid, REDIS_URL: 'not-a-url' } as NodeJS.ProcessEnv)).toThrow(
-      /REDIS_URL/,
-    );
+  it("refuses to boot on a malformed url", () => {
+    expect(() =>
+      loadEnv({ ...valid, REDIS_URL: "not-a-url" } as NodeJS.ProcessEnv),
+    ).toThrow(/REDIS_URL/);
   });
 
   /**
@@ -64,10 +88,13 @@ describe('loadEnv', () => {
    * added `CHECKIN_SECRET` and walked straight into it anyway. A comment is not a
    * mechanism. This is.
    */
-  it('has every environment variable declared in turbo.json', () => {
-    const raw = readFileSync(new URL('../../../../turbo.json', import.meta.url), 'utf8');
+  it("has every environment variable declared in turbo.json", () => {
+    const raw = readFileSync(
+      new URL("../../../../turbo.json", import.meta.url),
+      "utf8",
+    );
     // Line comments only - `$schema` contains a `//` inside a string.
-    const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '')) as {
+    const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, "")) as {
       globalEnv?: string[];
       globalPassThroughEnv?: string[];
     };
@@ -76,9 +103,12 @@ describe('loadEnv', () => {
       ...(config.globalPassThroughEnv ?? []),
     ]);
 
-    const missing = Object.keys(EnvSchema.shape).filter((name) => !declared.has(name));
-    expect(missing, `add these to turbo.json globalPassThroughEnv: ${missing.join(', ')}`).toEqual(
-      [],
+    const missing = Object.keys(EnvSchema.shape).filter(
+      (name) => !declared.has(name),
     );
+    expect(
+      missing,
+      `add these to turbo.json globalPassThroughEnv: ${missing.join(", ")}`,
+    ).toEqual([]);
   });
 });

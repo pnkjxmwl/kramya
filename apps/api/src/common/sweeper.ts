@@ -1,5 +1,15 @@
-import { Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { env } from '../config/env';
+import {
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from "@nestjs/common";
+import { env } from "../config/env";
+import { withDatabaseIdentity } from "../prisma/database-context";
+import {
+  registerWorker,
+  removeWorker,
+  type WorkerStatus,
+} from "./worker-status";
 
 /**
  * The shape every background worker in this codebase shares (P8-BE-03..05).
@@ -42,6 +52,7 @@ export abstract class Sweeper implements OnModuleInit, OnModuleDestroy {
   protected readonly log = new Logger(this.constructor.name);
   private timer: NodeJS.Timeout | undefined;
   private running = false;
+  private status: WorkerStatus | undefined;
 
   /** Name used by the `DISABLED_WORKERS` kill switch. Keep it short and greppable. */
   protected abstract readonly name: string;
@@ -51,9 +62,14 @@ export abstract class Sweeper implements OnModuleInit, OnModuleDestroy {
   protected abstract sweep(): Promise<void>;
 
   onModuleInit(): void {
+    this.status = registerWorker(
+      this.name,
+      this.intervalMs,
+      env().NODE_ENV !== "test" && !env().DISABLED_WORKERS.includes(this.name),
+    );
     // Never on its own in tests: a timer firing mid-fixture is a flake generator, and
     // every path is tested by calling sweep() directly instead.
-    if (env().NODE_ENV === 'test') return;
+    if (env().NODE_ENV === "test") return;
 
     // docs/Phases.md: "Give every worker its own env-flag kill switch, so a
     // misbehaving timer can be disabled without a redeploy."
@@ -68,6 +84,7 @@ export abstract class Sweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    if (this.status) removeWorker(this.status);
     if (this.timer !== undefined) clearInterval(this.timer);
   }
 
@@ -81,13 +98,27 @@ export abstract class Sweeper implements OnModuleInit, OnModuleDestroy {
   async safeSweep(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    if (this.status)
+      Object.assign(this.status, {
+        running: true,
+        lastAttemptAt: new Date().toISOString(),
+      });
     try {
-      await this.sweep();
+      await withDatabaseIdentity({ purpose: `worker:${this.name}` }, () =>
+        this.sweep(),
+      );
+      if (this.status)
+        Object.assign(this.status, {
+          lastSuccessAt: new Date().toISOString(),
+          lastFailed: false,
+        });
     } catch (error) {
+      if (this.status) this.status.lastFailed = true;
       // A worker that dies takes every future pass with it. Log and live.
       this.log.error({ err: error }, `${this.name} sweep failed`);
     } finally {
       this.running = false;
+      if (this.status) this.status.running = false;
     }
   }
 }

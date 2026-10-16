@@ -655,6 +655,33 @@ model Refund {
   @@index([status, reconcileAfter])
 }
 
+// Read-only projections backed by reviewed owner views, not writable tables.
+// They deliberately omit account/patient ids, check-in codes and event metadata.
+model QueueMetric {
+  id String @id
+  hospitalId String
+  sessionId String
+  tokenNumber Int
+  tokenLabel String
+  type QueueEntryType
+  status QueueEntryStatus
+  priority QueueEntryPriority
+  priorityAt DateTime?
+  requeuedAt DateTime?
+  reservationExpiresAt DateTime?
+  consultStartedAt DateTime?
+  calledAt DateTime?
+  completedAt DateTime?
+}
+
+model ConsultationMetric {
+  id String @id
+  hospitalId String
+  doctorId String
+  endedAt DateTime
+  durationSec Int
+}
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------

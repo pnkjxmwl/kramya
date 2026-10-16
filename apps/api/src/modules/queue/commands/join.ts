@@ -151,7 +151,7 @@ async function findExistingEntry(
  * somebody else while a patient is looking at the screen.
  */
 async function assertRegistrationOpen(ctx: CommandContext): Promise<void> {
-  const onlineTokensHeld = await ctx.tx.queueEntry.count({
+  const onlineTokensHeld = await ctx.tx.queueMetric.count({
     where: {
       sessionId: ctx.session.id,
       type: 'ONLINE',

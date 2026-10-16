@@ -157,10 +157,10 @@ export class EtaService {
       this.pacesFor([session.currentProviderDoctorId], now).then((map) =>
         map.get(session.currentProviderDoctorId),
       ),
-      this.prisma.queueEntry.count({
+      this.prisma.queueMetric.count({
         where: { sessionId, status: { in: [...ELIGIBLE_TO_CALL] } },
       }),
-      this.prisma.queueEntry.findFirst({
+      this.prisma.queueMetric.findFirst({
         where: { sessionId, status: 'IN_CONSULTATION' },
         select: { consultStartedAt: true },
       }),
@@ -241,7 +241,7 @@ export class EtaService {
     const out = new Map<string, DeadTimeResult>();
     if (sessionIds.length === 0) return out;
 
-    const finished = await this.prisma.queueEntry.findMany({
+    const finished = await this.prisma.queueMetric.findMany({
       where: {
         sessionId: { in: sessionIds },
         calledAt: { not: null },
@@ -293,13 +293,13 @@ export class EtaService {
         where: { id: { in: doctorIds } },
         select: { id: true, defaultConsultMins: true },
       }),
-      this.prisma.consultation.groupBy({
+      this.prisma.consultationMetric.groupBy({
         by: ['doctorId'],
         where: { doctorId: { in: doctorIds }, endedAt: { lte: now } },
         _avg: { durationSec: true },
         _count: { _all: true },
       }),
-      this.prisma.consultation.groupBy({
+      this.prisma.consultationMetric.groupBy({
         by: ['doctorId'],
         where: {
           doctorId: { in: doctorIds },

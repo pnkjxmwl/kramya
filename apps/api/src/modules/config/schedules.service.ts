@@ -54,15 +54,15 @@ export class SchedulesService {
   async list(hospitalId: string, query: ScheduleListQuery): Promise<Paginated<DoctorSchedule>> {
     const where = { hospitalId, ...(query.doctorId ? { doctorId: query.doctorId } : {}) };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.doctorSchedule.findMany({
+    const [rows, total] = await this.prisma.$transaction(async tx => Promise.all([
+      tx.doctorSchedule.findMany({
         where,
         orderBy: [{ weekday: 'asc' }, { date: 'asc' }, { startTime: 'asc' }],
         take: query.limit,
         skip: query.offset,
       }),
-      this.prisma.doctorSchedule.count({ where }),
-    ]);
+      tx.doctorSchedule.count({ where }),
+    ]));
 
     return { items: rows.map(toDto), total, limit: query.limit, offset: query.offset };
   }

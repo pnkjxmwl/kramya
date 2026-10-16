@@ -24,8 +24,11 @@ Credentials are in the local, Git-ignored `.env.staging-test-access.md`. Never c
 - [x] Verify runtime grants and append-only history using a non-owner connection in isolated PostgreSQL; independently verify hosted role attributes, grants and runtime app behavior. Do not treat role restrictions as tenant RLS.
 - [x] The operator rotated the old runtime-exposed postgres owner password and updated only GitHub's migration secret. [Workflow attempt 2](https://github.com/pnkjxmwl/kramya/actions/runs/38958710636/attempts/2) successfully authenticated and checked all 17 migrations with the replacement credential. Render retained its separate runtime URI; readiness and actual runtime-role connections remained healthy after rotation.
 - [ ] Prove an encrypted hosted backup and restoration into an isolated target. Record artifact, key custody, recovery time, row counts and application smoke checks.
+- [x] The founder confirmed private off-computer copies of the backup recipient key and staging Android signing files. This records custody, not a successful hosted restore.
+- [ ] Deploy transaction-local database identity and the timing-only projections, then enable and verify RLS using actual non-owner connections. Keep the two deployments in that order.
 - [ ] Decide clinic-hour availability, recovery objectives, support and clinic fallback procedures. No paid hosting changes have been authorized.
 - [ ] Verify Firebase project matching, server delivery credentials, release signing and distribution.
+- [ ] Run the admin-only operations/preflight checks after deployment; record provider authentication separately from real webhook delivery and phone notification receipt.
 - [ ] Verify Razorpay test mode and webhook configuration before checkout tests. No synthetic SUCCESS payment records were inserted into hosted staging.
 
 ## Final phase: Android UI and navigation

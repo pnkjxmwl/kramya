@@ -1,0 +1,46 @@
+name: Encrypted staging backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: kramya-staging-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: staging-database
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require reviewed code with passing checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT/check-runs" > "$RUNNER_TEMP/checks.json"
+          node -e 'const c=require(process.env.RUNNER_TEMP+"/checks.json").check_runs;for(const n of ["verify","native"]){if(!c.some(x=>x.name===n&&x.conclusion==="success"))throw Error("Passing CI missing: "+n)}'
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Export selected staging public schema and encrypt before upload
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: node scripts/hosted-backup.mjs backup staging-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .backups/*.kdb
+            .backups/*.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { env, paymentsConfigured, type Env } from '../../config/env';
+import { Injectable } from "@nestjs/common";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { env, paymentsConfigured, type Env } from "../../config/env";
 
 /**
  * Everything this product needs from Razorpay: two calls out, one signature check in.
@@ -16,7 +16,7 @@ import { env, paymentsConfigured, type Env } from '../../config/env';
  * are what decide whether the money is real.
  */
 
-const API_BASE = 'https://api.razorpay.com/v1';
+const API_BASE = "https://api.razorpay.com/v1";
 
 /**
  * Long enough for a gateway having a slow minute, short enough that a patient is not
@@ -54,9 +54,20 @@ export interface RazorpayPayment {
 
 /** The client's shape, so a test can substitute one without a mocking library. */
 export interface RazorpayApi {
-  createOrder(input: { amountPaise: number; receipt: string; notes?: Record<string, string> }): Promise<RazorpayOrder>;
-  refund(input: { paymentId: string; amountPaise: number; notes?: Record<string, string> }): Promise<RazorpayRefund>;
-  verifyWebhookSignature(rawBody: Buffer, signature: string | undefined): boolean;
+  createOrder(input: {
+    amountPaise: number;
+    receipt: string;
+    notes?: Record<string, string>;
+  }): Promise<RazorpayOrder>;
+  refund(input: {
+    paymentId: string;
+    amountPaise: number;
+    notes?: Record<string, string>;
+  }): Promise<RazorpayRefund>;
+  verifyWebhookSignature(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): boolean;
   /** Phase 8: what actually happened to an order whose webhook never arrived. */
   paymentsForOrder(orderId: string): Promise<RazorpayPayment[]>;
   /** Refunds already raised against a payment, so one is never raised twice. */
@@ -79,6 +90,26 @@ export class RazorpayClient implements RazorpayApi {
     return paymentsConfigured(this.config);
   }
 
+  /** Read-only provider authentication check. Never creates an order or charge. */
+  async preflight(): Promise<{
+    configured: boolean;
+    mode: string;
+    authenticated: boolean;
+  }> {
+    const result = {
+      configured: this.configured,
+      mode: this.config.RAZORPAY_MODE,
+      authenticated: false,
+    };
+    if (!result.configured || result.mode !== "test") return result;
+    try {
+      await this.get("/orders?count=1");
+      return { ...result, authenticated: true };
+    } catch {
+      return result;
+    }
+  }
+
   /**
    * An order for `amountPaise`, which the CALLER derived from the session fee.
    *
@@ -92,9 +123,9 @@ export class RazorpayClient implements RazorpayApi {
     receipt: string;
     notes?: Record<string, string>;
   }): Promise<RazorpayOrder> {
-    const body = await this.post<RazorpayOrder>('/orders', {
+    const body = await this.post<RazorpayOrder>("/orders", {
       amount: input.amountPaise,
-      currency: 'INR',
+      currency: "INR",
       // Our queue-entry id. Razorpay echoes it back on every event and on the
       // dashboard, which is what lets Phase 8's reconcile worker match an orphaned
       // order to the reservation it belongs to.
@@ -114,10 +145,13 @@ export class RazorpayClient implements RazorpayApi {
     amountPaise: number;
     notes?: Record<string, string>;
   }): Promise<RazorpayRefund> {
-    const body = await this.post<RazorpayRefund>(`/payments/${input.paymentId}/refund`, {
-      amount: input.amountPaise,
-      notes: input.notes ?? {},
-    });
+    const body = await this.post<RazorpayRefund>(
+      `/payments/${input.paymentId}/refund`,
+      {
+        amount: input.amountPaise,
+        notes: input.notes ?? {},
+      },
+    );
     return { id: body.id, amount: body.amount, status: body.status };
   }
 
@@ -139,16 +173,19 @@ export class RazorpayClient implements RazorpayApi {
    * Returns false rather than throwing: an unverified webhook is not an exception,
    * it is a stranger, and the caller answers it accordingly.
    */
-  verifyWebhookSignature(rawBody: Buffer, signature: string | undefined): boolean {
+  verifyWebhookSignature(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): boolean {
     const secret = this.config.RAZORPAY_WEBHOOK_SECRET;
-    if (secret === '' || signature === undefined || signature === '') {
+    if (secret === "" || signature === undefined || signature === "") {
       return false;
     }
 
-    const expected = createHmac('sha256', secret).update(rawBody).digest();
+    const expected = createHmac("sha256", secret).update(rawBody).digest();
     // Buffer.from(..., 'hex') truncates at the first invalid pair rather than
     // throwing, so the length comparison is what rejects a malformed signature.
-    const provided = Buffer.from(signature, 'hex');
+    const provided = Buffer.from(signature, "hex");
     if (provided.length !== expected.length) {
       return false;
     }
@@ -165,7 +202,9 @@ export class RazorpayClient implements RazorpayApi {
    * a token whether or not an HTTP callback survived the journey.
    */
   async paymentsForOrder(orderId: string): Promise<RazorpayPayment[]> {
-    const body = await this.get<{ items?: RazorpayPayment[] }>(`/orders/${orderId}/payments`);
+    const body = await this.get<{ items?: RazorpayPayment[] }>(
+      `/orders/${orderId}/payments`,
+    );
     return body.items ?? [];
   }
 
@@ -180,20 +219,24 @@ export class RazorpayClient implements RazorpayApi {
    * gives a patient their money twice.
    */
   async refundsForPayment(paymentId: string): Promise<RazorpayRefund[]> {
-    const body = await this.get<{ items?: RazorpayRefund[] }>(`/payments/${paymentId}/refunds`);
+    const body = await this.get<{ items?: RazorpayRefund[] }>(
+      `/payments/${paymentId}/refunds`,
+    );
     return body.items ?? [];
   }
 
   private async get<T>(path: string): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
-      method: 'GET',
+      method: "GET",
       headers: { authorization: `Basic ${this.credentials()}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`Razorpay ${path} failed with ${res.status}: ${detail.slice(0, 500)}`);
+      const detail = await res.text().catch(() => "");
+      throw new Error(
+        `Razorpay ${path} failed with ${res.status}: ${detail.slice(0, 500)}`,
+      );
     }
     return (await res.json()) as T;
   }
@@ -201,15 +244,15 @@ export class RazorpayClient implements RazorpayApi {
   private credentials(): string {
     return Buffer.from(
       `${this.config.RAZORPAY_KEY_ID}:${this.config.RAZORPAY_KEY_SECRET}`,
-    ).toString('base64');
+    ).toString("base64");
   }
 
   private async post<T>(path: string, payload: unknown): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
         authorization: `Basic ${this.credentials()}`,
-        'content-type': 'application/json',
+        "content-type": "application/json",
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -219,8 +262,10 @@ export class RazorpayClient implements RazorpayApi {
       // Razorpay's error body is safe to log but not to return: it can name internal
       // fields. The filter turns this into INTERNAL_ERROR with a generic message,
       // and pino keeps the detail (docs/Rules.md 7).
-      const detail = await res.text().catch(() => '');
-      throw new Error(`Razorpay ${path} failed with ${res.status}: ${detail.slice(0, 500)}`);
+      const detail = await res.text().catch(() => "");
+      throw new Error(
+        `Razorpay ${path} failed with ${res.status}: ${detail.slice(0, 500)}`,
+      );
     }
 
     return (await res.json()) as T;

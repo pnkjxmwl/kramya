@@ -1,27 +1,33 @@
-import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { LoggerModule } from 'nestjs-pino';
-import { randomUUID } from 'node:crypto';
-import { env } from './config/env';
-import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
-import { EtaModule } from './modules/eta/eta.module';
-import { RealtimeModule } from './realtime/realtime.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
-import { HealthModule } from './modules/health/health.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { PatientsModule } from './modules/patients/patients.module';
-import { ConfigModule } from './modules/config/config.module';
-import { SessionsModule } from './modules/sessions/sessions.module';
-import { StaffModule } from './modules/staff/staff.module';
-import { DiscoveryModule } from './modules/discovery/discovery.module';
-import { QueueModule } from './modules/queue/queue.module';
-import { PaymentsModule } from './modules/payments/payments.module';
-import { JwtGuard } from './common/guards/jwt.guard';
-import { TenantGuard } from './common/guards/tenant.guard';
-import { RolesGuard } from './common/guards/roles.guard';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import {
+  Module,
+  type MiddlewareConsumer,
+  type NestModule,
+} from "@nestjs/common";
+import { withDatabaseIdentity } from "./prisma/database-context";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { LoggerModule } from "nestjs-pino";
+import { randomUUID } from "node:crypto";
+import { env } from "./config/env";
+import { PrismaModule } from "./prisma/prisma.module";
+import { RedisModule } from "./redis/redis.module";
+import { EtaModule } from "./modules/eta/eta.module";
+import { RealtimeModule } from "./realtime/realtime.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { HealthModule } from "./modules/health/health.module";
+import { AuthModule } from "./modules/auth/auth.module";
+import { PatientsModule } from "./modules/patients/patients.module";
+import { ConfigModule } from "./modules/config/config.module";
+import { SessionsModule } from "./modules/sessions/sessions.module";
+import { StaffModule } from "./modules/staff/staff.module";
+import { DiscoveryModule } from "./modules/discovery/discovery.module";
+import { QueueModule } from "./modules/queue/queue.module";
+import { PaymentsModule } from "./modules/payments/payments.module";
+import { OperationsModule } from "./modules/operations/operations.module";
+import { JwtGuard } from "./common/guards/jwt.guard";
+import { TenantGuard } from "./common/guards/tenant.guard";
+import { RolesGuard } from "./common/guards/roles.guard";
+import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 @Module({
   imports: [
@@ -29,28 +35,32 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
       pinoHttp: {
         level: env().LOG_LEVEL,
         genReqId: (req, res) => {
-          const existing = req.headers['x-request-id'];
-          const id = typeof existing === 'string' && existing ? existing : randomUUID();
-          res.setHeader('x-request-id', id);
+          const existing = req.headers["x-request-id"];
+          const id =
+            typeof existing === "string" && existing ? existing : randomUUID();
+          res.setHeader("x-request-id", id);
           return id;
         },
         // Readable in dev, structured JSON everywhere else.
         transport:
-          env().NODE_ENV === 'development'
-            ? { target: 'pino-pretty', options: { singleLine: true, translateTime: 'HH:MM:ss' } }
+          env().NODE_ENV === "development"
+            ? {
+                target: "pino-pretty",
+                options: { singleLine: true, translateTime: "HH:MM:ss" },
+              }
             : undefined,
         // docs/Rules.md 10: never log credentials or tokens.
         redact: {
           paths: [
-            'req.headers.authorization',
-            'req.headers.cookie',
-            'req.body.password',
-            'req.body.passwordHash',
+            "req.headers.authorization",
+            "req.headers.cookie",
+            "req.body.password",
+            "req.body.passwordHash",
           ],
           remove: true,
         },
         // /health is polled constantly - do not fill the log with it.
-        autoLogging: { ignore: (req) => req.url === '/health' },
+        autoLogging: { ignore: (req) => req.url === "/health" },
       },
     }),
     PrismaModule,
@@ -64,6 +74,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     DiscoveryModule,
     QueueModule,
     PaymentsModule,
+    OperationsModule,
     EtaModule,
     RealtimeModule,
     NotificationsModule,
@@ -102,4 +113,12 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer
+      .apply((_req: unknown, _res: unknown, next: () => void) =>
+        withDatabaseIdentity({}, next),
+      )
+      .forRoutes("*");
+  }
+}

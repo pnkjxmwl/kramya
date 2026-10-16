@@ -4,6 +4,7 @@ import { nextTokenNumber, tokenLabel } from '../call-order';
 import { WALK_IN_INITIAL_STATUS } from '../state-machine';
 import type { CommandContext, QueueActor, QueueService } from '../queue.service';
 import { toCommandResult } from './result';
+import { randomUUID } from 'node:crypto';
 
 const ENTRY_INCLUDE = { patient: { select: { id: true, name: true } } } as const;
 
@@ -90,8 +91,12 @@ async function resolvePatient(ctx: CommandContext, input: WalkInRequest): Promis
     return existing.id;
   }
 
+  const id = randomUUID();
+  // Allow RETURNING only for this newly created profile, not every unowned patient.
+  await ctx.tx.$executeRaw`SELECT set_config('kramya.new_patient_id', ${id}, true)`;
   const created = await ctx.tx.patient.create({
     data: {
+      id,
       accountId: null,
       // The refine on WalkInRequest guarantees a name when there is no patientId.
       name: input.name as string,
