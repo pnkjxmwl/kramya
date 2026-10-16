@@ -13,7 +13,8 @@ real patient/payment data.
   the private Render `DATABASE_URL`; never copy that value into chat, Git, logs, or a
   client-side variable.
 - Redis-compatible Key Value: existing Render `opd-keyvalue` service.
-- Database state: 15 Prisma migrations complete; all application tables empty. The current Render API deployment reports the database and Redis healthy at `/health/ready`.
+- At the initial cutover, 15 Prisma migrations were complete and all application tables were empty. After subsequent releases, verify completed migrations and `/health/ready` again.
+- Keep the Supabase Data API disabled. Migration `202610160004_restrict_supabase_api_roles` removes unused client-role table/sequence permissions and future migration-owner defaults; it does not introduce tenant RLS or replace the API's authorization. See the [data access model](security/data-access-model.md).
 
 ## Read-only health checks
 

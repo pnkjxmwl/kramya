@@ -1,6 +1,6 @@
 # Fresh Postgres migration: Render to Supabase
 
-Prepared 15 October 2026 for Kramya's first 3–4 clinics. **Status (16 October): the free `Kramya` project is healthy in Mumbai; all 15 Prisma migrations are applied; the application schema is present and empty; Render deployment `1808372` is live and the database/Redis readiness probe passes.** The Data API is disabled. The founder confirmed the previous data was fictional and a fresh start is acceptable. The old Render database is suspended/expired and is not a rollback target.
+Prepared 15 October 2026 for Kramya's first 3–4 clinics. **Verified cutover baseline (16 October): the free `Kramya` project is healthy in Mumbai; the first 15 Prisma migrations are applied; the application schema is present and empty; Render is live and the database/Redis readiness probe passes.** The Data API is disabled. The subsequent permission-hardening migration and its verification are described below. The founder confirmed the previous data was fictional and a fresh start is acceptable. The old Render database is suspended/expired and is not a rollback target.
 
 Read the [architecture and pilot review](reviews/2026-10-15-architecture-and-pilot-review.md) first. Its account/payment/session-closure code blockers were addressed in PR #11; the remaining operating and security gates below still apply before real patients or live payments use this environment.
 
@@ -18,9 +18,9 @@ Neon is a valid alternative, but its free 100 CU-hours/month is a poor fit for a
 
 ## Current cloud state
 
-- Supabase project [`Kramya`](https://supabase.com/dashboard/project/ejbrtjcioolhtyklhwly) exists in the approved free organization, Mumbai region, and reports healthy. Its `public` schema contains 18 application tables and `_prisma_migrations`; all 15 committed Prisma migrations are finished. Application tables contain zero rows.
+- Supabase project [`Kramya`](https://supabase.com/dashboard/project/ejbrtjcioolhtyklhwly) exists in the approved free organization, Mumbai region, and reports healthy. Its `public` schema contains 18 application tables and `_prisma_migrations`; the 15-migration cutover baseline was verified complete with no application rows. Confirm subsequent migrations against `_prisma_migrations` after each release.
 - The owner disabled the unused Data API and automatic exposure of new tables. Render has the Supabase Session Pooler connection configured privately. The owner confirmed that the password placeholder previously shared in chat was masked, not the real password. Never put the URI or password in chat or source control.
-- Render's `opd-api` remains on Free in Singapore, and its existing free `opd-keyvalue` remains available. Deployment `1808372` (commit `1808372a`, PR #12) is live. `GET /health/ready` returned `200` with database and Redis up. The old `opd-postgres` is suspended after its October 7 expiry.
+- Render's `opd-api` remains on Free in Singapore, and its existing free `opd-keyvalue` remains available. At the cutover baseline, commit `1808372` (PR #12) was live and `GET /health/ready` returned `200` with database and Redis up. Verify the latest Render deployment and readiness after each release. The old `opd-postgres` is suspended after its October 7 expiry.
 - The Render dashboard browser requires the owner to sign in with its configured login method; this GitHub account is configured for deployments only. The owner must enter the database URI directly in the Render service environment so it never passes through chat.
 - `render.yaml` retains the expired database declaration temporarily so the first Blueprint sync does not remove that resource. The API declaration no longer derives `DATABASE_URL` from Render Postgres.
 
@@ -119,6 +119,8 @@ Review storage/egress, DB connections, p95 query/command latency, oldest unresol
 - [ ] Commercial web hosting and clinic-hour API uptime suitable.
 - [ ] One clinic supervised before expanding to the other three.
 
-The API's database connection is working, but this is not a patient-ready release. Supabase's table inventory flags RLS disabled on all 19 tables. Keep the Data API disabled; design and review table policies before any direct client access or real patient data. Render Free sleeps and is not suitable for clinic-hour availability.
+The API's database connection is working, but this is not a patient-ready release. Supabase's inventory flags RLS disabled on all 19 tables. The Data API is disabled, and a direct privilege audit found no table CRUD grants to `anon` or `authenticated`; migration `202610160004_restrict_supabase_api_roles` removes their remaining table/sequence grants and future defaults. They retain `USAGE` on the `public` schema, which by itself does not grant table access. The backend's `postgres` role bypasses RLS, so this does not provide row-level database isolation for Prisma. Keep the Data API disabled and complete a restricted runtime-role and tenant-context design before real patient data or direct client access. Render Free sleeps and is not suitable for clinic-hour availability.
+
+The permission-hardening migration is verified in CI with simulated Supabase roles and broad legacy defaults, including a rolled-back future table/sequence probe. After deployment, confirm the migration is finished and `has_table_privilege` reports no table permissions for either client role. Default privileges are scoped to the migration owner; create application objects through Prisma migrations, not as `supabase_admin` in the Dashboard. See the [data access model](security/data-access-model.md) for the role split and row-policy rollout design.
 
 Migration `202610160003_covering_fk_indexes` is applied. The `OPDSession.currentProviderDoctorId` and `Notification.entryId` foreign-key indexes are present in the hosted schema.
