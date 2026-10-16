@@ -1,6 +1,6 @@
 # Fresh Postgres migration: Render to Supabase
 
-Prepared 15 October 2026 for Kramya's first 3–4 clinics. **Status (16 October): the free `Kramya` project is healthy in Mumbai; all 14 Prisma migrations are applied; the application schema is present and empty; the Render API is deployed and its database/Redis readiness probe passes.** The Data API is disabled. The founder confirmed the previous data was fictional and a fresh start is acceptable. The old Render database is suspended/expired and is not a rollback target.
+Prepared 15 October 2026 for Kramya's first 3–4 clinics. **Status (16 October): the free `Kramya` project is healthy in Mumbai; all 15 Prisma migrations are applied; the application schema is present and empty; Render deployment `1808372` is live and the database/Redis readiness probe passes.** The Data API is disabled. The founder confirmed the previous data was fictional and a fresh start is acceptable. The old Render database is suspended/expired and is not a rollback target.
 
 Read the [architecture and pilot review](reviews/2026-10-15-architecture-and-pilot-review.md) first. Its account/payment/session-closure code blockers were addressed in PR #11; the remaining operating and security gates below still apply before real patients or live payments use this environment.
 
@@ -18,9 +18,9 @@ Neon is a valid alternative, but its free 100 CU-hours/month is a poor fit for a
 
 ## Current cloud state
 
-- Supabase project [`Kramya`](https://supabase.com/dashboard/project/ejbrtjcioolhtyklhwly) exists in the approved free organization, Mumbai region, and reports healthy. Its `public` schema contains 18 application tables and `_prisma_migrations`; all 14 committed Prisma migrations are finished. Application tables contain zero rows.
+- Supabase project [`Kramya`](https://supabase.com/dashboard/project/ejbrtjcioolhtyklhwly) exists in the approved free organization, Mumbai region, and reports healthy. Its `public` schema contains 18 application tables and `_prisma_migrations`; all 15 committed Prisma migrations are finished. Application tables contain zero rows.
 - The owner disabled the unused Data API and automatic exposure of new tables. Render has the Supabase Session Pooler connection configured privately. The owner confirmed that the password placeholder previously shared in chat was masked, not the real password. Never put the URI or password in chat or source control.
-- Render's `opd-api` remains on Free in Singapore, and its existing free `opd-keyvalue` remains available. The latest deployment of commit `55dc7df` is live. `GET /health/ready` returned `200` with database and Redis up. The old `opd-postgres` is suspended after its October 7 expiry.
+- Render's `opd-api` remains on Free in Singapore, and its existing free `opd-keyvalue` remains available. Deployment `1808372` (commit `1808372a`, PR #12) is live. `GET /health/ready` returned `200` with database and Redis up. The old `opd-postgres` is suspended after its October 7 expiry.
 - The Render dashboard browser requires the owner to sign in with its configured login method; this GitHub account is configured for deployments only. The owner must enter the database URI directly in the Render service environment so it never passes through chat.
 - `render.yaml` retains the expired database declaration temporarily so the first Blueprint sync does not remove that resource. The API declaration no longer derives `DATABASE_URL` from Render Postgres.
 
@@ -121,4 +121,4 @@ Review storage/egress, DB connections, p95 query/command latency, oldest unresol
 
 The API's database connection is working, but this is not a patient-ready release. Supabase's table inventory flags RLS disabled on all 19 tables. Keep the Data API disabled; design and review table policies before any direct client access or real patient data. Render Free sleeps and is not suitable for clinic-hour availability.
 
-The current hosted schema has two foreign-key indexes outstanding in the Supabase performance advisor. A follow-up Prisma migration adds indexes for `OPDSession.currentProviderDoctorId` and `Notification.entryId`; they are not applied to the hosted database until that migration is deployed.
+Migration `202610160003_covering_fk_indexes` is applied. The `OPDSession.currentProviderDoctorId` and `Notification.entryId` foreign-key indexes are present in the hosted schema.
