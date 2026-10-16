@@ -11,12 +11,13 @@ services:
     region: singapore
     plan: free
     healthCheckPath: /health
+    # Migrate and deploy staging runs checked main migrations before this service.
+    autoDeployTrigger: 'off'
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @opd/api prisma:generate &&
-      pnpm exec turbo run build --filter=@opd/api &&
-      pnpm --filter @opd/api prisma:deploy
+      pnpm exec turbo run build --filter=@opd/api
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_ENV
@@ -72,5 +73,5 @@ databases:
   - name: opd-postgres
     region: singapore
     plan: free
-    postgresMajorVersion: "16"
+    postgresMajorVersion: '16'
     databaseName: opd
