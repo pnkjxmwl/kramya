@@ -125,3 +125,16 @@ grants before applying all Prisma migrations. It then verifies no table/sequence
 privileges remain, including on a newly created probe that is rolled back. Hosted
 verification must independently confirm migration completion, effective ACLs/default
 ACLs and API readiness. No hosted application records are needed for this check.
+
+The post-activation advisor identified three [overlapping permissive policies](https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies)
+on Department, Doctor and DoctorSchedule: their `FOR ALL` write policies also ran
+for SELECT alongside their existing read policies. Follow-up migration
+`202610180001_specific_config_write_policies` replaces each with explicit
+INSERT/UPDATE/DELETE policies, retaining the same membership and relationship
+checks. The restricted-login suite asserts there are no overlapping actions.
+
+The [no-policy notice](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+for `_prisma_migrations` is intentional: runtime has no access; only the separate
+owner performs migrations. [Unused-index notices](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)
+on this small fictional dataset do not justify removing indexes needed by clinic
+queries. Review representative plans and usage after the supervised pilot.
