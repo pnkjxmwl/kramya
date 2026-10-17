@@ -1,9 +1,10 @@
 # Kramya final acceptance checklist
 
-Updated 17 October 2026 (Asia/Kolkata). The founder asked to defer hands-on phone testing and the full UI/workflow review until the final phase. Work through this file one item at a time after production safeguards and implementation are ready. Automated build, security and regression checks continue during development.
+Updated 18 October 2026 (Asia/Kolkata). The founder asked to defer hands-on phone testing and the full UI/workflow review until the final phase. Work through this file one item at a time after production safeguards and implementation are ready. Automated build, security and regression checks continue during development.
 
 ## Current evidence
 
+- [x] On 18 October 2026, Firebase project `kramya-39390` showed Android app `com.kramya.native` and Cloud Messaging V1 enabled. The staging APK signature was verified locally; its SHA-1 and SHA-256 fingerprints are both registered in Firebase. This does not prove server credential authentication, phone notification receipt or Google sign-in.
 - [x] Kotlin is the sole patient app; Expo was removed in PR #15.
 - [x] PR #15 passed 426 API tests, 42 contract tests, 72 web-console checks and 47 Android JVM tests. These are historical results, not automatic evidence for later changes.
 - [x] Supabase/Redis readiness and the hosted web deployment were checked after PR #15.
@@ -23,12 +24,12 @@ Credentials are in the local, Git-ignored `.env.staging-test-access.md`. Never c
 - [x] Move migrations out of the Render API build into the main-only migration workflow, turn automatic commit deploys off, and deploy the exact migrated commit.
 - [x] Verify runtime grants and append-only history using a non-owner connection in isolated PostgreSQL; independently verify hosted role attributes, grants and runtime app behavior. Do not treat role restrictions as tenant RLS.
 - [x] The operator rotated the old runtime-exposed postgres owner password and updated only GitHub's migration secret. [Workflow attempt 2](https://github.com/pnkjxmwl/kramya/actions/runs/38958710636/attempts/2) successfully authenticated and checked all 17 migrations with the replacement credential. Render retained its separate runtime URI; readiness and actual runtime-role connections remained healthy after rotation.
-- [ ] Prove an encrypted hosted backup and restoration into an isolated target. Record artifact, key custody, recovery time, row counts and application smoke checks.
+- [x] Hosted encrypted backup [38970979358](https://github.com/pnkjxmwl/kramya/actions/runs/38970979358) restored into isolated local PostgreSQL 17 on 18 October. All 19 table counts, 18 migration names/checksums, 37 foreign keys, 80 indexes, two views and four private helpers matched the captured source. Decryption/restore/comparison took 12.717 seconds; this is not a guaranteed end-to-end recovery time. After explicit role/grant recovery, actual restricted-login API checks passed login, discovery, temporary profile CRUD, queue reads and access denials. Proof is privately retained in `.backups/hosted-recovery-20261018.proof.json`. Repeat with a fresh hosted artifact after RLS activation; no automatic backup schedule is active.
 - [x] The founder confirmed private off-computer copies of the backup recipient key and staging Android signing files. This records custody, not a successful hosted restore.
 - [ ] Deploy transaction-local database identity and the timing-only projections, then enable and verify RLS using actual non-owner connections. Keep the two deployments in that order.
 - [ ] Decide clinic-hour availability, recovery objectives, support and clinic fallback procedures. No paid hosting changes have been authorized.
 - [ ] Verify Firebase project matching, server delivery credentials, release signing and distribution.
-- [ ] Run the admin-only operations/preflight checks after deployment; record provider authentication separately from real webhook delivery and phone notification receipt.
+- [x] On 18 October, the deployed admin-only operations preflight authenticated Razorpay in TEST mode and Firebase with matching project `kramya-39390`. Database/Redis readiness passed and the payment/refund backlog older than ten minutes was zero. This proves credential authentication only; real webhook delivery and phone receipt remain unchecked. Proof is privately retained in `.backups/hosted-provider-preflight-20261018.proof.json`.
 - [ ] Verify Razorpay test mode and webhook configuration before checkout tests. No synthetic SUCCESS payment records were inserted into hosted staging.
 
 ## Final phase: Android UI and navigation

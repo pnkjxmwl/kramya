@@ -199,10 +199,19 @@ export class AuthService {
     // ponytail: read-then-write, not an upsert. Two concurrent first-time logins for
     // the same account would race; the unique constraint rejects the loser and the
     // client retries. Wrap in a transaction if that ever shows up in the logs.
-    const existing = await this.prisma.account.findFirst({
-      where: { OR: [{ googleId: sub }, { email }] },
+    const bySubject = await this.prisma.account.findUnique({
+      where: { googleId: sub },
       select: { id: true, email: true, googleId: true },
     });
+    const existing =
+      bySubject ??
+      (await this.prisma.account.findUnique({
+        where: { email },
+        select: { id: true, email: true, googleId: true },
+      }));
+    if (existing?.googleId && existing.googleId !== sub) {
+      throw new UnauthorizedError("Sign in using your existing account");
+    }
 
     if (!existing) {
       const created = await this.prisma.account.create({
