@@ -162,6 +162,14 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
       });
     });
     it("fails closed without identity, blocks owner/clinic changes, and keeps pooled identities apart", async () => {
+      const overlaps = await owner.$queryRawUnsafe(`
+        SELECT tablename, action FROM pg_policies
+        CROSS JOIN LATERAL unnest(CASE WHEN cmd='ALL'
+          THEN ARRAY['SELECT','INSERT','UPDATE','DELETE'] ELSE ARRAY[cmd] END) AS action
+        WHERE schemaname='public' AND roles @> ARRAY['kramya_runtime']::name[]
+        GROUP BY tablename,action HAVING count(*)>1
+      `);
+      expect(overlaps).toEqual([]);
       expect(await runtime.patient.findMany()).toEqual([]);
       expect(await runtime.queueMetric.findMany()).toEqual([]);
       await expect(
