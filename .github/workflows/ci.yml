@@ -123,7 +123,7 @@ jobs:
           node - <<'NODE'
           const assert = require('node:assert/strict');
           const results = require('./apps/api/rls-results.json');
-          assert.ok(results.numPassedTests >= 11, 'Restricted-role checks did not run');
+          assert.ok(results.numPassedTests >= 12, 'Restricted-role checks did not run');
           assert.equal(results.numFailedTests, 0);
           assert.equal(results.numPendingTests, 0, 'Restricted-role checks were skipped');
           NODE

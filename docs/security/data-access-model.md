@@ -77,8 +77,8 @@ clinic/provider becomes undiscoverable without making that clinic bookable again
 Only verified server paths may bind worker/webhook purpose; this does not give
 patients a way to request system context.
 
-CI runs a separate eleven-case suite with an actual non-owner login and a pool
-of two connections. Its JSON result must contain at least eleven passes and no
+CI runs a separate twelve-case suite with an actual non-owner login and a pool
+of two connections. Its JSON result must contain at least twelve passes and no
 skips/failures. Owner-backed regression tests remain useful but cannot substitute
 for those checks. Hosted activation and post-activation backup recovery require
 independent deployment evidence before their checklist items can be cleared.

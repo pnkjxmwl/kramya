@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import type { INestApplication } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
+import { io, type Socket } from "socket.io-client";
 import {
   afterAll,
   beforeAll,
@@ -289,6 +290,74 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
         .get(`/sessions/${session}/queue`)
         .set(auth(bob.accessToken))
         .expect(403);
+    });
+    it("filters public socket discovery without an HTTP database context", async () => {
+      await app.listen(0, "127.0.0.1");
+      const url = await app.getUrl();
+      const sockets: Socket[] = [];
+      async function connect(token: string) {
+        const socket = io(url, {
+          auth: { token },
+          transports: ["websocket"],
+          forceNew: true,
+          reconnection: false,
+        });
+        sockets.push(socket);
+        await new Promise<void>((ok, fail) => {
+          const timer = setTimeout(
+            () => fail(new Error("RLS socket connection timed out")),
+            4000,
+          );
+          socket.once("connect", () => {
+            clearTimeout(timer);
+            ok();
+          });
+          socket.once("connect_error", (e) => {
+            clearTimeout(timer);
+            fail(e);
+          });
+        });
+        return socket;
+      }
+      const subscribe = (
+        socket: Socket,
+        id: string,
+      ): Promise<{ ok: boolean }> =>
+        socket.timeout(4000).emitWithAck("subscribe", { sessionId: id });
+      try {
+        const staff = await connect(admin.accessToken),
+          patient = await connect(bob.accessToken),
+          outsider = await connect(alice.accessToken);
+        expect(await subscribe(staff, session)).toMatchObject({ ok: true });
+        expect(await subscribe(staff, otherSession)).toMatchObject({
+          ok: true,
+        });
+        expect(await subscribe(patient, otherSession)).toMatchObject({
+          ok: true,
+        });
+        expect(await subscribe(patient, session)).toMatchObject({ ok: true });
+        expect(await subscribe(outsider, otherSession)).toMatchObject({
+          ok: true,
+        });
+        // Session rooms carry only sessionId/version invalidation events and are
+        // deliberately public to signed-in catalog users. Hidden clinics are not.
+        await owner.hospital.update({
+          where: { id: otherClinic },
+          data: { status: "PENDING" },
+        });
+        expect(await subscribe(staff, otherSession)).toMatchObject({
+          ok: false,
+        });
+        expect(await subscribe(patient, otherSession)).toMatchObject({
+          ok: false,
+        });
+        expect(await subscribe(outsider, otherSession)).toMatchObject({
+          ok: false,
+        });
+        expect(await subscribe(staff, session)).toMatchObject({ ok: true });
+      } finally {
+        for (const socket of sockets) socket.close();
+      }
     });
     it("creates and reads walk-ins only through their clinic and blocks disabled memberships", async () => {
       await http()
