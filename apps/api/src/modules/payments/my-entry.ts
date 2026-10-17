@@ -1,8 +1,12 @@
-import type { Prisma } from '@prisma/client';
-import type { CancellationRules, MyQueueEntry, QueueEntryStatus } from '@opd/contracts';
-import { signCheckInCode } from '../../common/checkin-code';
-import { CALL_ORDER } from '../queue/call-order';
-import { ELIGIBLE_TO_CALL, canApplyToEntry } from '../queue/state-machine';
+import type { Prisma } from "@prisma/client";
+import type {
+  CancellationRules,
+  MyQueueEntry,
+  QueueEntryStatus,
+} from "@opd/contracts";
+import { signCheckInCode } from "../../common/checkin-code";
+import { CALL_ORDER } from "../queue/call-order";
+import { ELIGIBLE_TO_CALL, canApplyToEntry } from "../queue/state-machine";
 
 /**
  * The patient's own visit, projected for docs/Design.md 5.6's token card.
@@ -32,7 +36,7 @@ export const MY_ENTRY_INCLUDE = {
       scheduledStart: true,
       scheduledEnd: true,
       feePaise: true,
-      hospital: { select: { id: true, name: true, area: true } },
+      hospital: { select: { id: true, name: true, area: true, status: true } },
       department: { select: { name: true } },
       // The id as well as the name: the ETA engine learns per DOCTOR, and after a
       // substitution it must be the person actually in the room (docs/PRD.md 8.11).
@@ -41,7 +45,9 @@ export const MY_ENTRY_INCLUDE = {
   },
 } as const;
 
-export type MyEntryRow = Prisma.QueueEntryGetPayload<{ include: typeof MY_ENTRY_INCLUDE }>;
+export type MyEntryRow = Prisma.QueueEntryGetPayload<{
+  include: typeof MY_ENTRY_INCLUDE;
+}>;
 
 /** The live numbers for one session, computed once and shared by every entry in it. */
 export interface SessionLiveView {
@@ -79,11 +85,11 @@ export async function loadSessionLiveView(
       select: { id: true },
     }),
     tx.queueMetric.findFirst({
-      where: { sessionId, status: { in: ['CALLED', 'IN_CONSULTATION'] } },
+      where: { sessionId, status: { in: ["CALLED", "IN_CONSULTATION"] } },
       select: { tokenLabel: true, status: true, consultStartedAt: true },
     }),
     tx.queueMetric.findMany({
-      where: { sessionId, status: { in: ['CONFIRMED', 'VIRTUAL_WAITING'] } },
+      where: { sessionId, status: { in: ["CONFIRMED", "VIRTUAL_WAITING"] } },
       select: { tokenNumber: true },
     }),
   ]);
@@ -92,7 +98,8 @@ export async function loadSessionLiveView(
     nowServingToken: serving?.tokenLabel ?? null,
     eligibleOrder: eligible.map((e) => e.id),
     bookedTokenNumbers: booked.map((e) => e.tokenNumber),
-    consultingSince: serving?.status === 'IN_CONSULTATION' ? serving.consultStartedAt : null,
+    consultingSince:
+      serving?.status === "IN_CONSULTATION" ? serving.consultStartedAt : null,
   };
 }
 
@@ -109,7 +116,9 @@ export function refundPctIfCancelledAt(
   scheduledStart: Date,
   now: Date,
 ): number {
-  const freeUntil = new Date(scheduledStart.getTime() - rules.freeCancellationMins * 60_000);
+  const freeUntil = new Date(
+    scheduledStart.getTime() - rules.freeCancellationMins * 60_000,
+  );
   return now <= freeUntil ? 100 : rules.lateCancellationRefundPct;
 }
 
@@ -121,7 +130,7 @@ export function refundPctIfCancelledAt(
  * reimplement queue logic, and neither must a projection).
  */
 const isCancellable = (status: QueueEntryStatus): boolean =>
-  status !== 'CANCELLED' && canApplyToEntry('CANCEL_ENTRY', status);
+  status !== "CANCELLED" && canApplyToEntry("CANCEL_ENTRY", status);
 
 export function toMyQueueEntry(
   row: MyEntryRow,
@@ -149,7 +158,8 @@ export function toMyQueueEntry(
     // Signed HERE rather than stored signed, so the signature is never baked into a
     // row: rotating CHECKIN_SECRET invalidates every QR at once, which is what a
     // compromised secret needs, and the stored reference itself never changes.
-    checkInCode: row.checkInCode === null ? null : signCheckInCode(row.checkInCode),
+    checkInCode:
+      row.checkInCode === null ? null : signCheckInCode(row.checkInCode),
 
     patientId: row.patientId,
     patientName: row.patient.name,
@@ -172,7 +182,8 @@ export function toMyQueueEntry(
     // already done - everyone present is ahead, because docs/PRD.md 8.2 means an
     // absent patient is behind every present one no matter how early they booked.
     checkedInAheadCount: position === -1 ? live.eligibleOrder.length : position,
-    bookedAheadCount: live.bookedTokenNumbers.filter((t) => t < row.tokenNumber).length,
+    bookedAheadCount: live.bookedTokenNumbers.filter((t) => t < row.tokenNumber)
+      .length,
 
     // A window, never a point (docs/Phases.md). Null while there is nothing honest
     // to say - the visit is over, or the session is not running.
@@ -185,6 +196,10 @@ export function toMyQueueEntry(
     completedAt: row.completedAt?.toISOString() ?? null,
 
     cancellable: isCancellable(row.status),
-    refundPctIfCancelledNow: refundPctIfCancelledAt(rules, row.session.scheduledStart, now),
+    refundPctIfCancelledNow: refundPctIfCancelledAt(
+      rules,
+      row.session.scheduledStart,
+      now,
+    ),
   };
 }

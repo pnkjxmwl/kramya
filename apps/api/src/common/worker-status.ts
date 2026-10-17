@@ -2,6 +2,7 @@ export interface WorkerStatus {
   name: string;
   intervalMs: number;
   enabled: boolean;
+  registeredAt: string;
   running: boolean;
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
@@ -17,6 +18,7 @@ export function registerWorker(
     name,
     intervalMs,
     enabled,
+    registeredAt: new Date().toISOString(),
     running: false,
     lastAttemptAt: null,
     lastSuccessAt: null,
@@ -33,8 +35,7 @@ export function workerStatuses(now = Date.now()) {
     ...status,
     stale:
       status.enabled &&
-      (!status.lastSuccessAt ||
-        now - Date.parse(status.lastSuccessAt) >
-          Math.max(status.intervalMs * 3, 90_000)),
+      now - Date.parse(status.lastSuccessAt ?? status.registeredAt) >
+        Math.max(status.intervalMs * 3, 90_000),
   }));
 }

@@ -18,10 +18,10 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
       - name: Test and assemble Kotlin patient app
         working-directory: apps/native
         run: bash gradlew --no-daemon testDebugUnitTest assembleDebug
@@ -36,13 +36,13 @@ jobs:
           POSTGRES_USER: opd
           POSTGRES_PASSWORD: opd_local_dev
           POSTGRES_DB: opd
-        ports: ['5433:5432']
+        ports: ["5433:5432"]
         options: >-
           --health-cmd "pg_isready -U opd -d opd"
           --health-interval 5s --health-timeout 5s --health-retries 12
       redis:
         image: redis:7-alpine
-        ports: ['6380:6379']
+        ports: ["6380:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 12
@@ -111,3 +111,19 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @opd/api seed
       - run: pnpm test
+
+      # Owner-backed suites cannot prove row isolation. Use a separate database,
+      # a real non-owner login and a pool of two connections for these checks.
+      - name: Verify tenant RLS with a restricted database login
+        env:
+          DATABASE_URL: postgresql://opd:opd_local_dev@127.0.0.1:5433/opd_ci_rls_test?schema=public
+          RLS_RUNTIME_TEST: "1"
+        run: |
+          pnpm --filter @opd/api exec vitest run test/rls-runtime.e2e.test.ts --reporter=json --outputFile=rls-results.json
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const results = require('./apps/api/rls-results.json');
+          assert.ok(results.numPassedTests >= 12, 'Restricted-role checks did not run');
+          assert.equal(results.numFailedTests, 0);
+          assert.equal(results.numPendingTests, 0, 'Restricted-role checks were skipped');
+          NODE

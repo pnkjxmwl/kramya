@@ -1146,7 +1146,9 @@ export class PaymentsService implements OnModuleInit {
           aheadCount: position === -1 ? live.eligibleOrder.length : position,
           currentStartedAt: live.consultingSince,
           estimable:
-            AWAITING_A_TURN.includes(row.status) && isEtaAvailable(row.session),
+            row.session.hospital.status === "VERIFIED" &&
+            AWAITING_A_TURN.includes(row.status) &&
+            isEtaAvailable(row.session),
         };
       }),
       now,
@@ -1173,8 +1175,13 @@ export class PaymentsService implements OnModuleInit {
    * client names a session, the server decides what that means.
    */
   private async hospitalOfSession(sessionId: string): Promise<string> {
-    const session = await this.prisma.oPDSession.findUnique({
-      where: { id: sessionId },
+    const session = await this.prisma.oPDSession.findFirst({
+      where: {
+        id: sessionId,
+        hospital: { status: "VERIFIED" },
+        department: { isActive: true },
+        currentProvider: { isActive: true },
+      },
       select: { hospitalId: true },
     });
     if (session === null) {

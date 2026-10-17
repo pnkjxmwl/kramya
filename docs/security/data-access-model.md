@@ -67,6 +67,22 @@ the existing lock/commit boundaries; identity changes inside a transaction fail.
 Deploy that application revision **before** a separate RLS activation migration.
 The projection migration alone does not enable row policies.
 
+Migration `202610170002_tenant_row_isolation` activates and forces RLS on all
+19 public tables, including migration history (which the runtime cannot read).
+Policies target the restricted runtime role and check ownership, selected active
+membership and coherent parent relationships. Provenance triggers prevent moving
+queue/payment/refund records between accounts, clinics and visits. Private,
+boolean-only historical relationship checks retain a patient's old visit after a
+clinic/provider becomes undiscoverable without making that clinic bookable again.
+Only verified server paths may bind worker/webhook purpose; this does not give
+patients a way to request system context.
+
+CI runs a separate twelve-case suite with an actual non-owner login and a pool
+of two connections. Its JSON result must contain at least twelve passes and no
+skips/failures. Owner-backed regression tests remain useful but cannot substitute
+for those checks. Hosted activation and post-activation backup recovery require
+independent deployment evidence before their checklist items can be cleared.
+
 1. Separate migration credentials from runtime credentials. The migration owner runs
    DDL; a dedicated non-owner runtime role must have no CREATE, role-management,
    TRUNCATE or BYPASSRLS privileges. Keep both credentials in deployment secrets.
