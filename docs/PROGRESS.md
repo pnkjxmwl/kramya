@@ -9505,3 +9505,13 @@ rotating it with Supabase's generator. Credentials must not be sent in chat. Ren
 `DATABASE_URL` has not yet changed, and no Prisma migrations have been applied to the hosted
 project. The Render dashboard login requires the owner's normal login method; its GitHub
 deployment connection is not enabled for account sign-in.
+
+## 2026-10-19 — Android checkout layout and gateway return fixes
+
+**Did:** Fixed the WebView checkout container whose inline 100dvh height cap resolved to zero on Android 16. Presented checkout in a full-screen modal above app tabs, kept Close/Back working, and reduced the close header from 76dp to 48dp. Intercepted POST returns as well as GET returns using the exact server-provided endpoint, and added neutral static GET/POST backend fallbacks. Callback fields never confirm payment. Server-reported failed attempts return to a cautious retry message. Also removed random token collisions from an ETA test fixture.
+
+**Decided:** Retain the existing Razorpay integration and server authority rather than replace the gateway or introduce a new payment screen. Preserve unrelated UI-lab work in the primary checkout. Scheduled backups and demo UI testing remain deferred by the founder.
+
+**Evidence:** The preceding Android build completed a real Razorpay TEST Netbanking success, with C001 confirmed in both patient and reception API views. The full-screen build passed 47 JVM tests and device Back/Close/reopen checks. The return-handling build passed 50 JVM tests and a real TEST mock-bank Failure returned to booking without raw JSON; the API showed payment FAILED and the hold RESERVED. All 41 local payment/route authorization tests passed, including forged return-field checks; typecheck and focused ESLint passed. ETA integration/engine/evaluation rerun passed 57 tests; actual restricted-login suite passed 12 separately. Hosted release verification is recorded after deployment.
+
+**Next:** Release through exact-commit CI and the protected main-only staging workflow, then check hosted GET/POST return content and readiness. Remaining queue, refund, notification and ETA pilot acceptance stays in TESTING.md.

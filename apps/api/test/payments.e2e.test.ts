@@ -134,6 +134,21 @@ describe('join -> pay -> token (Phase 5)', () => {
     expect(payment.amountPaise).toBe(FEE_PAISE);
   });
 
+  it.each(['get', 'post'] as const)('accepts a %s checkout return without trusting its payment fields', async (method) => {
+    const held = await join().expect(201);
+    const fields = { razorpay_order_id: held.body.razorpayOrderId, razorpay_payment_id: 'pay_forged', razorpay_signature: 'forged' };
+    const req = request(app.getHttpServer())[method]('/webhooks/checkout-complete');
+    const res = await (method === 'get' ? req.query(fields) : req.type('form').send(fields))
+      .expect(200).expect('content-type', /text\/html/);
+    expect(res.text).toContain('Checking payment status');
+    expect(res.text).not.toContain('Payment received');
+    expect(res.text).not.toContain('pay_forged');
+    const entry = await prisma.queueEntry.findUniqueOrThrow({ where: { id: held.body.entry.id } });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { queueEntryId: entry.id } });
+    expect(entry.status).toBe('RESERVED');
+    expect(payment.status).toBe('CREATED');
+  });
+
   it('ignores an amount the client tries to send', async () => {
     // A client that could name its own price is the most exploitable payment bug
     // there is. `JoinRequest` has no amount field and Zod strips unknown keys, so

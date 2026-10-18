@@ -43,6 +43,7 @@ const INTENTIONALLY_PUBLIC = new Set([
   'get /health',
   'get /health/ready',
   'get /webhooks/checkout-complete',
+  'post /webhooks/checkout-complete',
   'post /webhooks/razorpay',
 ]);
 
