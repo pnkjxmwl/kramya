@@ -5,19 +5,23 @@ import android.content.Intent
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -34,6 +38,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.kramya.core.Icon
 import app.kramya.core.Icons
 import app.kramya.core.Theme
@@ -47,6 +53,7 @@ import app.kramya.net.MY_ACTIVE_ENTRIES
 import app.kramya.net.MyQueueEntry
 import app.kramya.net.Paginated
 import app.kramya.net.Patient
+import app.kramya.net.PaymentStatus
 import app.kramya.net.QueueEntryStatus
 import app.kramya.net.SessionDetail
 import app.kramya.net.useApi
@@ -62,6 +69,8 @@ import app.kramya.ui.pressable
 import app.kramya.ui.useMyActiveEntries
 import kotlinx.coroutines.delay
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.net.URI
 
 /**
  * Confirm who is visiting, pay, and wait for the server's token.
@@ -178,12 +187,18 @@ fun JoinScreen(
         refetchMs = if (watching) CONFIRM_POLL_MS else null,
     )
 
-    LaunchedEffect(watching, entryId, active.data) {
+    LaunchedEffect(watching, entryId, active.data, phase) {
         if (!watching || entryId == null) return@LaunchedEffect
         val entry = active.data?.items?.firstOrNull { it.id == entryId } ?: return@LaunchedEffect
         // RESERVED means the hold exists but nothing is paid for yet. Anything else and the
         // server has decided - the only opinion that counts.
-        if (entry.status != QueueEntryStatus.RESERVED) onOpenToken(entry.id)
+        if (entry.status != QueueEntryStatus.RESERVED) {
+            onOpenToken(entry.id)
+        } else if (phase is Phase.Confirming && entry.paymentStatus == PaymentStatus.FAILED) {
+            notice = "Your payment has not been confirmed. Your place is still held. " +
+                "If your bank shows a debit, check My Visits before trying again."
+            phase = Phase.Choosing
+        }
     }
 
     LaunchedEffect(phase) {
@@ -409,15 +424,26 @@ fun JoinScreen(
     }
 
     (phase as? Phase.Checkout)?.let { checkout ->
-        CheckoutSheet(
-            order = checkout.order,
-            hospitalName = detail?.hospitalName ?: "Consultation",
-            leftOurPage = leftOurPage,
-            onLeftForGateway = {
-                phase = Phase.Confirming(checkout.order.entry.id)
-            },
-            onClose = { reason -> closeCheckout(reason) },
-        )
+        // A separate window covers and blocks the app's tab bar. The booking
+        // state and confirmation polling stay in this screen behind the dialog.
+        Dialog(
+            onDismissRequest = { closeCheckout() },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+                dismissOnClickOutside = false,
+            ),
+        ) {
+            CheckoutSheet(
+                order = checkout.order,
+                hospitalName = detail?.hospitalName ?: "Consultation",
+                leftOurPage = leftOurPage,
+                onLeftForGateway = {
+                    phase = Phase.Confirming(checkout.order.entry.id)
+                },
+                onClose = { reason -> closeCheckout(reason) },
+            )
+        }
     }
 }
 
@@ -446,14 +472,18 @@ private fun CheckoutSheet(
     val context = LocalContext.current
     val html = remember(order, hospitalName) { checkoutHtml(order, hospitalName) }
 
-    // The system back button closes the sheet, matching the RN Modal's onRequestClose.
-    BackHandler { onClose(null) }
-
-    Column(Modifier.fillMaxSize().background(Theme.Colors.Canvas)) {
+    // The dialog owns system Back; Close uses the same payment-aware callback.
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Theme.Colors.Canvas)
+            .windowInsetsPadding(WindowInsets.safeDrawing),
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .padding(Theme.Space.x4),
+                .height(48.dp)
+                .padding(horizontal = Theme.Space.x2),
             contentAlignment = Alignment.CenterEnd,
         ) {
             Box(
@@ -510,6 +540,25 @@ private fun CheckoutSheet(
                     )
 
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): WebResourceResponse? {
+                            // Android does not call shouldOverrideUrlLoading for POST.
+                            // Gateway returns are navigation only, never payment proof.
+                            if (isCheckoutReturn(request.url.toString(), order.callbackUrl)) {
+                                view.post {
+                                    leftOurPage.value = true
+                                    onLeftForGateway()
+                                }
+                                return WebResourceResponse(
+                                    "text/html", "utf-8",
+                                    ByteArrayInputStream("<!doctype html><p>Checking payment status...</p>".toByteArray()),
+                                )
+                            }
+                            return null
+                        }
+
                         override fun shouldOverrideUrlLoading(
                             view: WebView,
                             request: WebResourceRequest,
@@ -519,7 +568,7 @@ private fun CheckoutSheet(
                             // The gateway is finished and is handing the browser back. Stop
                             // the navigation - there is nothing at that address - and go
                             // ask the server what actually happened.
-                            if (url.startsWith(order.callbackUrl)) {
+                            if (request.isForMainFrame && isCheckoutReturn(url, order.callbackUrl)) {
                                 leftOurPage.value = true
                                 onLeftForGateway()
                                 return true
@@ -558,6 +607,15 @@ private fun CheckoutSheet(
         )
     }
 }
+
+/** Match only the server-provided return endpoint; query/fragment are gateway data. */
+internal fun isCheckoutReturn(url: String, callbackUrl: String): Boolean = runCatching {
+    val target = URI(url)
+    val expected = URI(callbackUrl)
+    target.scheme.equals(expected.scheme, ignoreCase = true) &&
+        target.host != null && target.host.equals(expected.host, ignoreCase = true) &&
+        target.port == expected.port && target.rawPath == expected.rawPath && target.rawUserInfo == null
+}.getOrDefault(false)
 
 private fun handleCheckoutMessage(
     raw: String,
@@ -633,8 +691,17 @@ internal fun checkoutHtml(order: JoinResponse, hospitalName: String): String {
 
     return """<!doctype html>
 <html>
-  <head><meta name="viewport" content="width=device-width, initial-scale=1" /></head>
-  <body style="margin:0;background:#F7F7F8">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html, body { width: 100%; height: 100%; margin: 0; }
+      body { background: #F7F7F8; }
+      /* Android WebView can resolve Checkout's inline max-height:100dvh to zero.
+         Its fixed, 100%-height container is already bounded by the native WebView. */
+      .razorpay-container { max-height: none !important; }
+    </style>
+  </head>
+  <body>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script>
       function post(message) {

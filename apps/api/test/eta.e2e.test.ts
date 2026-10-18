@@ -21,6 +21,7 @@ describe('eta (P7-BE-03)', () => {
   let departmentId: string;
   let doctorId: string;
   let sessionId: string;
+  let consultationToken = 100;
   let staff: Awaited<ReturnType<typeof signup>>;
   let outsider: Awaited<ReturnType<typeof signup>>;
 
@@ -28,8 +29,11 @@ describe('eta (P7-BE-03)', () => {
 
   /** A finished consultation for this doctor, `minutesAgo` in the past. */
   async function consultation(durationMins: number, minutesAgo: number): Promise<void> {
+    // Tokens are unique within a session; random fixture IDs can collide and
+    // fail an ETA assertion before the engine is exercised.
+    const tokenNumber = ++consultationToken;
     const person = await prisma.patient.create({
-      data: { name: `P${Math.random()}` },
+      data: { name: `P${tokenNumber}` },
     });
     const endedAt = new Date(Date.now() - minutesAgo * 60_000);
     const entry = await prisma.queueEntry.create({
@@ -37,7 +41,7 @@ describe('eta (P7-BE-03)', () => {
         hospitalId,
         sessionId,
         patientId: person.id,
-        tokenNumber: Math.floor(Math.random() * 100_000) + 100,
+        tokenNumber,
         tokenLabel: 'X000',
         type: 'WALK_IN',
         status: 'COMPLETED',
@@ -64,6 +68,7 @@ describe('eta (P7-BE-03)', () => {
 
   beforeEach(async () => {
     await resetDb(prisma);
+    consultationToken = 100;
 
     hospitalId = (
       await prisma.hospital.create({

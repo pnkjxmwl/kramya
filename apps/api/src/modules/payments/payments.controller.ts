@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Headers, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
@@ -101,7 +101,7 @@ export class PaymentsController {
  * signature, not a request count: an unsigned flood is rejected on arrival and a
  * signed one could only have come from Razorpay.
  *
- * The public `GET /checkout-complete` below is exempt for a duller reason - it
+ * The public GET/POST checkout return handlers below are exempt because each
  * decides nothing and returns static HTML.
  */
 @SkipThrottle()
@@ -127,9 +127,19 @@ export class RazorpayWebhookController {
     return `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <body style="font-family:system-ui;margin:0;display:grid;place-items:center;height:100vh;background:#F7FAFC;color:#0F172A">
 <div style="text-align:center;padding:24px">
-<h1 style="font-size:20px;margin:0 0 8px">Payment received</h1>
-<p style="margin:0;color:#64748B">You can close this and return to the app.<br>Your token appears once we have confirmed it.</p>
+<h1 style="font-size:20px;margin:0 0 8px">Checking payment status</h1>
+<p style="margin:0;color:#64748B">Return to the app to check your booking.<br>A token is confirmed only after the payment provider verifies it.</p>
 </div></body>`;
+  }
+
+  // Redirect-mode Checkout submits a form POST for both successful and failed
+  // attempts. Ignore every supplied field: only the signed webhook confirms money.
+  @Public()
+  @Post('checkout-complete')
+  @HttpCode(200)
+  @Header('content-type', 'text/html; charset=utf-8')
+  checkoutCompletePost(): string {
+    return this.checkoutComplete();
   }
 
   @Public()
