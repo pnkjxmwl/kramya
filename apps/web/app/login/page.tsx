@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import type { ApiError } from '@opd/contracts';
-import { AuthShell } from '../../components/auth-shell';
-import { Banner, Field, btn, inputLg } from '../../components/ui';
+import { useState } from "react";
+import type { ApiError } from "@opd/contracts";
+import { AuthShell } from "../../components/auth-shell";
+import { Banner, Field, btn, inputLg } from "../../components/ui";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -17,28 +17,29 @@ export default function LoginPage() {
     setError(null);
 
     try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (res.ok) {
-      // Read ?next here rather than with useSearchParams(): the hook forces the
-      // page into a Suspense boundary just to prerender a static login form.
-      const next = new URLSearchParams(window.location.search).get('next');
-      // Full navigation, not router.push: middleware must see the new cookies.
-      const target = new URL(next ?? '/overview', window.location.origin);
-      window.location.href = target.origin === window.location.origin && target.pathname !== '/'
-        ? target.pathname + target.search + target.hash : '/overview';
-      return;
-    }
+      if (res.ok) {
+        // Read ?next here rather than with useSearchParams(): the hook forces the
+        // page into a Suspense boundary just to prerender a static login form.
+        const next = new URLSearchParams(window.location.search).get("next");
+        // Full navigation, not router.push: middleware must see the new cookies.
+        const target = new URL(next ?? "/overview", window.location.origin);
+        window.location.href =
+          target.origin === window.location.origin && target.pathname !== "/"
+            ? target.pathname + target.search + target.hash
+            : "/overview";
+        return;
+      }
 
-    const body = (await res.json().catch(() => null)) as ApiError | null;
-    setError(body?.error.message ?? 'Sign-in failed. Please try again.');
-
+      const body = (await res.json().catch(() => null)) as ApiError | null;
+      setError(body?.error.message ?? "Sign-in failed. Please try again.");
     } catch {
-      setError('Cannot reach the server. Check your connection and try again.');
+      setError("Cannot reach the server. Check your connection and try again.");
     } finally {
       setPending(false);
     }
@@ -88,11 +89,16 @@ export default function LoginPage() {
           </Banner>
         )}
 
-        <button type="submit" disabled={pending} className={btn('primary', 'lg') + ' mt-1 w-full'}>
-          {pending ? 'Signing in…' : 'Sign in'}
+        <button
+          type="submit"
+          disabled={pending}
+          className={btn("primary", "lg") + " mt-1 w-full"}
+        >
+          {pending ? "Signing in…" : "Sign in"}
         </button>
-        <a className="text-center text-sm underline" href="/account-action">Forgot password?</a>
-        <div className="flex justify-center gap-5 text-sm underline"><a href="/privacy">Privacy</a><a href="/support">Support</a></div>
+        <a className="text-center text-sm underline" href="/account-action">
+          Forgot password?
+        </a>
       </form>
     </AuthShell>
   );

@@ -65,13 +65,13 @@ function Brand({ compact = false, href }: { compact?: boolean; href: string }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-2.5 rounded-md transition-opacity hover:opacity-70"
+      className="flex min-h-12 items-center gap-1 rounded-md"
       aria-label="Kramya home"
     >
-      <Mark className="text-primary h-[22px] w-[22px] shrink-0 text-ink" />
+      <Mark className="h-9 w-9 shrink-0 text-primary" />
       <span
         className={
-          "text-label font-semibold tracking-tight text-ink" +
+          "font-display text-[25px] font-semibold tracking-[-.05em] text-ink" +
           (compact ? " sr-only sm:not-sr-only" : "")
         }
       >

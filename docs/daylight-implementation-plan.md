@@ -24,8 +24,8 @@ Read the current primary pages at [Linear](https://linear.app/), [Attio](https:/
 - [x] Staff shell, overview, queue board, reception/check-in and configuration.
 - [x] Doctor session: ticket, patient identity and distinct action cluster, including the empty-room state.
 - [x] Public landing: new positioning, original product presentation, responsive navigation, pilot contact, FAQ, privacy/support links and honest app availability.
-- [ ] Build/typecheck/lint/tests; inspect the actual local web UI and native build evidence. Record limits when no phone is available.
-- [ ] Review the diff and required prior release dependencies; create focused commits and push the implementation branch.
+- [x] Build/typecheck/lint/tests; inspect the actual local web UI and native build evidence. No phone is connected; device acceptance remains pending.
+- [x] Review the diff and required prior release dependencies; create focused commits and push the implementation branch (PR #25).
 - [ ] Verify hosted web rollout if the connected deployment is available; produce signed Android artifacts without claiming an APK is automatically installed or published to Play.
 
 ## Delivery notes

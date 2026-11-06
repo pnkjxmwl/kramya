@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Mark } from "../components/mark";
 import { Icon } from "../components/icon";
 import { ProductPreview } from "./product-preview";
+import { MarketingNavigation } from "./marketing-navigation";
 import "./marketing.css";
 
 const CONTACT = "pankajsemwal.careers@gmail.com";
@@ -66,17 +67,7 @@ export default function HomePage() {
           <Link href="/login" className="marketing-signin">
             Staff sign in <Icon name="arrow-right" />
           </Link>
-          <details className="marketing-mobile-nav">
-            <summary aria-label="Open navigation">
-              <Icon name="menu" />
-            </summary>
-            <nav aria-label="Mobile navigation">
-              <a href="#product">Product</a>
-              <a href="#workflow">For your team</a>
-              <a href="#questions">Questions</a>
-              <Link href="/login">Staff sign in</Link>
-            </nav>
-          </details>
+          <MarketingNavigation />
         </div>
       </header>
       <main id="main">
