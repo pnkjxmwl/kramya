@@ -40,7 +40,7 @@ Narrative history, decisions and surprises go in **PROGRESS.md**; this table is 
 | ☐ | 10 — Staging Deploy + Pilot | M | 3–4 | 3 | `phase-10-done` |
 | ◐ | 11 — Booking + Play readiness ([current payment plan](payment-restoration-plan.md)) | XL | Acceptance-gated | Sequential | Razorpay restored locally; 49 payment, 18 RLS and 59 Android tests per variant pass; signed staging release built; hosted/device/Play/clinic gates pending |
 
-**6 November design rollout:** ◐ Daylight is implemented in the existing Kotlin routes, authenticated staff/doctor console and rebuilt public landing page. Native debug tests/APK/lint and web typecheck/lint pass; final release, browser regression, CI and hosted rollout remain in progress. Track [the implementation plan](daylight-implementation-plan.md).
+**6 November design rollout:** ✓ Daylight source, signed staging APK/AAB, full CI and hosted web/API rollout are complete. Actual reception/doctor browser checks and hosted smoke pass. Native device acceptance, supervised ETA pilot and Play/commercial release gates remain open. See [release evidence](daylight-release-2026-11-06.md).
 
 **MVP total: ~47–66 focused days.**
 
