@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --daylight-canvas: theme('colors.canvas');
+  --daylight-ink: theme('colors.ink.DEFAULT');
+  --daylight-secondary: theme('colors.ink.soft');
+  --daylight-muted: theme('colors.ink.muted');
+  --daylight-primary: theme('colors.primary');
+  --daylight-deep: theme('colors.brand.800');
+  --daylight-moss-tint: theme('colors.brand.100');
+  --daylight-border: theme('colors.line.DEFAULT');
+  --daylight-sunken: theme('colors.sunken');
+  --daylight-time: theme('colors.warning.DEFAULT');
+  --daylight-time-tint: theme('colors.warning.bg');
+}
+
+
 @layer base {
   /**
    * Typographic defaults the whole console inherits, rather than a `font-sans` and
@@ -280,3 +295,18 @@ html:has(.landing-root)::-webkit-scrollbar,
 html:has(.landing-root) body::-webkit-scrollbar {
   display: none;
 }
+
+/* Daylight product foundations. No page entrance delay on operational screens. */
+h1,h2{font-family:var(--font-bricolage),system-ui,sans-serif}
+.enter,.enter>*{animation:none!important;opacity:1!important;transform:none!important}
+.console-layout{--mark-cutout:#FAF7F2}
+.console-topbar{background:#FAF7F2}
+.daylight-stage{container-type:inline-size}
+.daylight-stage-body{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;padding:20px}
+.daylight-stage-person{display:grid;grid-template-columns:126px minmax(0,1fr);align-items:center;gap:20px}
+.daylight-stage-actions{min-width:0}
+.daylight-stub{background:#211D18;color:white;position:relative;border-radius:10px;padding:18px 15px;min-height:158px}
+.daylight-stub:before,.daylight-stub:after{content:'';position:absolute;top:calc(65% - 8px);height:16px;width:16px;background:white;border-radius:50%}
+.daylight-stub:before{left:-8px}.daylight-stub:after{right:-8px}
+@container(min-width:640px){.daylight-stage-body{grid-template-columns:minmax(0,1fr) 244px;align-items:start}.daylight-stage-person{grid-template-columns:126px minmax(0,1fr)}}
+@media(max-width:420px){.daylight-stage-person{grid-template-columns:104px minmax(0,1fr);gap:14px}.daylight-stub{padding:16px 12px}.daylight-stub>span:nth-child(2){font-size:40px}.daylight-stage-body{padding:16px}}

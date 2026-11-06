@@ -8,6 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -242,7 +243,7 @@ fun JoinScreen(
     val detail = session.data
 
     Column(Modifier.fillMaxSize().background(Theme.Colors.Canvas)) {
-        NavBar("Confirm booking", onBack = onBack)
+        NavBar("Review your booking", onBack = onBack)
 
         Column(
             Modifier
@@ -268,7 +269,8 @@ fun JoinScreen(
                 }
             }
             if (detail != null) {
-                Card(title = "Appointment") {
+                app.kramya.ui.BookingSteps()
+                Card(title = "Your visit") {
                     BasicTextLine(detail.doctorName, Theme.Font.H3, Theme.Colors.Ink)
                     BasicTextLine(
                         "${detail.departmentName} · ${detail.hospitalName}",
@@ -295,7 +297,7 @@ fun JoinScreen(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .shadow(Theme.Elevation.Card, RoundedCornerShape(Theme.Radius.Group))
+                        .border(1.dp, Theme.Colors.Border, RoundedCornerShape(Theme.Radius.Group))
                         .clip(RoundedCornerShape(Theme.Radius.Group))
                         .background(Theme.Colors.Surface)
                         .padding(vertical = Theme.Space.x5),
@@ -408,7 +410,7 @@ fun JoinScreen(
                 }
 
                 Card(title = "Arrival and payment") {
-                    BasicTextLine("Your token is confirmed only after the server verifies payment. An estimated turn is not an exact appointment time.", Theme.Font.Caption, Theme.Colors.InkTertiary)
+                    BasicTextLine("Your token is confirmed after payment is verified. An estimated turn is not an exact appointment time.", Theme.Font.Caption, Theme.Colors.InkTertiary)
                     detail.hospitalAddress?.takeIf { it.isNotBlank() }?.let { BasicTextLine(it, Theme.Font.Body, Theme.Colors.Ink) }
                     ReceptionContacts(detail.receptionPhone, detail.receptionEmail)
                     detail.arrivalGuidance?.let { guidance ->
@@ -714,7 +716,7 @@ internal fun checkoutHtml(order: JoinResponse, hospitalName: String): String {
         put("currency", order.currency)
         put("name", hospitalName)
         put("description", "${order.entry.departmentName} · Token ${order.entry.tokenLabel}")
-        put("theme", JSONObject().put("color", "#0B0B0C"))
+        put("theme", JSONObject().put("color", "#2E6B4F"))
         /*
           REDIRECT MODE, and it is the whole reason netbanking works.
 
@@ -742,7 +744,7 @@ internal fun checkoutHtml(order: JoinResponse, hospitalName: String): String {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       html, body { width: 100%; height: 100%; margin: 0; }
-      body { background: #F7F7F8; }
+      body { background: #FAF7F2; }
       /* Android WebView can resolve Checkout's inline max-height:100dvh to zero.
          Its fixed, 100%-height container is already bounded by the native WebView. */
       .razorpay-container { max-height: none !important; }

@@ -64,8 +64,8 @@ android {
         applicationId = "com.kramya.native"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("releaseVersionCode").orElse("3").get().toInt().also { require(it > 0) }
-        versionName = providers.gradleProperty("releaseVersionName").orElse("0.1.1").get()
+        versionCode = providers.gradleProperty("releaseVersionCode").orElse("4").get().toInt().also { require(it > 0) }
+        versionName = providers.gradleProperty("releaseVersionName").orElse("0.2.0").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

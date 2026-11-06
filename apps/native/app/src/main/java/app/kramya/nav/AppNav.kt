@@ -137,6 +137,7 @@ private fun NavGraphBuilder.discoverGraph(nav: NavHostController) {
                 onChangeCity = { nav.navigate(Routes.LOCATION) },
                 // Crossing to the Profile TAB, not pushing onto this stack.
                 onOpenProfile = { nav.switchTab(Tab.Profile) },
+                onOpenVisit = { nav.navigateAcrossTabs(Tab.Visits, Routes.visit(it)) },
             )
         }
 

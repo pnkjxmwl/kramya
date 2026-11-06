@@ -17,7 +17,7 @@
         <item name="android:windowBackground">@color/canvas</item>
         <item name="android:statusBarColor">@color/canvas</item>
         <!-- API 26 has light navigation glyphs; keep enough contrast there. -->
-        <item name="android:navigationBarColor">#182A29</item>
+        <item name="android:navigationBarColor">#211D18</item>
         <!-- StatusBar style="dark" in app/_layout.tsx: dark glyphs on the light bar. -->
         <item name="android:windowLightStatusBar">true</item>
     </style>

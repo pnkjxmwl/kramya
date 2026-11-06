@@ -1,5 +1,6 @@
 package app.kramya.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -400,45 +401,6 @@ fun Row(
 }
 
 /**
- * The queue, drawn.
- *
- * The handoff's strip, exactly: four 15pt ink bars for people recently seen, one 11pt pale
- * bar per person waiting ahead, and a 30pt ink bar at the end that is you. Six wide, five
- * apart, sitting on a 30pt baseline.
- *
- * **The pale bars are the ahead count, not a decoration** - the handoff is explicit that
- * the bar count and the stated number must agree, which is the whole reason the strip is
- * trustworthy at a glance rather than being a sparkline.
- *
- * ponytail: capped at 14 bars, because a 40-person queue would otherwise run off the card.
- * Past the cap the strip stops being a count and becomes "a lot", while the legend beneath
- * still states the true number. Swap for a two-row wrap if real OPD queues sit above 14.
- */
-private const val AHEAD_BAR_CAP = 14
-
-@Composable
-fun QueueStrip(ahead: Int, started: Boolean, modifier: Modifier = Modifier) {
-    val waiting = ahead.coerceIn(0, AHEAD_BAR_CAP)
-    Row(
-        modifier.height(30.dp).clearAndSetSemantics { },
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        // Nobody has been seen yet in a session that has not started - so no history.
-        if (started) {
-            repeat(4) { Bar(height = 15.dp, color = Color(0xFF0A0A0C).copy(alpha = 0.78f)) }
-        }
-        repeat(waiting) { Bar(height = 11.dp, color = Color(0xFF0A0A0C).copy(alpha = 0.14f)) }
-        Bar(height = 30.dp, color = Theme.Colors.Ink)
-    }
-}
-
-@Composable
-private fun Bar(height: Dp, color: Color) {
-    Box(Modifier.width(6.dp).height(height).clip(RoundedCornerShape(3.dp)).background(color))
-}
-
-/**
  * The handoff's primary card: one doctor's live queue, and the way into it.
  *
  * The layout is the handoff's, top to bottom - doctor row, the token pair, the strip, the
@@ -476,11 +438,10 @@ fun SessionCardView(
     val snapshot = card.snapshot
     val booked = booking is BookingState.Booked
     val reserved = booking is BookingState.Reserved
-    val started = snapshot.nowServingToken != null
 
     val outer = Modifier
         .fillMaxWidth()
-        .shadow(Theme.Elevation.Card, RoundedCornerShape(Theme.Radius.Card))
+        .border(1.dp,Theme.Colors.Border,RoundedCornerShape(Theme.Radius.Card))
         .clip(RoundedCornerShape(Theme.Radius.Card))
         .background(Theme.Colors.Surface)
         .let { base ->
@@ -537,91 +498,26 @@ fun SessionCardView(
             )
         }
 
-        Row(
-            Modifier.fillMaxWidth().padding(top = 26.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column {
-                BasicText(
-                    text = "NOW SERVING",
-                    style = Theme.Font.Micro.copy(
-                        letterSpacing = 1.2.sp,
-                        color = Theme.Colors.InkTertiary,
-                    ),
-                )
-                BasicText(
-                    text = snapshot.nowServingToken ?: "—",
-                    modifier = Modifier.padding(top = 4.dp),
-                    // Tabular figures throughout: these numbers change live and must not
-                    // jitter.
-                    style = Theme.Font.TokenSm.copy(
-                        color = Theme.Colors.InkTertiary,
-                        fontFeatureSettings = "tnum",
-                    ),
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                BasicText(
-                    text = if (booked) "YOUR TOKEN" else "WAITING",
-                    style = Theme.Font.Micro.copy(
-                        letterSpacing = 1.2.sp,
-                        color = Theme.Colors.InkTertiary,
-                    ),
-                )
-                BasicText(
-                    text = when (booking) {
-                        is BookingState.Booked -> booking.entry.tokenLabel
-                        else -> snapshot.checkedInCount.toString()
-                    },
-                    modifier = Modifier.padding(top = 4.dp),
-                    maxLines = 1,
-                    style = Theme.Font.TokenLg.copy(
-                        color = Theme.Colors.Ink,
-                        fontFeatureSettings = "tnum",
-                    ),
-                )
-            }
+        val from=if(booking is BookingState.Booked) booking.entry.etaFrom else snapshot.joinNowEtaFrom
+        val to=if(booking is BookingState.Booked) booking.entry.etaTo else snapshot.joinNowEtaTo
+        val unavailable=card.doctorPresence in setOf(DoctorPresence.ON_BREAK,DoctorPresence.LEFT)
+        Column(Modifier.fillMaxWidth().padding(top=20.dp).clip(RoundedCornerShape(10.dp))
+            .background(Theme.Colors.Warning.Bg).padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            BasicText(if(reserved) "PAYMENT NOT CONFIRMED" else if(booked) "YOUR ESTIMATED TURN" else "ESTIMATED IF YOU BOOK NOW",
+                style=Theme.Font.Overline.copy(color=Theme.Colors.Warning.Fg))
+            BasicText(when {
+                reserved -> "Check booking status"
+                unavailable -> "Doctor unavailable"
+                from!=null&&to!=null -> istRange(from,to)
+                else -> "Not available yet"
+            },style=Theme.Font.H1.copy(color=Theme.Colors.Warning.Fg,fontFeatureSettings="tnum"))
+            BasicText("A time window, not a fixed appointment. Check for queue updates.",
+                style=Theme.Font.Caption.copy(color=Theme.Colors.Warning.Fg))
         }
-
-        QueueStrip(
-            ahead = snapshot.checkedInCount,
-            started = started,
-            modifier = Modifier.padding(top = Theme.Space.x6),
-        )
-
-        Row(
-            Modifier.fillMaxWidth().padding(top = Theme.Space.x3),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BasicText(
-                text = buildAnnotatedString {
-                    withStyle(
-                        SpanStyle(
-                            color = Theme.Colors.Ink,
-                            fontWeight = FontWeight.Medium,
-                            fontFeatureSettings = "tnum",
-                        ),
-                    ) { append(snapshot.checkedInCount.toString()) }
-                    append(" ahead of you")
-                },
-                style = Theme.Font.Caption.copy(color = Theme.Colors.InkTertiary),
-            )
-            val from = snapshot.joinNowEtaFrom
-            val to = snapshot.joinNowEtaTo
-            if (from != null && to != null) {
-                BasicText(
-                    text = buildAnnotatedString {
-                        append("Seen ")
-                        withStyle(
-                            SpanStyle(color = Theme.Colors.Ink, fontWeight = FontWeight.Medium),
-                        ) { append(istRange(from, to)) }
-                    },
-                    style = Theme.Font.Caption.copy(color = Theme.Colors.InkTertiary),
-                )
-            }
-        }
+        BasicText("${snapshot.checkedInCount} checked in · ${snapshot.bookedNotArrivedCount} booked, not here",
+            Modifier.padding(top=14.dp),style=Theme.Font.Caption.copy(color=Theme.Colors.InkSecondary))
+        BasicText("Now serving: ${snapshot.nowServingToken ?: "Not started"}",Modifier.padding(top=6.dp),
+            style=Theme.Font.Caption.copy(color=Theme.Colors.InkTertiary))
 
         // Nested inside the card's own clickable on purpose: the nested control captures
         // its own touch, so tapping the action joins and tapping anywhere else opens the
@@ -632,8 +528,8 @@ fun SessionCardView(
                     reserved -> "Resume payment"
                     booking is BookingState.Booked ->
                         "View your token · ${booking.entry.tokenLabel}"
-                    snapshot.registrationOpen -> "Book and pay"
-                    else -> "Registration closed"
+                    snapshot.registrationOpen -> "Continue to booking"
+                    else -> "Booking closed"
                 },
                 // `registrationOpen` is the SERVER's answer (docs/PRD.md 8.12) - the client
                 // never works it out for itself. Advisory, though: the last slot can go

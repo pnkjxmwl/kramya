@@ -1,6 +1,6 @@
-import { switchHospital } from './switch-hospital';
-import { getMe, getActiveMembership } from '../../lib/tenant';
-import { ConsoleChrome, type NavLink } from './nav';
+import { switchHospital } from "./switch-hospital";
+import { getMe, getActiveMembership } from "../../lib/tenant";
+import { ConsoleChrome, type NavLink } from "./nav";
 
 /**
  * Role-aware console shell. Nav is built from the caller's memberships, so a
@@ -10,7 +10,11 @@ import { ConsoleChrome, type NavLink } from './nav';
  * request against the membership regardless of what the client renders
  * (docs/Rules.md 10).
  */
-export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
+export default async function ConsoleLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   // The same request the page below is about to make. `getMe` is request-scoped, so
   // the shell and its child share one call instead of asking the API twice for the
   // identical answer on every navigation.
@@ -23,12 +27,29 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   // were entitled to do.
   const links = (
     [
-      { href: '/overview', label: 'Overview', icon: 'overview', roles: ['ADMIN', 'RECEPTION', 'DOCTOR'] },
-      { href: '/queue', label: 'Queue', icon: 'queue', roles: ['ADMIN', 'RECEPTION', 'DOCTOR'] },
-      { href: '/config', label: 'Configuration', icon: 'config', roles: ['ADMIN'] },
+      {
+        href: "/overview",
+        label: "Overview",
+        icon: "overview",
+        roles: ["ADMIN", "RECEPTION", "DOCTOR"],
+      },
+      {
+        href: "/queue",
+        label: "Queue",
+        icon: "queue",
+        roles: ["ADMIN", "RECEPTION", "DOCTOR"],
+      },
+      {
+        href: "/config",
+        label: "Configuration",
+        icon: "config",
+        roles: ["ADMIN"],
+      },
     ] as const
   )
-    .filter((l) => active !== undefined && l.roles.includes(active.role as never))
+    .filter(
+      (l) => active !== undefined && l.roles.includes(active.role as never),
+    )
     .map(({ href, label, icon }): NavLink => ({ href, label, icon }));
 
   return (
@@ -44,7 +65,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
       chrome is `sticky` instead. Same information, the behaviour each device
       expects.
     */
-    <div className="min-h-screen bg-canvas lg:flex lg:h-screen lg:overflow-hidden">
+    <div className="console-layout min-h-screen bg-canvas lg:flex lg:h-screen lg:overflow-hidden">
       <ConsoleChrome
         links={links}
         viewer={{
@@ -55,18 +76,59 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
       />
 
       <main className="min-w-0 flex-1 lg:overflow-y-auto">
-        <div className="enter mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-          {me.memberships.filter((m) => m.status === 'ACTIVE').length > 1 && (
-            <form action={switchHospital} className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="console-topbar hidden items-center justify-between gap-4 border-b border-line px-8 py-4 lg:flex">
+          <div>
+            <span className="text-caption text-ink-muted">
+              Clinic workspace
+            </span>
+            <p className="text-label text-ink">
+              {active?.hospitalName ?? "Choose a clinic"}
+            </p>
+          </div>
+          <a
+            href="/support"
+            className="inline-flex min-h-10 items-center text-caption text-primary"
+          >
+            Help & support ↗
+          </a>
+        </div>
+        <div className="mx-auto w-full max-w-[1240px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+          {me.memberships.filter((m) => m.status === "ACTIVE").length > 1 && (
+            <form
+              action={switchHospital}
+              className="mb-5 flex flex-wrap items-center gap-2"
+            >
               <label htmlFor="hospital">Clinic</label>
-              <select id="hospital" name="hospitalId" defaultValue={active?.hospitalId} className="min-h-11 rounded border border-line bg-surface px-3">
-                {me.memberships.filter((m) => m.status === 'ACTIVE').map((m) => <option key={m.hospitalId} value={m.hospitalId}>{m.hospitalName}</option>)}
+              <select
+                id="hospital"
+                name="hospitalId"
+                defaultValue={active?.hospitalId}
+                className="min-h-11 rounded border border-line bg-surface px-3"
+              >
+                {me.memberships
+                  .filter((m) => m.status === "ACTIVE")
+                  .map((m) => (
+                    <option key={m.hospitalId} value={m.hospitalId}>
+                      {m.hospitalName}
+                    </option>
+                  ))}
               </select>
-              <button type="submit" className="min-h-11 rounded border border-line px-3">Switch clinic</button>
+              <button
+                type="submit"
+                className="min-h-11 rounded border border-line px-3"
+              >
+                Switch clinic
+              </button>
             </form>
           )}
-          {process.env.NEXT_PUBLIC_DEPLOYMENT_ENVIRONMENT !== 'PRODUCTION' && (
-            <p className="mb-5 rounded-control border border-line bg-surface p-3 text-body" role="note">Test environment · fictional clinic data. Do not use for real patient care.</p>
+          {process.env.NEXT_PUBLIC_DEPLOYMENT_ENVIRONMENT !== "PRODUCTION" && (
+            <p
+              className="mb-5 rounded-control border border-line bg-surface p-3 text-body"
+              role="note"
+            >
+              Test environment · fictional clinic data. Do not use for real
+              patient care.
+            </p>
           )}
           {children}
         </div>

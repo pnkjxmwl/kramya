@@ -73,22 +73,7 @@ fun LoginScreen(onSignup: () -> Unit) {
         // Brand mark, then the greeting - both left-aligned, at the handoff's large title
         // size. A centred wordmark over a centred subtitle is a splash screen; this is a
         // form, and a form starts at the left margin like every other screen in the app.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Theme.Space.x3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(Theme.Colors.Primary),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.ACTIVITY, size = 22.dp, tint = androidx.compose.ui.graphics.Color.White) }
-            BasicText(
-                text = "KRAMYA",
-                style = Theme.Font.Overline.copy(color = Theme.Colors.Primary),
-            )
-        }
+        app.kramya.ui.BrandLockup()
 
         Column(
             Modifier.padding(top = Theme.Space.x6, bottom = Theme.Space.x4),
@@ -96,7 +81,7 @@ fun LoginScreen(onSignup: () -> Unit) {
         ) {
             BasicText("Welcome back", style = Theme.Font.Display.copy(color = Theme.Colors.Ink))
             BasicText(
-                text = "Join a doctor's queue from home and arrive when it is nearly your turn.",
+                text = "Sign in to book for yourself or your family and follow your clinic’s queue.",
                 style = Theme.Font.Body.copy(color = Theme.Colors.InkTertiary),
             )
         }
@@ -224,7 +209,7 @@ private fun AuthScaffold(content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Theme.Colors.Surface)
+            .background(Theme.Colors.Canvas)
             .verticalScroll(rememberScrollState())
             .imePadding()
             .padding(horizontal = Theme.Gutter, vertical = Theme.Space.x8),
