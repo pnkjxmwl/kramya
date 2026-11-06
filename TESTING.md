@@ -1,5 +1,8 @@
 # Kramya final acceptance checklist
 
+> **6 November Daylight release:** PR #25 is merged and the hosted web/API release is verified. Signed Android version 0.2.0-staging (code 4) is built. [Exact CI, deployment, artifact and browser evidence](docs/daylight-release-2026-11-06.md) supersedes older hosted-pending notes below. Device/payment/push acceptance and Play/commercial readiness remain pending.
+
+
 Updated 19 October 2026 (Asia/Kolkata). Hands-on acceptance testing has started. Scheduled backups, retention automation and backup failure alerts are deferred at the founder's request; the existing manual encrypted backup and restore evidence remains valid. Demo UI testing is excluded from this pass. Work through the real Kotlin patient application and backend one item at a time.
 
 ## Acceptance run: 19 October 2026
@@ -197,3 +200,18 @@ Final broad run: **482 passed, 1 setup-hook timeout, 18 intentionally skipped re
 
 Historical pre-redesign deployment evidence (not the current release):
 - [x] Latest live release is `b34465f50ccc15f9b3a6474da6f029dbefa235ea` (PRs #21–22). Main CI [39073557659](https://github.com/pnkjxmwl/kramya/actions/runs/39073557659) passed verify/native, including all twelve actual restricted-login cases with no skipped cases. Protected deployment [39073841972](https://github.com/pnkjxmwl/kramya/actions/runs/39073841972) applied all 20 migrations; Render deploy `dep-db9v405g1s2s73a5eslg` reached live. Final hosted login, discovery, temporary profile CRUD, queue reads and access denials passed; no runtime error logs were returned in the short post-deploy check window.
+
+
+### Daylight hosted release acceptance — 6 November
+
+- [x] Final PR and merged main verify/native CI, including actual restricted-login RLS tests.
+- [x] Signed code 4 / 0.2.0-staging APK/AAB; 59 debug and 59 release JVM cases; APK signature/16 KB checks.
+- [x] Actual reception/doctor browser review at desktop and 390px; no demo UI and no queue writes.
+- [x] Public homepage, mobile navigation, role tabs, FAQ and staff sign-in live.
+- [x] Protected exact-commit deployment; 25 completed migrations; STAGING and restricted runtime/RLS verified.
+- [x] Hosted smoke: 25 requests pass, database/Redis up, patient staff-queue access denied, safe GET/POST checkout returns. Online-mode probe refused before mutation.
+- [ ] Install current APK on a phone; native large text/TalkBack/insets/navigation acceptance.
+- [ ] Actual Razorpay TEST booking/failure/pending/UPI return, process-death/offline recovery and push/logout isolation on the current APK.
+- [ ] Supervised clinic/ETA acceptance and remaining production/Play gates.
+
+See [the release record](docs/daylight-release-2026-11-06.md) for exact commit/workflow/deploy identity and limitations.

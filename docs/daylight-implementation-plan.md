@@ -13,7 +13,7 @@ Started 6 November 2026. Founder approved implementing the chosen designs in the
 
 ## Reference decisions
 
-Read the current primary pages at [Linear](https://linear.app/), [Attio](https://attio.com/), [Stripe](https://stripe.com/) and [Mercury](https://mercury.com/), alongside the first-party studies linked in `ui-lab/android-daylight/DESIGN-RESEARCH.md`. Use product-first explanation, clear role-based sections, editorial hierarchy and detailed interface previews. These are design interpretations, not copied artwork, copy, proprietary components or evidence that Kramya achieves their business results. This is a focused selection from the founder's list, not a claim to have analysed all 50 sites.
+Read the current primary pages at [Linear](https://linear.app/), [Attio](https://attio.com/), [Stripe](https://stripe.com/) and [Mercury](https://mercury.com/), alongside the first-party studies linked in [the release record](daylight-release-2026-11-06.md). Use product-first explanation, clear role-based sections, editorial hierarchy and detailed interface previews. These are design interpretations, not copied artwork, copy, proprietary components or evidence that Kramya achieves their business results. This is a focused selection from the founder's list, not a claim to have analysed all 50 sites.
 
 ## Work and acceptance
 
@@ -26,7 +26,7 @@ Read the current primary pages at [Linear](https://linear.app/), [Attio](https:/
 - [x] Public landing: new positioning, original product presentation, responsive navigation, pilot contact, FAQ, privacy/support links and honest app availability.
 - [x] Build/typecheck/lint/tests; inspect the actual local web UI and native build evidence. No phone is connected; device acceptance remains pending.
 - [x] Review the diff and required prior release dependencies; create focused commits and push the implementation branch (PR #25).
-- [ ] Verify hosted web rollout if the connected deployment is available; produce signed Android artifacts without claiming an APK is automatically installed or published to Play.
+- [x] Verify hosted web/API rollout; produce signed Android artifacts. Device installation and Play publication remain pending. See [release evidence and exact remaining gates](daylight-release-2026-11-06.md).
 
 ## Delivery notes
 
