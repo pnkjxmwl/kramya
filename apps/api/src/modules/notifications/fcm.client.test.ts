@@ -72,6 +72,18 @@ describe('Kotlin FCM delivery', () => {
     );
   });
 
+  it('lets an updated client gate display on the recipient even in background', async () => {
+    firebase.send.mockResolvedValue('guarded-id');
+    await new FcmClient(config(validCredential)).send([{ ...message, guarded: true,
+      data: { entryId: 'test-entry', accountId: 'test-account' } }]);
+    const payload = firebase.send.mock.calls[0]![0];
+    expect(payload.notification).toBeUndefined();
+    expect(payload.android.notification).toBeUndefined();
+    expect(payload.data).toEqual({ entryId: 'test-entry', accountId: 'test-account',
+      title: message.title, body: message.body });
+    expect(payload.android.priority).toBe('high');
+  });
+
   it.each([
     ['messaging/registration-token-not-registered', true],
     ['messaging/invalid-registration-token', true],

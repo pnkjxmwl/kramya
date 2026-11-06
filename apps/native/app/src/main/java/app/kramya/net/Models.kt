@@ -129,7 +129,18 @@ data class AuthTokens(
 data class MeResponse(
     val id: String,
     val email: String,
+    val hasPassword: Boolean = true,
+    val emailVerified: Boolean = false,
+    val emailDeliveryEnabled: Boolean = false,
+    val remoteBookingAccess: String? = null,
+    val deletionRequestedAt: String? = null,
 )
+
+@Serializable
+data class AccountActionResponse(val message: String, val deleted: Boolean? = null)
+
+@Serializable
+data class RequestAccountDeletion(val password: String, val confirmation: String = "DELETE")
 
 // ---------------------------------------------------------------------------
 // Patients
@@ -303,7 +314,19 @@ data class SessionDetail(
     val snapshot: QueueSnapshot,
     val hospitalArea: String? = null,
     val hospitalAddress: String? = null,
+    val receptionPhone: String? = null,
+    val receptionEmail: String? = null,
     val doctorDefaultConsultMins: Int,
+    val arrivalGuidance: ArrivalGuidance? = null,
+)
+
+@Serializable
+data class ArrivalGuidance(
+    val arriveBeforeMins: Int,
+    val gracePeriodSec: Int,
+    val recallAttempts: Int,
+    val requeueBehavior: String,
+    val instructions: String,
 )
 
 /** The shared fields, so one component can draw a card from either shape. */
@@ -406,7 +429,7 @@ data class MyQueueEntry(
 // ---------------------------------------------------------------------------
 
 /**
- * contracts/payments/dto.ts - POST /sessions/:id/join.
+ * contracts/payments/dto.ts - JoinRequest for POST /sessions/:id/join.
  *
  * The body names a patient and NOTHING else. No amount, no token number, no hospital:
  * the fee comes from the session, the token from the server. A client that could send an
@@ -415,13 +438,6 @@ data class MyQueueEntry(
 @Serializable
 data class JoinRequest(val patientId: String)
 
-/**
- * Everything Razorpay Checkout needs, plus the entry now being held.
- *
- * `razorpayKeyId` is the publishable half of the key pair and is safe to hold - Checkout
- * needs it in the page. The secret never leaves the server, and the signature that
- * actually authorises anything is verified on the webhook.
- */
 @Serializable
 data class JoinResponse(
     val entry: MyQueueEntry,
@@ -429,14 +445,6 @@ data class JoinResponse(
     val razorpayKeyId: String,
     val amountPaise: Int,
     val currency: String,
-    /**
-     * Where Razorpay returns the browser once the payment finishes.
-     *
-     * **From the server, never built here.** It has to be a real, publicly reachable
-     * address for the gateway to accept it, and only the server knows what that is. The
-     * app intercepts this URL rather than loading it, and still reads the OUTCOME from
-     * the server: it says "the gateway is done", never "the payment succeeded".
-     */
     val callbackUrl: String,
 )
 
@@ -476,7 +484,7 @@ data class SignupRequest(
 data class RefreshRequest(val refreshToken: String, val rotationKey: String? = null)
 
 @Serializable
-data class LogoutRequest(val refreshToken: String)
+data class LogoutRequest(val refreshToken: String, val pushToken: String? = null)
 
 // ---------------------------------------------------------------------------
 // Realtime - contracts/realtime/dto.ts

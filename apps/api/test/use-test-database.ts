@@ -21,6 +21,9 @@
  * remembered to create it, and the failure mode of forgetting is losing your data.
  */
 const DEV_URL = process.env.DATABASE_URL ?? '';
+// Historical gateway regression cases still exercise the explicit opt-in mode.
+// Reservation tests independently assert the default/cutover behavior.
+process.env.BOOKING_PAYMENT_MODE ??= 'ONLINE';
 
 /**
  * Swaps the database name for `<name>_test`, leaving credentials, host, port and

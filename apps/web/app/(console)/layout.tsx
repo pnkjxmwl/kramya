@@ -65,6 +65,9 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
               <button type="submit" className="min-h-11 rounded border border-line px-3">Switch clinic</button>
             </form>
           )}
+          {process.env.NEXT_PUBLIC_DEPLOYMENT_ENVIRONMENT !== 'PRODUCTION' && (
+            <p className="mb-5 rounded-control border border-line bg-surface p-3 text-body" role="note">Test environment · fictional clinic data. Do not use for real patient care.</p>
+          )}
           {children}
         </div>
       </main>

@@ -2,6 +2,7 @@
 
 import type { QueueCommandResult, StaffCancelEntryResponse } from '@opd/contracts';
 import { apiSend } from '../../../../lib/api';
+import { writeQueueNotice } from '../../../../lib/queue-notice';
 import { runQueueAction, text } from '../_run';
 
 /**
@@ -46,7 +47,7 @@ export async function callNext(form: FormData): Promise<void> {
     // No body: the SERVER picks who is next. A client that named the patient would
     // be deciding call order (docs/Rules.md 1).
     const result = await command(sessionId, 'call-next');
-    return `called=${encodeURIComponent(result.entry?.tokenLabel ?? '')}`;
+    return writeQueueNotice(sessionId, `Called ${result.entry?.tokenLabel ?? 'next patient'}`);
   });
 }
 
@@ -134,7 +135,7 @@ export async function checkInEntry(form: FormData): Promise<void> {
       tokenNumber: Number(text(form, 'tokenNumber')),
     });
     const entry = result.entry;
-    return `ok=${encodeURIComponent(`${entry?.tokenLabel ?? ''} · ${entry?.patientName ?? ''} checked in`)}`;
+    return writeQueueNotice(sessionId, `${entry?.tokenLabel ?? ''} · ${entry?.patientName ?? ''} checked in`);
   });
 }
 
@@ -182,6 +183,6 @@ export async function cancelEntry(form: FormData): Promise<void> {
       result.refund === null
         ? 'nothing to refund'
         : `₹${(result.refund.amountPaise / 100).toFixed(2)} refund raised (${result.refund.refundPct}%) — on its way, not settled yet`;
-    return `ok=${encodeURIComponent(`${label} cancelled — ${outcome}`)}`;
+    return writeQueueNotice(sessionId, `${label} cancelled — ${outcome}`);
   });
 }

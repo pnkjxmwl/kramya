@@ -34,7 +34,7 @@ export async function runAction(
   }
 
   revalidatePath(path);
-  redirect(result ? `${path}?${result}` : path);
+  redirect(typeof result === 'string' && result ? `${path}?${result}` : path);
 }
 
 /**

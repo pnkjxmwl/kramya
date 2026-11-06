@@ -8,6 +8,10 @@ import {
   LogoutRequest,
   RefreshRequest,
   SignupRequest,
+  RequestAccountAction,
+  ConfirmAccountAction,
+  RequestAccountDeletion,
+  type AccountActionResponse,
   type AuthTokens,
   type MeResponse,
 } from '@opd/contracts';
@@ -17,6 +21,8 @@ import { ZodBody } from '../../common/pipes/zod-validation.pipe';
 import { CurrentAccount, Public } from '../../common/decorators';
 import type { AuthedAccount } from '../../common/auth-context';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AccountActionsService } from './account-actions.service';
+import { AccountPrivacyService } from './account-privacy.service';
 
 /**
  * Rate limiting here is deliberately per route, not per controller.
@@ -41,7 +47,40 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly tokens: TokenService,
     private readonly notifications: NotificationsService,
+    private readonly actions: AccountActionsService,
+    private readonly privacy: AccountPrivacyService,
   ) {}
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('auth/account-actions/request')
+  requestAction(@Body(new ZodBody(RequestAccountAction)) body: RequestAccountAction): Promise<AccountActionResponse> {
+    return this.actions.requestPublic(body);
+  }
+
+  @Public()
+  @Throttle(GUESSABLE)
+  @HttpCode(200)
+  @Post('auth/account-actions/confirm')
+  confirmAction(@Body(new ZodBody(ConfirmAccountAction)) body: ConfirmAccountAction): Promise<AccountActionResponse> {
+    return this.actions.confirm(body);
+  }
+
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('me/email-verification')
+  verifyEmail(@CurrentAccount() account: AuthedAccount): Promise<AccountActionResponse> {
+    return this.actions.requestVerification(account.id);
+  }
+
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('me/account-deletion')
+  requestDeletion(@CurrentAccount() account: AuthedAccount,
+    @Body(new ZodBody(RequestAccountDeletion)) body: RequestAccountDeletion): Promise<AccountActionResponse> {
+    return this.privacy.request(account.id, body);
+  }
 
   @Public()
   @Throttle(GUESSABLE)

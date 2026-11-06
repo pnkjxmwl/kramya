@@ -21,6 +21,9 @@ import app.kramya.net.RealtimeClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import android.app.NotificationManager
+import app.kramya.push.PendingDeepLink
 
 /**
  * The app's singletons, built once and held by the process.
@@ -49,7 +52,18 @@ class Services(context: Context) {
     val query = QueryClient(auth, scope)
     val realtime = RealtimeClient(query)
     val city = CityStore(context)
-    init { auth.onIdentityChanged = { query.clear(); realtime.stop() } }
+    init {
+        auth.onIdentityChanged = {
+            query.clear()
+            realtime.stop()
+            PendingDeepLink.consume()
+            context.getSystemService(NotificationManager::class.java)?.cancelAll()
+            retryLogoutCleanup()
+        }
+        retryLogoutCleanup()
+    }
+
+    fun retryLogoutCleanup() { scope.launch { auth.flushLogouts() } }
 }
 
 val LocalCity = staticCompositionLocalOf<CityStore> {
@@ -95,6 +109,7 @@ fun Providers(services: Services, content: @Composable () -> Unit) {
         var seenFirstResume = false
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                services.retryLogoutCleanup()
                 if (seenFirstResume) services.query.invalidate() else seenFirstResume = true
             }
         }

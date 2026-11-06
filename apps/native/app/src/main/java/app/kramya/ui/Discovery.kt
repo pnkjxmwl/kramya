@@ -36,7 +36,6 @@ import app.kramya.core.IconName
 import app.kramya.core.Icons
 import app.kramya.core.Theme
 import app.kramya.core.istRange
-import app.kramya.core.rupees
 import app.kramya.net.DoctorPresence
 import app.kramya.net.SessionCard
 import app.kramya.net.SessionStatus
@@ -630,10 +629,10 @@ fun SessionCardView(
         Box(Modifier.padding(top = Theme.Space.x6)) {
             Button(
                 title = when {
-                    reserved -> "Finish payment"
+                    reserved -> "Resume payment"
                     booking is BookingState.Booked ->
                         "View your token · ${booking.entry.tokenLabel}"
-                    snapshot.registrationOpen -> "Join queue · ${rupees(card.feePaise)}"
+                    snapshot.registrationOpen -> "Book and pay"
                     else -> "Registration closed"
                 },
                 // `registrationOpen` is the SERVER's answer (docs/PRD.md 8.12) - the client

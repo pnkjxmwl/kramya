@@ -9,6 +9,8 @@ import {
 } from '@opd/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isUniqueViolation } from '../../common/prisma-errors';
+import { env } from '../../config/env';
+import { ConflictError } from '../../common/errors';
 
 type PolicyRow = {
   id: string;
@@ -23,6 +25,7 @@ type PolicyRow = {
   cutoffMinsBeforeEnd: number | null;
   maxOnlineTokens: number | null;
   arriveBeforeMins: number;
+  arrivalInstructions: string;
   cancellationRules: unknown;
   updatedAt: Date;
 };
@@ -39,7 +42,7 @@ const DEFAULTS: QueuePolicy = {
 
 const toDto = (row: PolicyRow): QueuePolicy => ({
   orderingStrategy: row.orderingStrategy as OrderingStrategy,
-  checkInRequired: row.checkInRequired,
+  checkInRequired: env().BOOKING_PAYMENT_MODE === 'AT_CLINIC' || row.checkInRequired,
   walkInEnabled: row.walkInEnabled,
   priorityEnabled: row.priorityEnabled,
   gracePeriodSec: row.gracePeriodSec,
@@ -49,6 +52,7 @@ const toDto = (row: PolicyRow): QueuePolicy => ({
   cutoffMinsBeforeEnd: row.cutoffMinsBeforeEnd,
   maxOnlineTokens: row.maxOnlineTokens,
   arriveBeforeMins: row.arriveBeforeMins,
+  arrivalInstructions: row.arrivalInstructions,
   // Parsed, not cast. Every field of CancellationRules defaults, so a row written
   // before a later phase adds a key still yields a complete object instead of
   // throwing on read in production - which is the whole reason it is a JSON column.
@@ -68,6 +72,7 @@ const columnsFrom = (input: UpdateQueuePolicyRequest) => ({
   cutoffMinsBeforeEnd: input.cutoffMinsBeforeEnd,
   maxOnlineTokens: input.maxOnlineTokens,
   arriveBeforeMins: input.arriveBeforeMins,
+  arrivalInstructions: input.arrivalInstructions,
   cancellationRules: input.cancellationRules,
 });
 
@@ -137,6 +142,9 @@ export class QueuePolicyService {
 
   /** PUT is a full replace: every field of the request defaults, so `{}` resets. */
   async replace(hospitalId: string, input: UpdateQueuePolicyRequest): Promise<QueuePolicy> {
+    if (env().BOOKING_PAYMENT_MODE === 'AT_CLINIC' && !input.checkInRequired) {
+      throw new ConflictError('Reception check-in is required for pay-at-clinic reservations.');
+    }
     const row = await this.prisma.queuePolicy.upsert({
       where: { hospitalId },
       update: columnsFrom(input),

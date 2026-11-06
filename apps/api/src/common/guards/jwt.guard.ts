@@ -6,6 +6,7 @@ import { setDatabaseIdentity } from "../../prisma/database-context";
 import { IS_PUBLIC } from "../decorators";
 import { UnauthorizedError } from "../errors";
 import type { AccessTokenClaims, AuthedRequest } from "../auth-context";
+import { PrismaService } from '../../prisma/prisma.service';
 
 /**
  * Authenticates every request. Registered globally - routes opt OUT with @Public(),
@@ -16,6 +17,7 @@ export class JwtGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -36,8 +38,14 @@ export class JwtGuard implements CanActivate {
           secret: env().JWT_ACCESS_SECRET,
         },
       );
-      req.account = { id: claims.sub, email: claims.email };
+      if ((claims.env ?? 'STAGING') !== env().DEPLOYMENT_ENVIRONMENT) throw new UnauthorizedError();
       setDatabaseIdentity({ accountId: claims.sub, purpose: "account" });
+      const account = await this.prisma.account.findFirst({
+        where: { id: claims.sub, deletedAt: null, authVersion: claims.ver ?? 0 },
+        select: { id: true, email: true },
+      });
+      if (!account) throw new UnauthorizedError();
+      req.account = account;
       return true;
     } catch {
       // Expired, tampered or signed with the refresh secret - all the same to a caller.

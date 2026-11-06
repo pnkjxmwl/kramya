@@ -67,6 +67,22 @@ the existing lock/commit boundaries; identity changes inside a transaction fail.
 Deploy that application revision **before** a separate RLS activation migration.
 The projection migration alone does not enable row policies.
 
+Migration `202610170002_tenant_row_isolation` activates and forces RLS on all
+19 public tables, including migration history (which the runtime cannot read).
+Policies target the restricted runtime role and check ownership, selected active
+membership and coherent parent relationships. Provenance triggers prevent moving
+queue/payment/refund records between accounts, clinics and visits. Private,
+boolean-only historical relationship checks retain a patient's old visit after a
+clinic/provider becomes undiscoverable without making that clinic bookable again.
+Only verified server paths may bind worker/webhook purpose; this does not give
+patients a way to request system context.
+
+CI runs a separate twelve-case suite with an actual non-owner login and a pool
+of two connections. Its JSON result must contain at least twelve passes and no
+skips/failures. Owner-backed regression tests remain useful but cannot substitute
+for those checks. Hosted activation and post-activation backup recovery require
+independent deployment evidence before their checklist items can be cleared.
+
 1. Separate migration credentials from runtime credentials. The migration owner runs
    DDL; a dedicated non-owner runtime role must have no CREATE, role-management,
    TRUNCATE or BYPASSRLS privileges. Keep both credentials in deployment secrets.
@@ -109,3 +125,16 @@ grants before applying all Prisma migrations. It then verifies no table/sequence
 privileges remain, including on a newly created probe that is rolled back. Hosted
 verification must independently confirm migration completion, effective ACLs/default
 ACLs and API readiness. No hosted application records are needed for this check.
+
+The post-activation advisor identified three [overlapping permissive policies](https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies)
+on Department, Doctor and DoctorSchedule: their `FOR ALL` write policies also ran
+for SELECT alongside their existing read policies. Follow-up migration
+`202610180001_specific_config_write_policies` replaces each with explicit
+INSERT/UPDATE/DELETE policies, retaining the same membership and relationship
+checks. The restricted-login suite asserts there are no overlapping actions.
+
+The [no-policy notice](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+for `_prisma_migrations` is intentional: runtime has no access; only the separate
+owner performs migrations. [Unused-index notices](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)
+on this small fictional dataset do not justify removing indexes needed by clinic
+queries. Review representative plans and usage after the supervised pilot.

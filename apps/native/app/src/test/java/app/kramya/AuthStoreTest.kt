@@ -36,6 +36,52 @@ import java.util.concurrent.atomic.AtomicInteger
  * after fifteen minutes) and catastrophic in the field. It gets a test.
  */
 class AuthStoreTest {
+    @Test
+    fun `logout sends the device token and accepts an empty 204 response`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201).setBody("""{"registered":true}"""))
+        server.enqueue(MockResponse().setResponseCode(204))
+        val storage = FakeTokenStorage(AuthTokens("access", "refresh"))
+        val auth = AuthStore(storage)
+        auth.registerPushToken("test-push-token-long")
+        auth.signOut()
+        val registration = server.takeRequest()
+        assertTrue(registration.body.readUtf8().contains("\"deliveryVersion\":2"))
+        val logout = server.takeRequest()
+        assertEquals("/auth/logout", logout.path)
+        assertTrue(logout.body.readUtf8().contains("test-push-token-long"))
+        assertNull(storage.load())
+        assertNull(storage.pushToken)
+        assertTrue(storage.pendingLogouts.isEmpty())
+    }
+
+    @Test
+    fun `offline logout clears identity and survives process restart for retry`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(503))
+        val storage = FakeTokenStorage(AuthTokens("access", "refresh"))
+        storage.pushToken = "test-push-token-long"
+        val auth = AuthStore(storage)
+        auth.signOut()
+        assertEquals(false, auth.state.value.signedIn)
+        assertNull(storage.load())
+        assertEquals(1, storage.pendingLogouts.size)
+        server.takeRequest()
+        server.enqueue(MockResponse().setResponseCode(204))
+        AuthStore(storage).flushLogouts()
+        assertEquals("/auth/logout", server.takeRequest().path)
+        assertTrue(storage.pendingLogouts.isEmpty())
+    }
+
+    @Test
+    fun `logout cleanup does not replace the newly signed in identity`() = runBlocking {
+        val storage = FakeTokenStorage(AuthTokens("bob-access", "bob-refresh"))
+        storage.pendingLogouts = listOf(app.kramya.net.LogoutRequest("alice-refresh", "alice-device-token"))
+        server.enqueue(MockResponse().setResponseCode(204))
+        val auth = AuthStore(storage)
+        auth.flushLogouts()
+        assertEquals("bob-access", auth.state.value.accessToken)
+        assertTrue(server.takeRequest().body.readUtf8().contains("alice-refresh"))
+        assertTrue(storage.pendingLogouts.isEmpty())
+    }
 
     private lateinit var server: MockWebServer
     private val refreshCount = AtomicInteger(0)

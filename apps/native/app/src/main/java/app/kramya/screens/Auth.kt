@@ -36,6 +36,7 @@ import app.kramya.ui.ButtonVariant
 import app.kramya.ui.ErrorNote
 import app.kramya.ui.Field
 import app.kramya.ui.pressable
+import app.kramya.ui.AccountWebLink
 import kotlinx.coroutines.launch
 
 // Mirror of apps/mobile/app/(auth)/login.tsx and signup.tsx.
@@ -118,6 +119,7 @@ fun LoginScreen(onSignup: () -> Unit) {
         error?.let { ErrorNote(it) }
 
         Button("Sign in", onClick = ::submit, pending = pending)
+        AccountWebLink("Forgot password?", "/account-action")
 
         Box(
             Modifier
@@ -227,5 +229,9 @@ private fun AuthScaffold(content: @Composable () -> Unit) {
             .imePadding()
             .padding(horizontal = Theme.Gutter, vertical = Theme.Space.x8),
         verticalArrangement = Arrangement.spacedBy(Theme.Space.x4, Alignment.CenterVertically),
-    ) { content() }
+    ) {
+        content()
+        AccountWebLink("Privacy notice", "/privacy")
+        AccountWebLink("Help & support", "/support")
+    }
 }

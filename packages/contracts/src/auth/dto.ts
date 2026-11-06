@@ -64,6 +64,30 @@ export const LogoutRequest = z.object({
 });
 export type LogoutRequest = z.infer<typeof LogoutRequest>;
 
+export const AccountActionPurpose = z.enum(['VERIFY_EMAIL', 'RESET_PASSWORD', 'DELETE_ACCOUNT']);
+export type AccountActionPurpose = z.infer<typeof AccountActionPurpose>;
+export const RequestAccountAction = z.object({
+  email: Email,
+  purpose: z.enum(['RESET_PASSWORD', 'DELETE_ACCOUNT']),
+});
+export type RequestAccountAction = z.infer<typeof RequestAccountAction>;
+export const ConfirmAccountAction = z.object({
+  token: z.string().min(43).max(128),
+  purpose: AccountActionPurpose,
+  newPassword: Password.optional(),
+  confirmation: z.literal('DELETE').optional(),
+}).superRefine((v, ctx) => {
+  if (v.purpose === 'RESET_PASSWORD' && !v.newPassword)
+    ctx.addIssue({ code: 'custom', path: ['newPassword'], message: 'A new password is required' });
+  if (v.purpose === 'DELETE_ACCOUNT' && v.confirmation !== 'DELETE')
+    ctx.addIssue({ code: 'custom', path: ['confirmation'], message: 'Confirm the deletion request' });
+});
+export type ConfirmAccountAction = z.infer<typeof ConfirmAccountAction>;
+export const RequestAccountDeletion = z.object({ password: z.string().min(1).max(200), confirmation: z.literal('DELETE') });
+export type RequestAccountDeletion = z.infer<typeof RequestAccountDeletion>;
+export const AccountActionResponse = z.object({ message: z.string(), deleted: z.boolean().optional() });
+export type AccountActionResponse = z.infer<typeof AccountActionResponse>;
+
 export const AuthTokens = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
@@ -99,6 +123,14 @@ export const MeResponse = z.object({
   email: z.string().email(),
   hasPassword: z.boolean(),
   linkedGoogle: z.boolean(),
+  emailVerified: z.boolean().optional(),
+  emailDeliveryEnabled: z.boolean().optional(),
+  remoteBookingAccess: z.enum(['TEST', 'APPROVED', 'APPROVAL_REQUIRED', 'VERIFIED', 'VERIFICATION_REQUIRED']).optional(),
+  deletionRequestedAt: z.string().datetime().nullable().optional(),
   memberships: z.array(HospitalMembership),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
+
+/** Public web deletion authenticates without issuing a browser session. */
+export const ExternalAccountDeletionRequest = LoginRequest.extend({ confirmation: z.literal('DELETE') });
+export type ExternalAccountDeletionRequest = z.infer<typeof ExternalAccountDeletionRequest>;

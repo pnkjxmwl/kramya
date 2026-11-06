@@ -4,6 +4,7 @@ import type { HealthResponse, ReadinessResponse } from '@opd/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { Public } from '../../common/decorators';
+import { env } from '../../config/env';
 
 // Health probes must never require a token: an orchestrator polling liveness has no
 // credentials, and a 401 here reads as "unhealthy" and gets the service killed.
@@ -18,7 +19,7 @@ export class HealthController {
   /** Liveness: the process is up. Never touches a dependency. */
   @Get()
   health(): HealthResponse {
-    return { status: 'ok', uptimeSec: Math.floor(process.uptime()) };
+    return { status: 'ok', uptimeSec: Math.floor(process.uptime()), environment: env().DEPLOYMENT_ENVIRONMENT };
   }
 
   /**

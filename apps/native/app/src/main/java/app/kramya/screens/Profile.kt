@@ -57,6 +57,12 @@ import app.kramya.ui.minTouchTarget
 import app.kramya.ui.pressable
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import kotlinx.coroutines.launch
+import app.kramya.net.AccountActionResponse
+import app.kramya.net.RequestAccountDeletion
+import app.kramya.net.useApiPost
+import app.kramya.ui.AccountWebLink
+import app.kramya.ui.Button
+import app.kramya.ui.ButtonVariant
 
 /**
  * The account: who you are, who you book for, and the way out.
@@ -85,6 +91,12 @@ fun ProfileScreen(
     val city by cityStore.city.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
+    val verification = useApiPost<Map<String, String>, AccountActionResponse>("/me/email-verification")
+    val deletion = useApiPost<RequestAccountDeletion, AccountActionResponse>("/me/account-deletion")
+    var showDeletion by remember { mutableStateOf(false) }
+    var deletionPassword by remember { mutableStateOf("") }
+    var accountNotice by remember { mutableStateOf<String?>(null) }
+
     val me = useApi<MeResponse>("/me")
     // Same cache key Discover uses, so this costs nothing on a warm app.
     val patients = useApi<List<Patient>>("/patients")
@@ -99,6 +111,28 @@ fun ProfileScreen(
         } else {
             person.name.substringBefore(' ').ifEmpty { person.name }
         }
+    }
+
+    if (showDeletion) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!deletion.isPending) { showDeletion = false; deletionPassword = "" } },
+            title = { BasicText("Delete your Kramya account?", style = Theme.Font.H3.copy(color = Theme.Colors.Ink)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Theme.Space.x3)) {
+                    BasicText("Eligible upcoming reservations will be cancelled. Account and family profile details will be removed. Active consultations or clinic staff access may require a handover; limited audit/payment records can remain. Confirm with your current password.", style = Theme.Font.Body.copy(color = Theme.Colors.Ink))
+                    Field(label = "Current password", value = deletionPassword, onValueChange = { deletionPassword = it }, secure = true)
+                    deletion.error?.let { ErrorNote(it.message ?: "Could not request deletion") }
+                }
+            },
+            confirmButton = { Button(title = "Request deletion", pending = deletion.isPending, enabled = deletionPassword.isNotBlank(), onClick = {
+                deletion.mutate(RequestAccountDeletion(deletionPassword)) { response ->
+                    accountNotice = response.message; showDeletion = false; deletionPassword = ""
+                    if (response.deleted == true) scope.launch { auth.signOut() } else me.refetch()
+                }
+            }) },
+            dismissButton = { Button(title = "Keep account", variant = ButtonVariant.Ghost, enabled = !deletion.isPending,
+                onClick = { showDeletion = false; deletionPassword = "" }) },
+        )
     }
 
     Screen {
@@ -215,6 +249,27 @@ fun ProfileScreen(
             }
 
             Column(Modifier.padding(top = 30.dp, bottom = 10.dp)) { SectionLabel("Account") }
+            accountNotice?.let { BasicText(it, style = Theme.Font.Body.copy(color = Theme.Colors.Ink)) }
+            verification.error?.let { ErrorNote(it.message ?: "Could not request verification") }
+            if (me.data?.remoteBookingAccess == "APPROVAL_REQUIRED") {
+                BasicText("Remote booking is limited to approved pilot accounts. Contact support or reception to request access. You can still arrange a visit directly with the clinic.", style = Theme.Font.Body.copy(color = Theme.Colors.Ink))
+            }
+            if (me.data != null && me.data?.emailDeliveryEnabled != true) {
+                BasicText("Automatic verification and recovery emails are not enabled. Contact support if you need help accessing your account.", style = Theme.Font.Caption.copy(color = Theme.Colors.InkSecondary))
+            }
+            if (me.data?.emailDeliveryEnabled == true && me.data?.emailVerified != true) {
+                Button(title = "Verify email", pending = verification.isPending, onClick = {
+                    verification.mutate(emptyMap()) { accountNotice = it.message }
+                })
+            }
+            if (me.data?.deletionRequestedAt != null) {
+                BasicText("Your deletion request is pending. New reservations are blocked. Contact support about any handover or retained records.", style = Theme.Font.Body.copy(color = Theme.Colors.Ink))
+            }
+            AccountWebLink("Privacy notice", "/privacy")
+            AccountWebLink("Help & support", "/support")
+            AccountWebLink("Password recovery", "/account-action")
+            if (me.data?.hasPassword == true) Button(title = "Delete account", variant = ButtonVariant.Ghost, onClick = { showDeletion = true })
+            else AccountWebLink("Request account deletion", "/delete-account")
             ListGroup {
                 row {
                     // Centred, red, no chevron: iOS puts the destructive action in its own

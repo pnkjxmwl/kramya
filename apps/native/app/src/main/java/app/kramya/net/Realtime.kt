@@ -46,7 +46,7 @@ class RealtimeClient(private val query: QueryClient) {
             // The token goes in the handshake `auth` payload rather than a query string:
             // query strings end up in access logs and proxy logs, and this is a bearer
             // credential. The gateway reads `handshake.auth.token`.
-            auth = mapOf("token" to accessToken)
+            auth = mapOf("token" to accessToken, "environment" to app.kramya.BuildConfig.DEPLOYMENT_ENVIRONMENT)
             transports = arrayOf("websocket")
             // A phone loses signal in a lift and in a hospital basement. Reconnecting is
             // the normal case here, not the exception.

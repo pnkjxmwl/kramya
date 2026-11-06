@@ -202,6 +202,7 @@ class QueryClientTest {
         // costing them a request on every socket event.
         client.fetch("/cities?limit=50", citySerializer)
         assertEquals(1, countFor("/cities?limit=50").get())
+        val receivedAt = client.entryOf("/cities?limit=50")?.receivedAt
 
         client.invalidate()
         Thread.sleep(250)
@@ -210,6 +211,7 @@ class QueryClientTest {
         // But it IS marked stale, so the next mount refetches rather than serving a value
         // the server has just told us is out of date.
         assertEquals(0L, client.entryOf("/cities?limit=50")?.updatedAt)
+        assertEquals("invalidation must preserve the last successful receipt time", receivedAt, client.entryOf("/cities?limit=50")?.receivedAt)
         client.ensure("/cities?limit=50", citySerializer)
         assertEquals(2, countFor("/cities?limit=50").get())
     }

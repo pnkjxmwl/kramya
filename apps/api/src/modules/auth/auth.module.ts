@@ -5,6 +5,13 @@ import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
 import { StaffModule } from '../staff/staff.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PatientsModule } from '../patients/patients.module';
+import { PaymentsModule } from '../payments/payments.module';
+import { RealtimeModule } from '../../realtime/realtime.module';
+import { AccountMailer } from './account-mailer';
+import { AccountActionsService } from './account-actions.service';
+import { AccountPrivacyService } from './account-privacy.service';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
   // global: JwtGuard is registered app-wide in AppModule, so JwtService must be
@@ -12,9 +19,9 @@ import { NotificationsModule } from '../notifications/notifications.module';
   // No default secret: access and refresh are signed with different ones, passed
   // per sign/verify call.
   // StaffModule owns HospitalStaff; accepting an invitation goes through it.
-  imports: [JwtModule.register({ global: true }), StaffModule, NotificationsModule],
+  imports: [JwtModule.register({ global: true }), StaffModule, NotificationsModule, PatientsModule, PaymentsModule, QueueModule, RealtimeModule],
   controllers: [AuthController],
-  providers: [AuthService, TokenService],
-  exports: [TokenService],
+  providers: [AuthService, TokenService, AccountMailer, AccountActionsService, AccountPrivacyService],
+  exports: [TokenService, AccountPrivacyService],
 })
 export class AuthModule {}

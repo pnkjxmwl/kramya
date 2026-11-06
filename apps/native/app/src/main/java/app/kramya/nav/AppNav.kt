@@ -242,6 +242,7 @@ private fun NavGraphBuilder.visitsGraph(nav: NavHostController) {
             TokenScreen(
                 entryId = entry.arg("id"),
                 onBack = { nav.popBackStack() },
+                onResumePayment = { nav.navigate(Routes.join(it)) { launchSingleTop = true } },
             )
         }
     }

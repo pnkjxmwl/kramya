@@ -1,7 +1,8 @@
+import { FormSubmit } from '../../../../components/form-submit';
 import type { QueuePolicy } from '@opd/contracts';
 import { apiGet } from '../../../../lib/api';
 import { requireAdminHospital } from '../../../../lib/tenant';
-import { Card, ErrorBanner, btn, input, label } from '../../../../components/ui';
+import { Card, ErrorBanner, SuccessBanner, btn, input, label } from '../../../../components/ui';
 import { Icon } from '../../../../components/icon';
 import { savePolicy } from './actions';
 
@@ -16,7 +17,7 @@ import { savePolicy } from './actions';
 export default async function PolicyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
 }) {
   const params = await searchParams;
   const hospital = await requireAdminHospital();
@@ -25,6 +26,7 @@ export default async function PolicyPage({
   return (
     <>
       <ErrorBanner message={params.error} />
+      <SuccessBanner message={params.saved === '1' ? 'Queue and arrival policy saved.' : undefined} />
 
       <form action={savePolicy} className="flex flex-col gap-6">
         <Card title="Ordering and eligibility">
@@ -49,12 +51,8 @@ export default async function PolicyPage({
 
           <fieldset className="mt-5 flex flex-col gap-3">
             <legend className="sr-only">Queue behaviour</legend>
-            <Toggle
-              name="checkInRequired"
-              checked={policy.checkInRequired}
-              title="Only checked-in patients can be called"
-              hint="The doctor never idles for someone still at home. Turning this off lets a booking alone be called."
-            />
+            <input type="hidden" name="checkInRequired" value="on" />
+            <p className="text-body">Reception check-in is required before a patient can be called.</p>
             <Toggle
               name="walkInEnabled"
               checked={policy.walkInEnabled}
@@ -102,7 +100,7 @@ export default async function PolicyPage({
                 <option value="NO_REQUEUE">Mark as a no-show</option>
               </select>
               <p className="mt-1 text-caption text-ink-muted">
-                A no-show is refunded by the no-show rule below.
+                For online payments, the no-show refund rule below applies. Clinic-collected payments are handled separately by the clinic.
               </p>
             </div>
           </div>
@@ -145,6 +143,13 @@ export default async function PolicyPage({
         </Card>
 
         <Card title="Arrival guidance">
+          <p className="mb-4 text-body text-ink-muted">Patients pay the clinic directly. Reception must confirm arrival before they can be called. Explain where to check in and how to contact reception about a late arrival.</p>
+          <label className="mb-5 block text-body font-medium">
+            Public reception instructions
+            <textarea name="arrivalInstructions" defaultValue={policy.arrivalInstructions} maxLength={600} rows={4}
+              className="mt-2 block w-full rounded-control border border-line bg-white p-3" placeholder="For example: Check in at the ground-floor OPD desk and show your token." />
+            <span className="mt-1 block text-caption text-ink-muted">Shown before booking. Include no patient details or medical advice.</span>
+          </label>
           <div className="max-w-sm">
             <Number
               name="arriveBeforeMins"
@@ -157,7 +162,8 @@ export default async function PolicyPage({
           </div>
         </Card>
 
-        <Card title="Cancellations and refunds">
+        <Card title="Historical online payment rules">
+          <p className="mb-4 text-body text-ink-muted">These percentages apply to historical gateway payments. New reservations take no online payment. Reception manages clinic-collected fees and receipts separately.</p>
           <div className="grid gap-5 sm:grid-cols-2">
             <Number
               name="freeCancellationMins"
@@ -204,10 +210,10 @@ export default async function PolicyPage({
           a long settings form feel finished rather than merely long.
         */}
         <div className="sticky bottom-0 -mx-4 mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-surface/85 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <button type="submit" className={btn('primary')}>
+          <FormSubmit className={btn('primary')} pendingLabel="Saving...">
             <Icon name="check" className="h-4 w-4" />
             Save policy
-          </button>
+          </FormSubmit>
           <span className="text-caption tabular-nums text-ink-muted">
             Last updated {new Date(policy.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}{' '}
             UTC

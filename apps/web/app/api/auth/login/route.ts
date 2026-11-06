@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { LoginRequest, type ApiError, type AuthTokens } from '@opd/contracts';
-import { apiUrl, writeSession } from '../../../../lib/session';
+import { apiFetch, writeSession } from '../../../../lib/session';
 
 /**
  * Browser -> here -> API. This indirection exists so the tokens land in httpOnly
@@ -15,7 +15,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const upstream = await fetch(apiUrl('/auth/login'), {
+  const upstream = await apiFetch('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(parsed.data),

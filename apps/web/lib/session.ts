@@ -9,6 +9,7 @@ import type { AuthTokens } from '@opd/contracts';
 export const ACCESS_COOKIE = 'opd_at';
 export const REFRESH_COOKIE = 'opd_rt';
 export const ROTATION_COOKIE = 'opd_rk';
+export const QUEUE_NOTICE_COOKIE = 'opd_queue_notice';
 
 export type CookieWriter = {
   set(name: string, value: string, options: Record<string, unknown>): void;
@@ -30,6 +31,7 @@ export function writeSession(jar: CookieWriter, tokens: AuthTokens): void {
 }
 
 export function clearSession(jar: CookieWriter): void {
+  jar.set(QUEUE_NOTICE_COOKIE, '', { path: '/queue', maxAge: 0, httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
   jar.delete(ACCESS_COOKIE);
   jar.delete(REFRESH_COOKIE);
   jar.delete(ROTATION_COOKIE);
@@ -46,3 +48,12 @@ export async function getRefreshToken(): Promise<string | undefined> {
 
 export const apiUrl = (path: string): string =>
   `${process.env.API_URL ?? 'http://localhost:3000'}${path}`;
+
+/** Build/environment tag prevents accidentally pairing the console with another dataset. */
+export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const environment = process.env.NEXT_PUBLIC_DEPLOYMENT_ENVIRONMENT ?? 'STAGING';
+  if (!['STAGING', 'PRODUCTION'].includes(environment)) throw new Error('Invalid console deployment environment');
+  const headers = new Headers(init?.headers);
+  headers.set('x-kramya-environment', environment);
+  return fetch(apiUrl(path), { ...init, headers });
+}

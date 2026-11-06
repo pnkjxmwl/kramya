@@ -14,7 +14,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 1. **The backend/database is the only source of truth.** Never let a client decide queue state, token order, prices, or permissions.
 2. **Every queue-changing action goes through a domain command** in the `queue` service, inside a DB transaction with a per-session `FOR UPDATE` lock. **No raw CRUD on `QueueEntry`/`OPDSession` status.**
 3. **Tenant scoping is server-side, always.** Derive `hospital_id` from the caller's membership — never from request body/query/header. Every by-id fetch verifies the record belongs to the caller's hospital.
-4. **Money is confirmed by the Razorpay webhook, not the client.** Token creation is idempotent on the order id.
+4. **Online token booking requires verified payment.** Razorpay checkout holds a place; only server-verified capture confirms the token/check-in QR. Existing confirmed pay-at-clinic reservations remain valid without retroactive charges. See payment-restoration-plan.md (2026-11-05).
 5. **No secrets in the repo.** All keys/URLs come from environment variables.
 6. **Validate all input with Zod** from the shared `contracts` package. No unvalidated request data reaches a service.
 7. **Every queue-affecting action writes an `AuditLog` + `QueueEvent`.** Accountability is a feature, not optional.
@@ -36,7 +36,7 @@ These are the boundaries for building this project (human or AI). When a rule he
 - A different ORM (TypeORM/Sequelize/Knex), a different gateway, or a different realtime lib.
 - Redux/MobX (use TanStack Query + local state; add a store only if genuinely needed).
 - Moment.js (use date-fns / native `Intl`).
-- ORM-bypassing raw SQL, except the intentional `SELECT … FOR UPDATE` lock and read-only reporting queries.
+- ORM-bypassing raw SQL, except intentional row/transaction advisory locks and read-only reporting queries. Booking account advisory locks coordinate staff/patient actions without granting staff access to private Account rows; acquire them before row locks.
 - Adding a new dependency for something the standard library or an existing dep already does.
 - Introducing microservices, a message broker, event sourcing, or GraphQL in the MVP.
 
@@ -119,6 +119,8 @@ These are the boundaries for building this project (human or AI). When a rule he
 ---
 
 ## 9. Payments Rules
+
+**2026-11-05 update:** The founder restored payment-before-token booking. `BOOKING_PAYMENT_MODE=ONLINE` is the default, and `/reserve` refuses new no-payment bookings in that mode. `AT_CLINIC` remains an explicit alternative for compatibility/testing; historical clinic reservations are not converted into paid entries. Preserve signature verification, settlement reconciliation and idempotent refunds.
 
 - Create the Razorpay order **server-side**; never trust an amount sent by the client — use the session fee.
 - **Verify the webhook signature.** Treat the verified webhook as the confirmation of truth.

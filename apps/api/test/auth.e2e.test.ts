@@ -15,6 +15,25 @@ describe('auth (P1-BE-01, P1-BE-02)', () => {
 
   const http = () => request(app.getHttpServer());
 
+  it('logout unlinks only the supplied device still owned by that account', async () => {
+    const alice = await signup(app, 'logout-alice@test.dev');
+    const bob = await signup(app, 'logout-bob@test.dev');
+    const register = (accessToken: string, token: string) => http().post('/me/push-tokens')
+      .set(auth(accessToken)).send({ token, platform: 'android', deliveryVersion: 2 }).expect(201);
+    await register(alice.accessToken, 'alice-current-device');
+    await register(alice.accessToken, 'alice-other-device');
+    await http().post('/auth/logout').send({ refreshToken: alice.refreshToken, pushToken: 'alice-current-device' }).expect(204);
+    expect(await prisma.pushToken.findUnique({ where: { token: 'alice-current-device' } })).toBeNull();
+    expect(await prisma.pushToken.findUnique({ where: { token: 'alice-other-device' } })).not.toBeNull();
+
+    const another = await http().post('/auth/login')
+      .send({ email: 'logout-alice@test.dev', password: 'correct-horse-battery' }).expect(200);
+    await register(another.body.accessToken, 'shared-family-device');
+    await register(bob.accessToken, 'shared-family-device');
+    await http().post('/auth/logout').send({ refreshToken: another.body.refreshToken, pushToken: 'shared-family-device' }).expect(204);
+    expect((await prisma.pushToken.findUniqueOrThrow({ where: { token: 'shared-family-device' } })).accountId).toBe(bob.accountId);
+  });
+
   it('signup -> login -> refresh -> logout', async () => {
     const signupRes = await http()
       .post('/auth/signup')

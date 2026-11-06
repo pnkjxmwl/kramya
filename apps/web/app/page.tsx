@@ -672,6 +672,6 @@ function SectionLabel({ children }: { children: string }) {
   pointed at a real domain - which is why it is a named constant at the bottom of the
   file rather than inlined into four anchors.
 */
-const CONTACT = 'hello@kramya.app';
+const CONTACT = 'pankajsemwal.careers@gmail.com';
 const DEMO_MAILTO = `mailto:${CONTACT}?subject=${encodeURIComponent('Kramya demo for our hospital')}`;
 const WAITLIST_MAILTO = `mailto:${CONTACT}?subject=${encodeURIComponent('Kramya clinic pilot')}`;

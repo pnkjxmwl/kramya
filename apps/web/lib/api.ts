@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import type { ApiError } from '@opd/contracts';
-import { apiUrl, getAccessToken } from './session';
+import { apiFetch, getAccessToken } from './session';
 
 /**
  * A rejection the API produced deliberately - a validation failure, a conflict, a
@@ -41,7 +41,7 @@ export class ApiCallError extends Error {
  */
 export async function apiGet<T>(path: string): Promise<T> {
   const token = await getAccessToken();
-  const res = await fetch(apiUrl(path), {
+  const res = await apiFetch(path, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     cache: 'no-store',
   });
@@ -62,7 +62,7 @@ export async function apiSend<T>(
   body?: unknown,
 ): Promise<T> {
   const token = await getAccessToken();
-  const res = await fetch(apiUrl(path), {
+  const res = await apiFetch(path, {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

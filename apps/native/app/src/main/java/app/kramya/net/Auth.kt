@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,6 +72,9 @@ class AuthStore(private val store: TokenStorage) {
      * guarantee: the server never sees one refresh token presented twice.
      */
     private val rotation = Mutex()
+    private val deviceChanges = Mutex()
+    private val logoutCleanup = Mutex()
+    private val identityLock = Any()
     var onIdentityChanged: () -> Unit = {}
     @Volatile private var generation = 0L
 
@@ -90,27 +95,57 @@ class AuthStore(private val store: TokenStorage) {
     // Commands
     // -----------------------------------------------------------------------------
 
-    suspend fun signIn(email: String, password: String) {
+    suspend fun signIn(email: String, password: String) = deviceChanges.withLock {
         persist(post("/auth/login", Api.json.encodeToString(LoginRequest.serializer(), LoginRequest(email, password))), newIdentity = true)
     }
 
-    suspend fun signUp(email: String, password: String, name: String?) {
+    suspend fun signUp(email: String, password: String, name: String?) = deviceChanges.withLock {
         // The name creates the account holder's own SELF patient profile server-side.
         val body = SignupRequest(email, password, name?.takeIf { it.isNotBlank() })
         persist(post("/auth/signup", Api.json.encodeToString(SignupRequest.serializer(), body)), newIdentity = true)
     }
 
     suspend fun signOut() {
-        val held = tokens
-        if (held != null) {
-            // Revoke server-side so the token FAMILY dies, not just this device's copy.
-            // Failure is ignored on purpose: a patient who taps Sign out must end up
-            // signed out of this phone whatever the network is doing.
-            runCatching {
-                post("/auth/logout", Api.json.encodeToString(LogoutRequest.serializer(), LogoutRequest(held.refreshToken)))
+        deviceChanges.withLock {
+            // Clear local identity before any network work. Offline logout remains logout.
+            persist(null)
+        }
+        flushLogouts()
+    }
+
+    /** Serialized with logout/account switches, including Firebase token rotation. */
+    suspend fun registerPushToken(token: String) = deviceChanges.withLock {
+        if (tokens == null) return@withLock
+        store.savePushToken(token)
+        val payload = kotlinx.serialization.json.buildJsonObject {
+            put("token", kotlinx.serialization.json.JsonPrimitive(token))
+            put("platform", kotlinx.serialization.json.JsonPrimitive("android"))
+            put("deliveryVersion", kotlinx.serialization.json.JsonPrimitive(2))
+        }.toString()
+        authedFetch("/me/push-tokens", "POST", payload).use { response ->
+            if (!response.isSuccessful) throw response.toApiException()
+        }
+    }
+
+    /** Encrypted retry outbox; old-account cleanup cannot remove another owner's device. */
+    suspend fun flushLogouts() = logoutCleanup.withLock {
+        for (request in store.loadPendingLogouts()) {
+            try {
+                call("/auth/logout", "POST", Api.json.encodeToString(LogoutRequest.serializer(), request), null).use { response ->
+                    if (!response.isSuccessful) return@withLock
+                }
+                store.savePendingLogouts(store.loadPendingLogouts().filter { it.refreshToken != request.refreshToken })
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: ApiException) {
+                return@withLock // Persisted for the next sign-in/foreground, without logging secrets.
             }
         }
-        persist(null)
+    }
+
+    /** Synchronizes notification display with logout's notification clearing. Not API authorization. */
+    fun forCurrentPushRecipient(accountId: String?, action: () -> Unit): Unit = synchronized(identityLock) {
+        if (app.kramya.push.matchesPushRecipient(tokens?.accessToken, accountId)) action()
     }
 
     // -----------------------------------------------------------------------------
@@ -169,7 +204,7 @@ class AuthStore(private val store: TokenStorage) {
         try {
             val next = post("/auth/refresh", Api.json.encodeToString(RefreshRequest.serializer(), RefreshRequest(held.refreshToken, held.rotationKey)))
             if (started != generation) throw ApiException("Account changed")
-            persist(next)
+            persist(next, expectedGeneration = started)
             next
         } catch (error: Exception) {
             if (error is ApiException && error.status == 401 && started == generation) persist(null)
@@ -203,8 +238,17 @@ class AuthStore(private val store: TokenStorage) {
             Api.json.decodeFromString(AuthTokens.serializer(), response.body!!.string())
         }
 
-    private fun persist(next: AuthTokens?, newIdentity: Boolean = false) {
-        if (next == null || newIdentity) { generation++; onIdentityChanged() }
+    private fun persist(next: AuthTokens?, newIdentity: Boolean = false, expectedGeneration: Long? = null): Unit = synchronized(identityLock) {
+        if (expectedGeneration != null && expectedGeneration != generation) throw ApiException("Account changed")
+        val identityChanged = next == null || newIdentity
+        if (identityChanged) {
+            tokens?.let { held ->
+                val request = LogoutRequest(held.refreshToken, store.loadPushToken())
+                store.savePendingLogouts((store.loadPendingLogouts() + request).distinctBy { it.refreshToken })
+            }
+            store.savePushToken(null)
+            generation++
+        }
         // The volatile field first: a concurrent request checking whether its token is
         // already stale must see the new one immediately, not after a flow has emitted.
         tokens = next
@@ -214,6 +258,7 @@ class AuthStore(private val store: TokenStorage) {
             signedIn = next != null,
             accessToken = next?.accessToken,
         )
+        if (identityChanged) onIdentityChanged()
     }
 
 }
@@ -231,12 +276,18 @@ class AuthStore(private val store: TokenStorage) {
 interface TokenStorage {
     fun load(): AuthTokens?
     fun save(tokens: AuthTokens?)
+    fun loadPushToken(): String? = null
+    fun savePushToken(token: String?) {}
+    fun loadPendingLogouts(): List<LogoutRequest> = emptyList()
+    fun savePendingLogouts(requests: List<LogoutRequest>) {}
 }
 
 /** Secure persistence only. If the keystore fails, sessions remain in memory. */
 class KeystoreTokenStorage(context: Context) : TokenStorage {
 
     private var ephemeral: AuthTokens? = null
+    private var deviceToken: String? = null
+    private var pendingLogouts = emptyList<LogoutRequest>()
     init { context.getSharedPreferences("kramya.session.fallback", Context.MODE_PRIVATE).edit().clear().apply() }
     private val prefs: SharedPreferences? = try {
         val key = MasterKey.Builder(context)
@@ -274,7 +325,21 @@ class KeystoreTokenStorage(context: Context) : TokenStorage {
                 putString(REFRESH_KEY, tokens.refreshToken)
                 putString(ROTATION_KEY, tokens.rotationKey)
             }
-        }?.apply()
+        }?.commit()
+    }
+
+    override fun loadPushToken(): String? = prefs?.getString("push.token", null) ?: deviceToken
+    override fun savePushToken(token: String?) {
+        deviceToken = token
+        prefs?.edit()?.putString("push.token", token)?.commit()
+    }
+    override fun loadPendingLogouts(): List<LogoutRequest> {
+        val saved = prefs?.getString("pending.logouts", null) ?: return pendingLogouts
+        return runCatching { Api.json.decodeFromString(ListSerializer(LogoutRequest.serializer()), saved) }.getOrDefault(emptyList())
+    }
+    override fun savePendingLogouts(requests: List<LogoutRequest>) {
+        pendingLogouts = requests
+        prefs?.edit()?.putString("pending.logouts", Api.json.encodeToString(ListSerializer(LogoutRequest.serializer()), requests))?.commit()
     }
 
     private companion object {

@@ -19,7 +19,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { env } from "../config/env";
 import type { AccessTokenClaims } from "../common/auth-context";
-import { DatabaseIdentityFor } from "../prisma/database-context";
+import { DatabaseIdentityFor, setDatabaseIdentity, withDatabaseIdentity } from "../prisma/database-context";
 
 /**
  * P7-BE-01 · the Socket.IO gateway (docs/Architecture.md 9).
@@ -43,6 +43,7 @@ import { DatabaseIdentityFor } from "../prisma/database-context";
 })
 export class RealtimeGateway implements OnGatewayConnection {
   private readonly log = new Logger(RealtimeGateway.name);
+  private readonly connectionReady = new WeakMap<Socket, Promise<boolean>>();
 
   @WebSocketServer()
   private readonly server?: Server;
@@ -63,7 +64,13 @@ export class RealtimeGateway implements OnGatewayConnection {
    * and mute. A client that thinks it is subscribed but is not is worse than one
    * that knows it is offline - the first shows stale data confidently.
    */
-  async handleConnection(socket: Socket): Promise<void> {
+  handleConnection(socket: Socket): void {
+    // Nest does not await the connection hook before binding message handlers.
+    // Share its result so an immediate subscribe waits for the account/room checks.
+    this.connectionReady.set(socket, this.authenticateConnection(socket));
+  }
+
+  private async authenticateConnection(socket: Socket): Promise<boolean> {
     const token =
       typeof socket.handshake.auth?.token === "string"
         ? socket.handshake.auth.token
@@ -71,19 +78,35 @@ export class RealtimeGateway implements OnGatewayConnection {
 
     if (token === null) {
       socket.disconnect(true);
-      return;
+      return false;
     }
 
     try {
+      const expected = env().DEPLOYMENT_ENVIRONMENT;
+      const supplied = socket.handshake.auth?.environment;
+      if ((supplied !== undefined && supplied !== expected) || (expected === 'PRODUCTION' && supplied !== expected)) throw new Error('Wrong app environment');
       const claims = await this.jwt.verifyAsync<AccessTokenClaims>(token, {
         secret: env().JWT_ACCESS_SECRET,
       });
-      socket.data.accountId = claims.sub;
+      if ((claims.env ?? 'STAGING') !== expected) throw new Error('Wrong token environment');
+      const active = () => withDatabaseIdentity({ accountId: claims.sub, purpose: 'account' }, () =>
+        this.prisma.account.findFirst({ where: { id: claims.sub, deletedAt: null, authVersion: claims.ver ?? 0 }, select: { id: true } }));
+      if (!(await active())) throw new Error('Session revoked');
       await socket.join(accountRoom(claims.sub));
+      // Close the join/revocation race: a reset before join is caught here; a reset
+      // after join disconnects this socket through its account room.
+      if (!(await active())) throw new Error('Session revoked');
+      socket.data.accountId = claims.sub;
+      return true;
     } catch {
       // Expired, tampered, or signed with the refresh secret - all the same answer.
       socket.disconnect(true);
+      return false;
     }
+  }
+
+  disconnectAccount(accountId: string): void {
+    this.safely(() => { this.server?.in(accountRoom(accountId)).disconnectSockets(true); });
   }
 
   /**
@@ -106,6 +129,8 @@ export class RealtimeGateway implements OnGatewayConnection {
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: unknown,
   ): Promise<SubscribeAck> {
+    const ready = this.connectionReady.get(socket);
+    if (!ready || !(await ready) || !socket.connected) return { ok: false, error: 'Not signed in' };
     const accountId: unknown = socket.data.accountId;
     if (typeof accountId !== "string") {
       // Belt and braces: handleConnection disconnects an unauthenticated socket, so
@@ -113,6 +138,8 @@ export class RealtimeGateway implements OnGatewayConnection {
       // the failure is a refusal rather than an open subscription.
       return { ok: false, error: "Not signed in" };
     }
+    // The decorator ran before awaiting connection authentication.
+    setDatabaseIdentity({ accountId, purpose: 'account' });
 
     const parsed = SubscribeRequest.safeParse(body);
     if (!parsed.success) return { ok: false, error: "Unknown session" };

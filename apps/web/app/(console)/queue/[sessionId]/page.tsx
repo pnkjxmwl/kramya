@@ -1,3 +1,4 @@
+import { readQueueNotice } from '../../../../lib/queue-notice';
 import Link from 'next/link';
 import type {
   Doctor,
@@ -69,7 +70,7 @@ import {
  *    work at all, so they sit beside it rather than in the page title.
  */
 
-/** One page holds a whole OPD session; the endpoint caps at 200 either way. */
+/** Pilot roster page; large-session aggregate navigation remains a release gate. */
 const LIMIT = 200;
 
 /**
@@ -92,7 +93,7 @@ export default async function BoardPage({
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; called?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const { sessionId } = await params;
   const query = await searchParams;
@@ -215,14 +216,20 @@ export default async function BoardPage({
         patient", which is normal on a shared board and must never be missed. It used
         to render inside the left column, which on a laptop put it under the fold.
       */}
-      {(query.error !== undefined || query.ok !== undefined || query.called !== undefined) && (
+      {(query.error !== undefined || query.notice !== undefined) && (
         <div className="mb-4 flex flex-col gap-2">
           <ErrorBanner message={query.error} />
           <SuccessBanner
-            message={query.ok ?? (query.called ? `Called ${query.called}` : undefined)}
+            message={query.notice === '1' ? await readQueueNotice(sessionId) ?? 'Action completed. Confirm the updated patient record below.' : undefined}
           />
         </div>
       )}
+
+      {queue.total > entries.length && <div role="alert" className="mb-4 rounded-lg border border-warning bg-surface p-4 text-body">
+        This session exceeds the supported pilot roster size: showing {entries.length} of {queue.total} records.
+        Counts and previews below cover this page only. Use signed QR or token lookup at the check-in desk for missing bookings.
+        Contact the operator before using this board for a session above 200 reservations.
+      </div>}
 
       {/*
         Two columns, and the left one does not scroll.
@@ -644,7 +651,7 @@ const TYPE_LABEL: Record<string, string> = {
  * held up to three stacked forms, so the table could not shrink below about 1200px
  * without scrolling sideways - on the tablet docs/Design.md 9 says reception uses.
  */
-function Roster({
+async function Roster({
   title,
   icon,
   description,
@@ -663,6 +670,7 @@ function Roster({
   empty?: React.ReactNode;
   emphasis?: boolean;
 }) {
+  const hospital = await requireStaffHospital();
   return (
     <RosterShell
       title={title}
@@ -721,6 +729,9 @@ function Roster({
                 </>
               )}
 
+              {entry.type === 'ONLINE' && hospital.role !== 'DOCTOR' && (
+                <Link href={`/queue/${sessionId}/booking-access/${entry.id}`} className={btn('ghost', 'sm')}>Review booking access</Link>
+              )}
               {actions !== 'none' && (
                 <RowMenu label={`More actions for ${entry.tokenLabel}`}>
                   <PriorityForm entry={entry} sessionId={sessionId} />

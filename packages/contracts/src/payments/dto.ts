@@ -39,7 +39,7 @@ export const MyQueueEntry = z.object({
   status: QueueEntryStatus,
   type: QueueEntryType,
   /**
-   * Null for an entry with no payment behind it - a walk-in registered at a desk.
+   * Null for an entry with no online payment: a pay-at-clinic reservation or walk-in.
    * Deliberately not folded into `status`; see the note on PaymentStatus.
    */
   paymentStatus: PaymentStatus.nullable(),
@@ -47,9 +47,9 @@ export const MyQueueEntry = z.object({
   tokenNumber: z.number().int().positive(),
   tokenLabel: z.string(),
   /**
-   * The signed, opaque QR reference reception scans (docs/Rules.md 10). Issued when
-   * payment is confirmed, so it is null while an entry is still RESERVED - there is
-   * nothing to check in to yet.
+   * The signed, opaque QR reference reception scans. Issued for confirmed clinic-payment
+   * reservations without collecting money, or after legacy online payment confirmation.
+   * Null while a legacy entry is still RESERVED.
    *
    * **Render this verbatim into the QR. Never parse it.** Phase 6 made it
    * `v1.<opaque ref>.<hmac>`: the reference is what the server stores, the signature
@@ -149,6 +149,15 @@ export const JoinRequest = z.object({
   patientId: z.string().uuid(),
 });
 export type JoinRequest = z.infer<typeof JoinRequest>;
+
+/** POST /sessions/:id/reserve. No gateway order and no assertion that money moved. */
+export const ReserveRequest = JoinRequest;
+export type ReserveRequest = z.infer<typeof ReserveRequest>;
+export const ReserveResponse = z.object({
+  entry: MyQueueEntry,
+  paymentCollection: z.literal('AT_CLINIC'),
+});
+export type ReserveResponse = z.infer<typeof ReserveResponse>;
 
 /**
  * Everything Razorpay Checkout needs, plus the entry that is now being held.

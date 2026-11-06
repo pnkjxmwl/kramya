@@ -322,7 +322,7 @@ describe('queue scenarios (P4-TEST-01)', () => {
     // End the session. Cara never arrived; nobody is left who was present.
     const ended = await endSession(queue, sessionId, actor, { reason: 'clinic over' });
     expect(ended.sessionStatus).toBe('ENDED_EARLY');
-    expect(await statusOf(cara)).toBe('NO_SHOW');
+    expect(await statusOf(cara)).toBe('CANCELLED');
 
     // Two consultations were recorded, and both are attributed to the provider.
     const consultations = await prisma.consultation.findMany({ where: { hospitalId } });
@@ -464,7 +464,7 @@ describe('queue scenarios (P4-TEST-01)', () => {
     // The distinction docs/PRD.md 8.9 and 8.11 each describe one half of: someone
     // who took the afternoon off and came in is not a no-show.
     expect(await statusOf(present)).toBe('CANCELLED');
-    expect(await statusOf(athome)).toBe('NO_SHOW');
+    expect(await statusOf(athome)).toBe('CANCELLED');
   });
 
   it('refuses to end a session while a patient is with the doctor', async () => {

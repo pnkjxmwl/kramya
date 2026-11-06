@@ -13,12 +13,13 @@
       Light only: app.json pins `userInterfaceStyle: "light"` and the ink system has no
       dark palette. Forcing it here means a phone in dark mode gets the same app.
     -->
-    <style name="Theme.Kramya" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Kramya.Base" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/canvas</item>
         <item name="android:statusBarColor">@color/canvas</item>
-        <item name="android:navigationBarColor">@color/canvas</item>
+        <!-- API 26 has light navigation glyphs; keep enough contrast there. -->
+        <item name="android:navigationBarColor">#182A29</item>
         <!-- StatusBar style="dark" in app/_layout.tsx: dark glyphs on the light bar. -->
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
     </style>
+    <style name="Theme.Kramya" parent="Theme.Kramya.Base" />
 </resources>

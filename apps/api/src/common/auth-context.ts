@@ -5,6 +5,8 @@ import type { Role } from '@opd/contracts';
 export interface AccessTokenClaims {
   sub: string;
   email: string;
+  ver?: number;
+  env?: 'STAGING' | 'PRODUCTION';
 }
 
 export interface AuthedAccount {

@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.kramya.core.Theme
 import app.kramya.core.calendarDate
 import app.kramya.core.istClock
@@ -47,6 +50,10 @@ import app.kramya.net.useApi
 import app.kramya.net.useApiPost
 import app.kramya.ui.Button
 import app.kramya.ui.ButtonVariant
+import app.kramya.ui.queueFreshness
+import app.kramya.ui.ReceptionContacts
+import app.kramya.net.LocalQueryClient
+import app.kramya.net.SessionDetail
 import app.kramya.ui.Card
 import app.kramya.ui.EntryStatusPill
 import app.kramya.ui.ErrorNote
@@ -87,7 +94,7 @@ private const val FALLBACK_POLL_MS = 90_000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TokenScreen(entryId: String, onBack: () -> Unit) {
+fun TokenScreen(entryId: String, onBack: () -> Unit, onResumePayment: (String) -> Unit) {
     val context = LocalContext.current
 
     // There is no GET /me/queue-entries/:id: the active list is small and already carries
@@ -101,6 +108,16 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
 
     // Watch the queue this token is in, so the ETA and "ahead of you" move with it.
     val connected = useLiveSession(entry?.sessionId)
+    val clinic = useApi<SessionDetail>("/sessions/${entry?.sessionId.orEmpty()}", enabled = entry != null)
+    val queryClient = LocalQueryClient.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var freshnessNow by remember { mutableLongStateOf(queryClient.clock()) }
+    LaunchedEffect(entryId, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { freshnessNow = queryClient.clock(); delay(15_000) }
+        }
+    }
+    val freshness = queueFreshness(active.receivedAt, freshnessNow, connected, active.error != null)
 
     val cancel = useApiPost<CancelEntryRequest, CancelEntryResponse>(
         "/queue-entries/$entryId/cancel",
@@ -119,7 +136,7 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
     val hold = holdRemaining(entry?.reservationExpiresAt, now)
 
     Column(Modifier.fillMaxSize().background(Theme.Colors.Canvas)) {
-        NavBar(entry?.tokenLabel ?: "Your token", onBack = onBack)
+        NavBar(if (entry?.status == app.kramya.net.QueueEntryStatus.RESERVED) "Payment pending" else entry?.tokenLabel ?: "Your token", onBack = onBack)
 
         PullToRefreshBox(
             isRefreshing = active.isFetching && !active.isPending,
@@ -206,6 +223,12 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                             */
                             LiveState(connected)
                         }
+                        BasicText(freshness.message, modifier = Modifier.padding(top = Theme.Space.x3),
+                            style = Theme.Font.Caption.copy(color = Theme.Colors.InkSecondary))
+                        if (!freshness.current) {
+                            Button("Refresh queue", onClick = active.refetch, pending = active.isFetching,
+                                variant = ButtonVariant.Ghost)
+                        }
 
                         // The same strip the department screen draws, from the same
                         // numbers. A patient who joined from that card should recognise
@@ -229,7 +252,8 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                                 value = run {
                                     val from = entry.etaFrom
                                     val to = entry.etaTo
-                                    if (from != null && to != null) "~${istRange(from, to)}"
+                                    if (!freshness.current) "Refresh to see estimate"
+                                    else if (from != null && to != null) "~${istRange(from, to)}"
                                     else "Not available yet"
                                 },
                                 emphasis = true,
@@ -285,7 +309,9 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                                     )
                                 }
                                 BasicText(
-                                    "Show this at reception to check in",
+                                    if (entry.paymentStatus == null)
+                                        "Show this at reception. Pay the clinic directly and ask staff to check you in."
+                                    else "Show this at reception to check in. Contact the clinic about your existing payment if needed.",
                                     style = Theme.Font.Caption.copy(
                                         color = Theme.Colors.InkTertiary,
                                         textAlign = TextAlign.Center,
@@ -295,13 +321,17 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                         } else {
                             BasicText(
                                 text = if (hold != null) {
-                                    "Your place is held for $hold. Your QR code appears once payment is confirmed."
+                                    "Payment pending: $hold remaining on this hold. If your bank shows a debit, refresh this booking before paying again."
                                 } else {
-                                    "Your QR code appears once payment is confirmed."
+                                    "This booking is not confirmed. Contact support if your bank shows a debit."
                                 },
                                 style = Theme.Font.Caption.copy(color = Theme.Colors.Warning.Fg),
                             )
                         }
+                    }
+
+                    if (entry.status == app.kramya.net.QueueEntryStatus.RESERVED && hold != null) {
+                        Button(title = "Resume payment", onClick = { onResumePayment(entry.sessionId) })
                     }
 
                     // 3. Everything that does not change, last, and quietly.
@@ -313,7 +343,17 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                         KeyValue("Hospital", entry.hospitalName)
                         KeyValue("Date", calendarDate(entry.scheduledStart))
                         KeyValue("Session starts", istClock(entry.scheduledStart))
-                        KeyValue("Fee", rupees(entry.feePaise))
+                        KeyValue(if (entry.paymentStatus == null) "Fee payable at clinic" else "Fee", rupees(entry.feePaise))
+                        clinic.data?.hospitalAddress?.takeIf { it.isNotBlank() }?.let {
+                            BasicText(it, style = Theme.Font.Body.copy(color = Theme.Colors.InkSecondary))
+                        }
+                        ReceptionContacts(clinic.data?.receptionPhone, clinic.data?.receptionEmail)
+                        clinic.data?.arrivalGuidance?.let { guidance ->
+                            BasicText("Plan to reach reception ${guidance.arriveBeforeMins} minutes before the estimated window. Contact reception if you are late; a missed turn may be requeued or marked absent under clinic rules.", style = Theme.Font.Caption.copy(color = Theme.Colors.InkSecondary))
+                            guidance.instructions.takeIf { it.isNotBlank() }?.let {
+                                BasicText(it, style = Theme.Font.Body.copy(color = Theme.Colors.InkSecondary))
+                            }
+                        }
                     }
 
                     cancel.error?.let {
@@ -336,7 +376,9 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                                     AlertDialog.Builder(context)
                                         .setTitle("Cancel this booking?")
                                         .setMessage(
-                                            if (entry.refundPctIfCancelledNow > 0) {
+                                            if (entry.paymentStatus == null) {
+                                                "Cancel your reservation? Kramya has not collected an online payment. Contact the clinic about any payment made there."
+                                            } else if (entry.refundPctIfCancelledNow > 0) {
                                                 "You will be refunded ${entry.refundPctIfCancelledNow}% of " +
                                                     "${rupees(entry.feePaise)}. Refunds take a few working days."
                                             } else {

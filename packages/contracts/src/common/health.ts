@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const HealthResponse = z.object({
   status: z.literal('ok'),
   uptimeSec: z.number(),
+  environment: z.enum(['STAGING', 'PRODUCTION']).optional(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 

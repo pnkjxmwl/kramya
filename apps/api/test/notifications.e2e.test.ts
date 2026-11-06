@@ -250,6 +250,15 @@ describe('notifications (P8-BE-01, P8-BE-02)', () => {
       });
     });
 
+    it('uses guarded recipient-bound delivery only for clients that advertise v2', async () => {
+      const device = await prisma.pushToken.findFirstOrThrow();
+      await http().post('/me/push-tokens').set(auth(patient.accessToken))
+        .send({ token: device.token, platform: 'android', deliveryVersion: 2, accountId: staff.accountId }).expect(201);
+      await notifications.dispatch();
+      expect(push.sent[0]?.guarded).toBe(true);
+      expect(push.sent[0]?.data.accountId).toBe(patient.accountId);
+    });
+
     it('never sends the same notification twice', async () => {
       await notifications.dispatch();
       expect(await notifications.dispatch()).toEqual({ sent: 0, failed: 0 });

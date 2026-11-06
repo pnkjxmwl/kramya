@@ -49,19 +49,6 @@ export default function LoginPage() {
       title="Sign in"
       // What to type, not what the product is. The wordmark is directly above this.
       intro="Use the email address your hospital administrator invited."
-      /*
-        No footer, by decision.
-
-        This carried three help notes - how invitations work, that there is no
-        password reset, and that access needs activating. All true, and all removed:
-        below a two-field form they were more words than form, and a sign-in screen
-        that explains itself at length reads as one that expects to go wrong.
-
-        **The password-reset gap is still real** - there is no self-service reset
-        anywhere in this product, because Argon2id is one-way and nobody has built
-        one. The recovery path is an administrator re-inviting you. That belongs in
-        the onboarding runbook, not on this screen.
-      */
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
         <Field id="email" label="Email">
@@ -104,6 +91,8 @@ export default function LoginPage() {
         <button type="submit" disabled={pending} className={btn('primary', 'lg') + ' mt-1 w-full'}>
           {pending ? 'Signing in…' : 'Sign in'}
         </button>
+        <a className="text-center text-sm underline" href="/account-action">Forgot password?</a>
+        <div className="flex justify-center gap-5 text-sm underline"><a href="/privacy">Privacy</a><a href="/support">Support</a></div>
       </form>
     </AuthShell>
   );

@@ -26,6 +26,7 @@ import {
   setDatabaseIdentity,
 } from "../../prisma/database-context";
 import { createHash } from "node:crypto";
+import { AccountMailer } from './account-mailer';
 
 @Injectable()
 export class AuthService {
@@ -35,6 +36,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly staff: StaffService,
+    private readonly mail: AccountMailer,
   ) {}
 
   @DatabaseIdentityFor((input: SignupRequest) => ({
@@ -145,17 +147,17 @@ export class AuthService {
   async login(input: LoginRequest): Promise<AuthTokens> {
     const account = await this.prisma.account.findUnique({
       where: { email: input.email },
-      select: { id: true, email: true, passwordHash: true },
+      select: { id: true, email: true, passwordHash: true, authVersion: true, deletedAt: true },
     });
 
     // Google-only accounts have no passwordHash and must not be loggable by password.
-    if (!account?.passwordHash) throw new InvalidCredentialsError();
+    if (!account?.passwordHash || account.deletedAt) throw new InvalidCredentialsError();
 
     if (!(await argonVerify(account.passwordHash, input.password))) {
       throw new InvalidCredentialsError();
     }
 
-    return this.tokens.issue({ id: account.id, email: account.email });
+    return this.tokens.issue({ id: account.id, email: account.email, authVersion: account.authVersion });
   }
 
   /** Google-only and password accounts prove identity through their existing session. */
@@ -199,14 +201,23 @@ export class AuthService {
     // ponytail: read-then-write, not an upsert. Two concurrent first-time logins for
     // the same account would race; the unique constraint rejects the loser and the
     // client retries. Wrap in a transaction if that ever shows up in the logs.
-    const existing = await this.prisma.account.findFirst({
-      where: { OR: [{ googleId: sub }, { email }] },
+    const bySubject = await this.prisma.account.findUnique({
+      where: { googleId: sub },
       select: { id: true, email: true, googleId: true },
     });
+    const existing =
+      bySubject ??
+      (await this.prisma.account.findUnique({
+        where: { email },
+        select: { id: true, email: true, googleId: true },
+      }));
+    if (existing?.googleId && existing.googleId !== sub) {
+      throw new UnauthorizedError("Sign in using your existing account");
+    }
 
     if (!existing) {
       const created = await this.prisma.account.create({
-        data: { googleId: sub, email },
+        data: { googleId: sub, email, emailVerifiedAt: new Date() },
         select: { id: true, email: true },
       });
       return this.tokens.issue(created);
@@ -216,7 +227,7 @@ export class AuthService {
     if (!existing.googleId) {
       await this.prisma.account.update({
         where: { id: existing.id },
-        data: { googleId: sub },
+        data: { googleId: sub, emailVerifiedAt: new Date() },
       });
     }
 
@@ -231,6 +242,9 @@ export class AuthService {
         email: true,
         passwordHash: true,
         googleId: true,
+        emailVerifiedAt: true,
+        remoteBookingApprovedAt: true,
+        deletionRequestedAt: true,
         memberships: {
           select: {
             hospitalId: true,
@@ -253,6 +267,12 @@ export class AuthService {
       email: account.email,
       hasPassword: account.passwordHash !== null,
       linkedGoogle: account.googleId !== null,
+      emailVerified: account.emailVerifiedAt !== null,
+      emailDeliveryEnabled: this.mail.configured,
+      remoteBookingAccess: env().REMOTE_BOOKING_ACCESS === 'OPEN_TEST' ? 'TEST'
+        : env().REMOTE_BOOKING_ACCESS === 'APPROVED_ONLY' ? (account.remoteBookingApprovedAt ? 'APPROVED' : 'APPROVAL_REQUIRED')
+        : account.emailVerifiedAt ? 'VERIFIED' : 'VERIFICATION_REQUIRED',
+      deletionRequestedAt: account.deletionRequestedAt?.toISOString() ?? null,
       memberships: account.memberships.map((m) => ({
         hospitalId: m.hospitalId,
         hospitalName: m.hospital.name,

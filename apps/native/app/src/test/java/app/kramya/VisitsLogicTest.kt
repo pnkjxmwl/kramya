@@ -141,7 +141,7 @@ class VisitsLogicTest {
         val notFirst = nextStepFor(
             entry(status = QueueEntryStatus.CONFIRMED, checkedInAhead = 2),
         )
-        assertEquals("You are first in line. Reach the hospital and check in at reception.", first)
+        assertEquals("Nobody is currently ahead. Follow clinic arrival instructions; your turn time can change. Check in at reception.", first)
         assertEquals(
             "Wait comfortably. Reach the hospital in time to check in at reception.",
             notFirst,

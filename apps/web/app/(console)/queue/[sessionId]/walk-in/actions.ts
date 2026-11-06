@@ -1,4 +1,5 @@
 'use server';
+import { writeQueueNotice } from '../../../../../lib/queue-notice';
 
 import type { QueueCommandResult } from '@opd/contracts';
 import { ApiCallError, apiSend } from '../../../../../lib/api';
@@ -36,6 +37,6 @@ export async function registerWalkIn(form: FormData): Promise<void> {
     );
 
     const entry = result.entry;
-    return `ok=${encodeURIComponent(`${entry?.tokenLabel ?? ''} · ${entry?.patientName ?? ''} added and checked in`)}`;
+    return writeQueueNotice(sessionId, `${entry?.tokenLabel ?? ''} · ${entry?.patientName ?? ''} added and checked in`);
   });
 }

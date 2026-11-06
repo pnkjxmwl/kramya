@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import type { CreatePatientRequest, Patient, UpdatePatientRequest } from '@opd/contracts';
 import type { Gender, PatientRelation } from '@opd/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotFoundError } from '../../common/errors';
+import { ConflictError, NotFoundError, UnauthorizedError } from '../../common/errors';
+import { env } from '../../config/env';
+import type { Prisma } from '@prisma/client';
 
 type PatientRow = {
   id: string;
@@ -33,6 +35,18 @@ const toDto = (p: PatientRow): Patient => ({
 export class PatientsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async eraseAccountDetails(accountId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.patient.updateMany({ where: { accountId }, data: { name: 'Deleted patient', dob: null, gender: null, abhaId: null, erasedAt: new Date() } });
+  }
+
+  private async ownedWrite<T>(accountId: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${accountId} FOR UPDATE`;
+      if (!(await tx.account.findFirst({ where: { id: accountId, deletedAt: null }, select: { id: true } }))) throw new UnauthorizedError();
+      return work(tx);
+    });
+  }
+
   async list(accountId: string): Promise<Patient[]> {
     const rows = await this.prisma.patient.findMany({
       where: { accountId },
@@ -42,7 +56,11 @@ export class PatientsService {
   }
 
   async create(accountId: string, input: CreatePatientRequest): Promise<Patient> {
-    const row = await this.prisma.patient.create({
+    const row = await this.ownedWrite(accountId, async tx => {
+      if (await tx.patient.count({ where: { accountId } }) >= env().MAX_PATIENT_PROFILES_PER_ACCOUNT) {
+        throw new ConflictError('This account has reached its patient-profile limit. Use an existing family profile or contact support.');
+      }
+      return tx.patient.create({
       data: {
         accountId,
         name: input.name,
@@ -51,13 +69,14 @@ export class PatientsService {
         relation: input.relation,
       },
     });
+    });
     return toDto(row);
   }
 
   async update(accountId: string, id: string, input: UpdatePatientRequest): Promise<Patient> {
     // updateMany (not update) so accountId is part of the WHERE - update-by-id
     // alone would edit another account's row.
-    const { count } = await this.prisma.patient.updateMany({
+    const { count } = await this.ownedWrite(accountId, tx => tx.patient.updateMany({
       where: { id, accountId },
       data: {
         ...(input.name !== undefined && { name: input.name }),
@@ -65,7 +84,7 @@ export class PatientsService {
         ...(input.gender !== undefined && { gender: input.gender }),
         ...(input.relation !== undefined && { relation: input.relation }),
       },
-    });
+    }));
     if (count === 0) throw new NotFoundError('Patient not found');
 
     const row = await this.prisma.patient.findFirst({ where: { id, accountId } });

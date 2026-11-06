@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { AcceptInviteRequest, type ApiError, type AuthTokens } from '@opd/contracts';
-import { apiUrl, writeSession } from '../../../../lib/session';
+import { apiFetch, writeSession } from '../../../../lib/session';
 
 /**
  * Browser -> here -> API, the same indirection as /api/auth/login: accepting an
@@ -21,7 +21,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
 
-  const upstream = await fetch(apiUrl('/auth/accept-invite'), {
+  const upstream = await apiFetch('/auth/accept-invite', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(parsed.data),

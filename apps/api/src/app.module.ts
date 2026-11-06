@@ -27,6 +27,7 @@ import { OperationsModule } from "./modules/operations/operations.module";
 import { JwtGuard } from "./common/guards/jwt.guard";
 import { TenantGuard } from "./common/guards/tenant.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
+import { DeploymentGuard } from './common/guards/deployment.guard';
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 @Module({
@@ -56,6 +57,12 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
             "req.headers.cookie",
             "req.body.password",
             "req.body.passwordHash",
+            "req.body.newPassword",
+            "req.body.refreshToken",
+            "req.body.rotationKey",
+            "req.body.token",
+            "req.body.idToken",
+            "req.body.pushToken",
           ],
           remove: true,
         },
@@ -99,6 +106,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
   // is transient-scoped and cannot be resolved with app.get().
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_GUARD, useClass: DeploymentGuard },
     // Rate limiting runs BEFORE authentication, deliberately: the attack it defends
     // against is credential stuffing, where every request is unauthenticated by
     // definition. A limiter behind the JwtGuard would only ever throttle people who

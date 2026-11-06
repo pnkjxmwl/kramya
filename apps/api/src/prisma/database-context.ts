@@ -14,6 +14,7 @@ export interface DatabaseIdentity {
   invitationId?: string;
   deviceToken?: string;
   sessionId?: string;
+  actionHash?: string;
 }
 interface DatabaseScope {
   identity: DatabaseIdentity;
@@ -79,5 +80,6 @@ export async function bindDatabaseIdentity(
     set_config('kramya.invite_hash', ${identity.inviteHash ?? ""}, true),
     set_config('kramya.invitation_id', ${identity.invitationId ?? ""}, true),
     set_config('kramya.device_token', ${identity.deviceToken ?? ""}, true),
-    set_config('kramya.session_id', ${identity.sessionId ?? ""}, true)`;
+    set_config('kramya.session_id', ${identity.sessionId ?? ""}, true),
+    set_config('kramya.action_hash', ${identity.actionHash ?? ""}, true)`;
 }

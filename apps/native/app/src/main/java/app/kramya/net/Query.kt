@@ -52,6 +52,7 @@ class QueryClient(
         val error: Throwable? = null,
         /** When `data` last landed. 0 means never. */
         val updatedAt: Long = 0L,
+        val receivedAt: Long = 0L,
         val fetching: Boolean = false,
         val hasData: Boolean = false,
     )
@@ -80,7 +81,7 @@ class QueryClient(
     private data class ObserverEntry(val serializer: KSerializer<*>, val count: Int)
 
     /** Now, in millis. Overridable so a test can advance time without sleeping. */
-    var clock: () -> Long = { System.currentTimeMillis() }
+    var clock: () -> Long = { System.nanoTime() / 1_000_000 }
 
     // -----------------------------------------------------------------------------
     // Reading
@@ -132,6 +133,7 @@ class QueryClient(
                         data = value,
                         error = null,
                         updatedAt = clock(),
+                        receivedAt = clock(),
                         fetching = false,
                         hasData = true,
                     )
@@ -276,6 +278,7 @@ data class QueryResult<T>(
     val isFetching: Boolean,
     val isPending: Boolean,
     val isSuccess: Boolean,
+    val receivedAt: Long = 0L,
     val refetch: () -> Unit,
 )
 
