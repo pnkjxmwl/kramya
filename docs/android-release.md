@@ -50,3 +50,7 @@ currently uses API account authentication and Firebase Messaging; it has no
 Google sign-in client flow. Server credential authentication and actual device
 notification receipt remain separate checks. These staging fingerprints are
 also not a future Google Play app-signing certificate.
+
+## 5 November payment restoration
+
+Current build source restores full-screen Razorpay checkout and payment-before-token confirmation, retaining the prior header/height/return fixes and independent privacy/environment work. Version code 3, version 0.1.1 (staging suffix). Earlier reservation-only artifacts are superseded; build/test evidence is recorded in TESTING.md. Use only matching TEST keys during acceptance. A phone/Play-distributed acceptance pass is still pending; no store upload or live payment is implied.

@@ -28,6 +28,7 @@ export async function savePolicy(form: FormData): Promise<void> {
       maxOnlineTokens: num(form, 'maxOnlineTokens'),
 
       arriveBeforeMins: num(form, 'arriveBeforeMins'),
+      arrivalInstructions: text(form, 'arrivalInstructions'),
 
       cancellationRules: {
         freeCancellationMins: num(form, 'freeCancellationMins'),
@@ -35,6 +36,6 @@ export async function savePolicy(form: FormData): Promise<void> {
         noShowRefundPct: num(form, 'noShowRefundPct'),
         sessionCancelledRefundPct: num(form, 'sessionCancelledRefundPct'),
       },
-    }),
+    }).then(() => 'saved=1'),
   );
 }

@@ -1,3 +1,4 @@
+import { readQueueNotice } from '../../../../../lib/queue-notice';
 import Link from 'next/link';
 import type { Paginated, QueueEntryView } from '@opd/contracts';
 import { requireStaffHospital } from '../../../../../lib/tenant';
@@ -44,7 +45,7 @@ export default async function WalkInPage({
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<{ error?: string; ok?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const { sessionId } = await params;
   const query = await searchParams;
@@ -72,10 +73,10 @@ export default async function WalkInPage({
         </p>
       </header>
 
-      {(query.error !== undefined || query.ok !== undefined) && (
+      {(query.error !== undefined || query.notice !== undefined) && (
         <div className="mb-4 flex max-w-3xl flex-col gap-2">
           <ErrorBanner message={query.error} />
-          <SuccessBanner message={query.ok} />
+          <SuccessBanner message={query.notice === '1' ? await readQueueNotice(sessionId) ?? 'Action completed. Confirm the updated patient record below.' : undefined} />
         </div>
       )}
 

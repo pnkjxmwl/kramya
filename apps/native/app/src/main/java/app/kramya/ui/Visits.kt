@@ -55,13 +55,13 @@ fun EntryStatusPill(status: QueueEntryStatus) {
  */
 fun nextStepFor(entry: MyQueueEntry): String = when (entry.status) {
     QueueEntryStatus.RESERVED ->
-        "Your place is held until you pay. Finish the payment to get your token."
+        "Payment is not confirmed yet. Resume the same checkout while your place is held. If your bank shows a debit, check this booking before paying again."
 
     QueueEntryStatus.CONFIRMED, QueueEntryStatus.VIRTUAL_WAITING ->
         if (entry.etaFrom == null || entry.etaTo == null) {
             "Waiting for an estimate. Check the clinic status or contact reception before travelling."
         } else if (entry.checkedInAheadCount == 0 && entry.bookedAheadCount == 0) {
-            "You are first in line. Reach the hospital and check in at reception."
+            "Nobody is currently ahead. Follow clinic arrival instructions; your turn time can change. Check in at reception."
         } else {
             "Wait comfortably. Reach the hospital in time to check in at reception."
         }

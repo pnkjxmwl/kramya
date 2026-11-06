@@ -90,7 +90,8 @@ async function resolveOutstanding(ctx: CommandContext, sessionId: string, settle
 
   const byTarget = new Map<QueueEntryStatus, string[]>();
   for (const entry of outstanding) {
-    const to = nextEntryStatus('END_SESSION', entry.status);
+    const earlyClosure = ctx.now < ctx.session.scheduledEnd;
+    const to = nextEntryStatus('END_SESSION', entry.status, { earlySessionEnd: earlyClosure });
     const event = END_OF_SESSION_EVENT[to];
     if (event === undefined) {
       // Unreachable given the filter above; a loud skip rather than a plausible
@@ -109,7 +110,7 @@ async function resolveOutstanding(ctx: CommandContext, sessionId: string, settle
     ctx.record({
       type: event,
       entryId: entry.id,
-      metadata: { from: entry.status, to, tokenLabel: entry.tokenLabel, atSessionEnd: true },
+      metadata: { from: entry.status, to, tokenLabel: entry.tokenLabel, atSessionEnd: true, earlyClosure },
     });
   }
 

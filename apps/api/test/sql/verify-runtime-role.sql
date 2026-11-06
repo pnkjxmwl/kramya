@@ -26,7 +26,8 @@ BEGIN
   FOREACH object_name IN ARRAY ARRAY[
     'Account','Department','Doctor','DoctorSchedule','Hospital','HospitalStaff',
     'Notification','OPDSession','Patient','Payment','PushToken','QueueEntry',
-    'QueuePolicy','RefreshToken','Refund','AuditLog','QueueEvent','Consultation'
+    'QueuePolicy','RefreshToken','Refund','AuditLog','QueueEvent','Consultation',
+    'AccountActionToken','BookingAccess'
   ] LOOP
     EXECUTE format('SELECT * FROM public.%I LIMIT 0', object_name);
     EXECUTE format('INSERT INTO public.%I SELECT * FROM public.%I WHERE false', object_name, object_name);
@@ -49,6 +50,10 @@ BEGIN
       EXECUTE format('DELETE FROM public.%I WHERE false', object_name);
     END IF;
   END LOOP;
+  PERFORM 1 FROM public."DeploymentIdentity";
+  IF has_table_privilege(current_user, 'public."DeploymentIdentity"', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'runtime role can modify the deployment boundary';
+  END IF;
   BEGIN
     EXECUTE 'CREATE TABLE public.__runtime_ddl_denied (id integer)';
     RAISE EXCEPTION 'runtime role can create application tables';

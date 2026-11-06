@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import { readQueueNotice } from "../../../../lib/queue-notice";
+import Link from "next/link";
 import type {
   Doctor,
   OPDSession,
@@ -6,11 +7,11 @@ import type {
   QueueEntryStatus,
   QueueEntryView,
   SessionEta,
-} from '@opd/contracts';
-import { requireStaffHospital } from '../../../../lib/tenant';
-import { queueGet } from '../_run';
-import { Pace } from '../pace';
-import { Icon } from '../../../../components/icon';
+} from "@opd/contracts";
+import { requireStaffHospital } from "../../../../lib/tenant";
+import { queueGet } from "../_run";
+import { Pace } from "../pace";
+import { Icon } from "../../../../components/icon";
 import {
   Badge,
   Card,
@@ -22,10 +23,10 @@ import {
   btn,
   input,
   label,
-} from '../../../../components/ui';
-import { PriorityPill, SessionStatusBadge, StatusPill, istTime } from '../ui';
-import { RosterShell, RowMenu, Stage, UpNext } from '../stage';
-import { Live } from '../live';
+} from "../../../../components/ui";
+import { PriorityPill, SessionStatusBadge, StatusPill, istTime } from "../ui";
+import { RosterShell, RowMenu, Stage, UpNext } from "../stage";
+import { Live } from "../live";
 import {
   callNext,
   cancelEntry,
@@ -40,7 +41,7 @@ import {
   setPresence,
   skipPatient,
   startConsultation,
-} from './actions';
+} from "./actions";
 
 /**
  * P6-WEB-01 / P6-WEB-04 · the board. docs/Design.md 5.7.
@@ -69,22 +70,30 @@ import {
  *    work at all, so they sit beside it rather than in the page title.
  */
 
-/** One page holds a whole OPD session; the endpoint caps at 200 either way. */
+/** Pilot roster page; large-session aggregate navigation remains a release gate. */
 const LIMIT = 200;
 
 /**
  * How a status is grouped on screen. Purely presentational - what is LEGAL is the
  * state machine's business, and the server rejects anything this offers wrongly.
  */
-const ELIGIBLE: QueueEntryStatus[] = ['CHECKED_IN', 'READY'];
-const NOT_ARRIVED: QueueEntryStatus[] = ['CONFIRMED', 'VIRTUAL_WAITING'];
-const FINISHED: QueueEntryStatus[] = ['COMPLETED', 'NO_SHOW', 'CANCELLED', 'RESCHEDULED'];
+const ELIGIBLE: QueueEntryStatus[] = ["CHECKED_IN", "READY"];
+const NOT_ARRIVED: QueueEntryStatus[] = ["CONFIRMED", "VIRTUAL_WAITING"];
+const FINISHED: QueueEntryStatus[] = [
+  "COMPLETED",
+  "NO_SHOW",
+  "CANCELLED",
+  "RESCHEDULED",
+];
 
-const PRESENCE: Record<string, { label: string; tone: 'neutral' | 'success' | 'warning' }> = {
-  PRESENT: { label: 'Doctor present', tone: 'success' },
-  NOT_PRESENT: { label: 'Doctor not here yet', tone: 'neutral' },
-  ON_BREAK: { label: 'Doctor on break', tone: 'warning' },
-  LEFT: { label: 'Doctor has left', tone: 'warning' },
+const PRESENCE: Record<
+  string,
+  { label: string; tone: "neutral" | "success" | "warning" }
+> = {
+  PRESENT: { label: "Doctor present", tone: "success" },
+  NOT_PRESENT: { label: "Doctor not here yet", tone: "neutral" },
+  ON_BREAK: { label: "Doctor on break", tone: "warning" },
+  LEFT: { label: "Doctor has left", tone: "warning" },
 };
 
 export default async function BoardPage({
@@ -92,7 +101,7 @@ export default async function BoardPage({
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; called?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const { sessionId } = await params;
   const query = await searchParams;
@@ -100,7 +109,9 @@ export default async function BoardPage({
 
   const [session, queue, doctors, eta] = await Promise.all([
     queueGet<OPDSession>(`/hospitals/${hospital.id}/sessions/${sessionId}`),
-    queueGet<Paginated<QueueEntryView>>(`/sessions/${sessionId}/queue?limit=${LIMIT}`),
+    queueGet<Paginated<QueueEntryView>>(
+      `/sessions/${sessionId}/queue?limit=${LIMIT}`,
+    ),
     queueGet<Paginated<Doctor>>(`/hospitals/${hospital.id}/doctors?limit=100`),
     // Fourth request, in the same round trip rather than after it. The board already
     // waits on three; making this a fifth sequential await would have added latency
@@ -109,21 +120,23 @@ export default async function BoardPage({
   ]);
 
   const doctorName =
-    doctors.items.find((d) => d.id === session.currentProviderDoctorId)?.name ?? 'Unknown doctor';
+    doctors.items.find((d) => d.id === session.currentProviderDoctorId)?.name ??
+    "Unknown doctor";
 
   const entries = queue.items;
-  const inConsultation = entries.find((e) => e.status === 'IN_CONSULTATION') ?? null;
-  const called = entries.find((e) => e.status === 'CALLED') ?? null;
+  const inConsultation =
+    entries.find((e) => e.status === "IN_CONSULTATION") ?? null;
+  const called = entries.find((e) => e.status === "CALLED") ?? null;
   const eligible = entries.filter((e) => ELIGIBLE.includes(e.status));
-  const skipped = entries.filter((e) => e.status === 'SKIPPED');
+  const skipped = entries.filter((e) => e.status === "SKIPPED");
   const notArrived = entries.filter((e) => NOT_ARRIVED.includes(e.status));
-  const holds = entries.filter((e) => e.status === 'RESERVED');
+  const holds = entries.filter((e) => e.status === "RESERVED");
   const finished = entries.filter((e) => FINISHED.includes(e.status));
 
   const paused = session.pausedAt !== null;
   const presence = PRESENCE[session.doctorPresence] ?? {
-    label: session.doctorPresence.replaceAll('_', ' ').toLowerCase(),
-    tone: 'neutral' as const,
+    label: session.doctorPresence.replaceAll("_", " ").toLowerCase(),
+    tone: "neutral" as const,
   };
 
   /**
@@ -133,7 +146,7 @@ export default async function BoardPage({
    * come back with an error, exactly as `paused` does above. The API decides; this
    * saves the receptionist a click and a red banner.
    */
-  const doctorAway = session.doctorPresence !== 'PRESENT';
+  const doctorAway = session.doctorPresence !== "PRESENT";
 
   /**
    * Starting and completing a consultation are the doctor's (PRD 6.2), so the API
@@ -142,15 +155,17 @@ export default async function BoardPage({
    * (lib/tenant.ts says so at length). ADMIN keeps both - it is the hospital's own
    * account and the only role that can always unstick a clinic.
    */
-  const clinicalDenied = hospital.role === 'RECEPTION';
+  const clinicalDenied = hospital.role === "RECEPTION";
   const AWAY_REASON: Record<string, string> = {
-    NOT_PRESENT: 'The doctor has not been marked present yet.',
-    ON_BREAK: 'The doctor is on a break.',
-    LEFT: 'The doctor has left for the day.',
+    NOT_PRESENT: "The doctor has not been marked present yet.",
+    ON_BREAK: "The doctor is on a break.",
+    LEFT: "The doctor has left for the day.",
   };
 
-  const hidden = (name: string, value: string) => <input type="hidden" name={name} value={value} />;
-  const sessionField = hidden('sessionId', sessionId);
+  const hidden = (name: string, value: string) => (
+    <input type="hidden" name={name} value={value} />
+  );
+  const sessionField = hidden("sessionId", sessionId);
 
   return (
     <>
@@ -172,7 +187,8 @@ export default async function BoardPage({
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <Badge icon="clock">
               <span className="tabular-nums">
-                {istTime(session.scheduledStart)}–{istTime(session.scheduledEnd)}
+                {istTime(session.scheduledStart)}–
+                {istTime(session.scheduledEnd)}
               </span>
             </Badge>
             <SessionStatusBadge status={session.status} />
@@ -196,11 +212,14 @@ export default async function BoardPage({
           where it goes, not with what happens when you eventually get there.
         */}
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Link className={btn('primary')} href={`/queue/${sessionId}/check-in`}>
+          <Link
+            className={btn("primary")}
+            href={`/queue/${sessionId}/check-in`}
+          >
             <Icon name="camera" className="h-4 w-4" />
             Open check-in desk
           </Link>
-          <Link className={btn('quiet')} href={`/queue/${sessionId}/walk-in`}>
+          <Link className={btn("quiet")} href={`/queue/${sessionId}/walk-in`}>
             <Icon name="user-plus" className="h-4 w-4" />
             Add a walk-in
           </Link>
@@ -215,12 +234,30 @@ export default async function BoardPage({
         patient", which is normal on a shared board and must never be missed. It used
         to render inside the left column, which on a laptop put it under the fold.
       */}
-      {(query.error !== undefined || query.ok !== undefined || query.called !== undefined) && (
+      {(query.error !== undefined || query.notice !== undefined) && (
         <div className="mb-4 flex flex-col gap-2">
           <ErrorBanner message={query.error} />
           <SuccessBanner
-            message={query.ok ?? (query.called ? `Called ${query.called}` : undefined)}
+            message={
+              query.notice === "1"
+                ? ((await readQueueNotice(sessionId)) ??
+                  "Action completed. Confirm the updated patient record below.")
+                : undefined
+            }
           />
+        </div>
+      )}
+
+      {queue.total > entries.length && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-warning bg-surface p-4 text-body"
+        >
+          This session exceeds the supported pilot roster size: showing{" "}
+          {entries.length} of {queue.total} records. Counts and previews below
+          cover this page only. Use signed QR or token lookup at the check-in
+          desk for missing bookings. Contact the operator before using this
+          board for a session above 200 reservations.
         </div>
       )}
 
@@ -240,7 +277,7 @@ export default async function BoardPage({
         roster row - so on a 390px phone the whole board was 533px wide and the page
         scrolled sideways. `minmax(0, …)` lets the column be narrower than its content.
       */}
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,1fr)]">
         {/*
           `max-h` + its own scroll, not bare `sticky`. A sticky column taller than
           the viewport pins its TOP and leaves the bottom permanently unreachable -
@@ -253,7 +290,7 @@ export default async function BoardPage({
           THEN the pace and the controls - which are wrapped below and sent last.
           On a desktop it is the sticky left column, unchanged.
         */}
-        <div className="flex flex-col gap-4 max-lg:contents lg:sticky lg:top-0 lg:max-h-[calc(100dvh-3.5rem)] lg:overflow-y-auto lg:pb-1 lg:pr-1">
+        <div className="flex flex-col gap-4 max-xl:contents xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto xl:pb-1 xl:pr-1">
           {/* ------------------------------------------------------------------
               The one dominant action (docs/Design.md 5.7). Exactly one of these
               three states is true, and each has a single obvious next step.
@@ -261,8 +298,8 @@ export default async function BoardPage({
           {inConsultation !== null ? (
             <Stage
               state={{
-                label: 'In consultation',
-                icon: 'stethoscope',
+                label: "In consultation",
+                icon: "stethoscope",
                 live: true,
               }}
               token={inConsultation.tokenLabel}
@@ -271,10 +308,10 @@ export default async function BoardPage({
             >
               <form action={completeConsultation}>
                 {sessionField}
-                {hidden('entryId', inConsultation.id)}
+                {hidden("entryId", inConsultation.id)}
                 <button
                   type="submit"
-                  className={btn('primary', 'lg') + ' w-full'}
+                  className={btn("primary", "lg") + " w-full"}
                   disabled={clinicalDenied}
                 >
                   <Icon name="check" className="h-4 w-4" />
@@ -286,7 +323,7 @@ export default async function BoardPage({
             </Stage>
           ) : called !== null ? (
             <Stage
-              state={{ label: 'Called', icon: 'bell' }}
+              state={{ label: "Called", icon: "bell" }}
               token={called.tokenLabel}
               name={called.patientName}
               meta={<EntryMeta entry={called} />}
@@ -294,15 +331,15 @@ export default async function BoardPage({
               <p className="flex items-center gap-1.5 text-caption text-warning">
                 <Icon name="bell" className="h-3.5 w-3.5" />
                 Called
-                {called.recallCount > 0 && ` · not seen ${called.recallCount}×`}. Waiting for them
-                to come in.
+                {called.recallCount > 0 && ` · not seen ${called.recallCount}×`}
+                . Waiting for them to come in.
               </p>
               <form action={startConsultation} className="mt-3">
                 {sessionField}
-                {hidden('entryId', called.id)}
+                {hidden("entryId", called.id)}
                 <button
                   type="submit"
-                  className={btn('primary', 'lg') + ' w-full'}
+                  className={btn("primary", "lg") + " w-full"}
                   disabled={doctorAway || clinicalDenied}
                 >
                   <Icon name="play" className="h-4 w-4" />
@@ -319,12 +356,13 @@ export default async function BoardPage({
                 <div className="mt-2.5">
                   <p className="flex items-start gap-1.5 text-caption text-warning">
                     <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
-                    {AWAY_REASON[session.doctorPresence] ?? 'The doctor is not available.'}
+                    {AWAY_REASON[session.doctorPresence] ??
+                      "The doctor is not available."}
                   </p>
                   <form action={setPresence} className="mt-2">
                     {sessionField}
                     <input type="hidden" name="presence" value="PRESENT" />
-                    <button type="submit" className={btn('quiet')}>
+                    <button type="submit" className={btn("quiet")}>
                       <Icon name="user" className="h-4 w-4" />
                       Mark doctor present
                     </button>
@@ -332,11 +370,14 @@ export default async function BoardPage({
                 </div>
               )}
               <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-line-soft pt-3">
-                <form action={skipPatient} className="flex flex-1 items-end gap-2">
+                <form
+                  action={skipPatient}
+                  className="flex flex-1 items-end gap-2"
+                >
                   {sessionField}
-                  {hidden('entryId', called.id)}
+                  {hidden("entryId", called.id)}
                   <div className="min-w-0 flex-1">
-                    <label className={label + ' sr-only'} htmlFor="skip-reason">
+                    <label className={label + " sr-only"} htmlFor="skip-reason">
                       Reason for skipping
                     </label>
                     <input
@@ -346,14 +387,14 @@ export default async function BoardPage({
                       className={input}
                     />
                   </div>
-                  <button type="submit" className={btn('quiet')}>
+                  <button type="submit" className={btn("quiet")}>
                     Skip for now
                   </button>
                 </form>
                 <form action={markNoShow}>
                   {sessionField}
-                  {hidden('entryId', called.id)}
-                  <button type="submit" className={btn('danger')}>
+                  {hidden("entryId", called.id)}
+                  <button type="submit" className={btn("danger")}>
                     No-show
                   </button>
                 </form>
@@ -366,15 +407,15 @@ export default async function BoardPage({
             <Stage
               state={
                 eligible.length > 0
-                  ? { label: 'Ready to call', icon: 'bell' }
-                  : { label: 'Nobody waiting', icon: 'clock' }
+                  ? { label: "Ready to call", icon: "bell" }
+                  : { label: "Nobody waiting", icon: "clock" }
               }
               token={eligible[0]?.tokenLabel ?? null}
-              name={eligible[0]?.patientName ?? 'Nobody checked in yet'}
+              name={eligible[0]?.patientName ?? "Nobody checked in yet"}
               meta={
                 eligible.length > 0
                   ? `Next up · ${eligible.length} checked in`
-                  : 'Patients become callable once they are checked in'
+                  : "Patients become callable once they are checked in"
               }
               dim
             >
@@ -382,7 +423,7 @@ export default async function BoardPage({
                 {sessionField}
                 <button
                   type="submit"
-                  className={btn('primary', 'lg') + ' w-full'}
+                  className={btn("primary", "lg") + " w-full"}
                   disabled={eligible.length === 0 || paused || doctorAway}
                 >
                   <Icon name="bell" className="h-4 w-4" />
@@ -402,8 +443,9 @@ export default async function BoardPage({
                 <div className="mt-2.5">
                   <p className="flex items-start gap-1.5 text-caption text-warning">
                     <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
-                    {AWAY_REASON[session.doctorPresence] ?? 'The doctor is not available.'} Nobody
-                    can be called in until someone marks them present.
+                    {AWAY_REASON[session.doctorPresence] ??
+                      "The doctor is not available."}{" "}
+                    Nobody can be called in until someone marks them present.
                   </p>
                   {/*
                     The remedy, next to the thing it unblocks. The presence control
@@ -413,7 +455,7 @@ export default async function BoardPage({
                   <form action={setPresence} className="mt-2">
                     {sessionField}
                     <input type="hidden" name="presence" value="PRESENT" />
-                    <button type="submit" className={btn('quiet')}>
+                    <button type="submit" className={btn("quiet")}>
                       <Icon name="user" className="h-4 w-4" />
                       Mark doctor present
                     </button>
@@ -434,7 +476,7 @@ export default async function BoardPage({
                 {paused ? (
                   <form action={resumeQueue}>
                     {sessionField}
-                    <button type="submit" className={btn('quiet') + ' w-full'}>
+                    <button type="submit" className={btn("quiet") + " w-full"}>
                       <Icon name="play" className="h-4 w-4" />
                       Resume queue
                     </button>
@@ -443,7 +485,10 @@ export default async function BoardPage({
                   <form action={pauseQueue} className="flex items-end gap-2">
                     {sessionField}
                     <div className="min-w-0 flex-1">
-                      <label className={label + ' mb-1 block'} htmlFor="pause-reason">
+                      <label
+                        className={label + " mb-1 block"}
+                        htmlFor="pause-reason"
+                      >
                         Pause reason
                       </label>
                       <input
@@ -453,7 +498,7 @@ export default async function BoardPage({
                         className={input}
                       />
                     </div>
-                    <button type="submit" className={btn('quiet')}>
+                    <button type="submit" className={btn("quiet")}>
                       Pause queue
                     </button>
                   </form>
@@ -462,7 +507,7 @@ export default async function BoardPage({
                 <form action={setPresence} className="flex items-end gap-2">
                   {sessionField}
                   <div className="min-w-0 flex-1">
-                    <label className={label + ' mb-1 block'} htmlFor="presence">
+                    <label className={label + " mb-1 block"} htmlFor="presence">
                       Doctor presence
                     </label>
                     <select
@@ -477,7 +522,7 @@ export default async function BoardPage({
                       <option value="LEFT">Left for the day</option>
                     </select>
                   </div>
-                  <button type="submit" className={btn('quiet')}>
+                  <button type="submit" className={btn("quiet")}>
                     Update
                   </button>
                 </form>
@@ -485,15 +530,22 @@ export default async function BoardPage({
                 <div className="border-t border-line-soft pt-3">
                   <Disclosure summary="End this session" tone="danger">
                     <p className="text-caption text-ink-muted">
-                      Everyone still outstanding is resolved: patients who were here but not seen
-                      are rescheduled, and patients who never arrived are marked no-show. Paid
-                      patients are refunded the percentage your queue policy sets for each. This
-                      cannot be undone.
+                      Everyone still outstanding is resolved: patients who were
+                      here but not seen are rescheduled, and patients who never
+                      arrived are marked no-show. Paid patients are refunded the
+                      percentage your queue policy sets for each. This cannot be
+                      undone.
                     </p>
-                    <form action={endSession} className="mt-3 flex items-end gap-2">
+                    <form
+                      action={endSession}
+                      className="mt-3 flex items-end gap-2"
+                    >
                       {sessionField}
                       <div className="min-w-0 flex-1">
-                        <label className={label + ' mb-1 block'} htmlFor="end-reason">
+                        <label
+                          className={label + " mb-1 block"}
+                          htmlFor="end-reason"
+                        >
                           Reason
                         </label>
                         <input
@@ -503,7 +555,7 @@ export default async function BoardPage({
                           className={input}
                         />
                       </div>
-                      <button type="submit" className={btn('danger')}>
+                      <button type="submit" className={btn("danger")}>
                         End session
                       </button>
                     </form>
@@ -533,7 +585,8 @@ export default async function BoardPage({
             actions="eligible"
             empty={
               <EmptyState icon="user-plus" title="Nobody is checked in">
-                Patients become callable once reception checks them in at the desk.
+                Patients become callable once reception checks them in at the
+                desk.
               </EmptyState>
             }
           />
@@ -598,7 +651,8 @@ function ClinicalNote() {
   return (
     <p className="mt-2.5 flex items-start gap-1.5 text-caption text-ink-muted">
       <Icon name="user" className="mt-0.5 h-3.5 w-3.5" />
-      Consultations are recorded by the doctor. Ask them to sign in, or an admin.
+      Consultations are recorded by the doctor. Ask them to sign in, or an
+      admin.
     </p>
   );
 }
@@ -606,19 +660,19 @@ function ClinicalNote() {
 /** Under the name on the stage: priority, then where they came from and when. */
 function EntryMeta({ entry }: { entry: QueueEntryView }) {
   const since =
-    entry.status === 'IN_CONSULTATION' && entry.consultStartedAt !== null
+    entry.status === "IN_CONSULTATION" && entry.consultStartedAt !== null
       ? `started ${istTime(entry.consultStartedAt)}`
       : entry.calledAt !== null
         ? `called ${istTime(entry.calledAt)}`
         : null;
   return (
     <>
-      {entry.priority !== 'NORMAL' && (
+      {entry.priority !== "NORMAL" && (
         <span className="mr-1.5 font-semibold text-white">
-          {entry.priority === 'EMERGENCY' ? 'Emergency' : 'Priority'} ·
+          {entry.priority === "EMERGENCY" ? "Emergency" : "Priority"} ·
         </span>
       )}
-      {TYPE_LABEL[entry.type] ?? 'Booked'}
+      {TYPE_LABEL[entry.type] ?? "Booked"}
       {since !== null && ` · ${since}`}
     </>
   );
@@ -628,8 +682,8 @@ const nextUp = (entries: QueueEntryView[]) =>
   entries.map((e) => ({ id: e.id, token: e.tokenLabel, name: e.patientName }));
 
 const TYPE_LABEL: Record<string, string> = {
-  WALK_IN: 'Walk-in',
-  ONLINE: 'App',
+  WALK_IN: "Walk-in",
+  ONLINE: "App",
 };
 
 /**
@@ -644,7 +698,7 @@ const TYPE_LABEL: Record<string, string> = {
  * held up to three stacked forms, so the table could not shrink below about 1200px
  * without scrolling sideways - on the tablet docs/Design.md 9 says reception uses.
  */
-function Roster({
+async function Roster({
   title,
   icon,
   description,
@@ -655,14 +709,15 @@ function Roster({
   emphasis = false,
 }: {
   title: string;
-  icon: 'check-circle' | 'skip-forward' | 'home' | 'clock' | 'check';
+  icon: "check-circle" | "skip-forward" | "home" | "clock" | "check";
   description?: string;
   entries: QueueEntryView[];
   sessionId: string;
-  actions: 'eligible' | 'skipped' | 'notArrived' | 'none';
+  actions: "eligible" | "skipped" | "notArrived" | "none";
   empty?: React.ReactNode;
   emphasis?: boolean;
 }) {
+  const hospital = await requireStaffHospital();
   return (
     <RosterShell
       title={title}
@@ -692,36 +747,48 @@ function Roster({
               <PriorityPill priority={entry.priority} />
               <StatusPill status={entry.status} />
 
-              {actions === 'notArrived' && (
+              {actions === "notArrived" && (
                 <form action={checkInEntry}>
                   <input type="hidden" name="sessionId" value={sessionId} />
-                  <input type="hidden" name="tokenNumber" value={entry.tokenNumber} />
-                  <button type="submit" className={btn('quiet', 'sm')}>
+                  <input
+                    type="hidden"
+                    name="tokenNumber"
+                    value={entry.tokenNumber}
+                  />
+                  <button type="submit" className={btn("quiet", "sm")}>
                     Check in
                   </button>
                 </form>
               )}
 
-              {actions === 'skipped' && (
+              {actions === "skipped" && (
                 <>
                   <form action={requeuePatient}>
                     <input type="hidden" name="sessionId" value={sessionId} />
                     <input type="hidden" name="entryId" value={entry.id} />
-                    <button type="submit" className={btn('quiet', 'sm')}>
+                    <button type="submit" className={btn("quiet", "sm")}>
                       Put back in queue
                     </button>
                   </form>
                   <form action={markNoShow}>
                     <input type="hidden" name="sessionId" value={sessionId} />
                     <input type="hidden" name="entryId" value={entry.id} />
-                    <button type="submit" className={btn('danger', 'sm')}>
+                    <button type="submit" className={btn("danger", "sm")}>
                       No-show
                     </button>
                   </form>
                 </>
               )}
 
-              {actions !== 'none' && (
+              {entry.type === "ONLINE" && hospital.role !== "DOCTOR" && (
+                <Link
+                  href={`/queue/${sessionId}/booking-access/${entry.id}`}
+                  className={btn("ghost", "sm")}
+                >
+                  Review booking access
+                </Link>
+              )}
+              {actions !== "none" && (
                 <RowMenu label={`More actions for ${entry.tokenLabel}`}>
                   <PriorityForm entry={entry} sessionId={sessionId} />
                   <div className="border-t border-line-soft pt-3">
@@ -737,7 +804,13 @@ function Roster({
   );
 }
 
-function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: string }) {
+function PriorityForm({
+  entry,
+  sessionId,
+}: {
+  entry: QueueEntryView;
+  sessionId: string;
+}) {
   return (
     <div>
       <p className="mb-2 text-label font-semibold text-ink">Priority</p>
@@ -745,7 +818,10 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
         <input type="hidden" name="sessionId" value={sessionId} />
         <input type="hidden" name="entryId" value={entry.id} />
         <div className="w-36">
-          <label className={label + ' mb-1 block'} htmlFor={`priority-${entry.id}`}>
+          <label
+            className={label + " mb-1 block"}
+            htmlFor={`priority-${entry.id}`}
+          >
             Priority
           </label>
           <select
@@ -760,7 +836,10 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
           </select>
         </div>
         <div className="min-w-[12rem] flex-1">
-          <label className={label + ' mb-1 block'} htmlFor={`priority-reason-${entry.id}`}>
+          <label
+            className={label + " mb-1 block"}
+            htmlFor={`priority-reason-${entry.id}`}
+          >
             Reason
           </label>
           <input
@@ -772,13 +851,13 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
             className={input}
           />
         </div>
-        <button type="submit" className={btn('quiet')}>
+        <button type="submit" className={btn("quiet")}>
           Save
         </button>
       </form>
       <p className="mt-2 text-caption text-ink-muted">
-        Recorded in the audit log with your name. Other patients are told only that the queue
-        changed for a priority case.
+        Recorded in the audit log with your name. Other patients are told only
+        that the queue changed for a priority case.
       </p>
     </div>
   );
@@ -791,15 +870,23 @@ function PriorityForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: 
  * receptionist is actually answering - "who decided this" - rather than as two
  * percentages, which would invite picking the number instead of the truth.
  */
-function CancelForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: string }) {
+function CancelForm({
+  entry,
+  sessionId,
+}: {
+  entry: QueueEntryView;
+  sessionId: string;
+}) {
   return (
     <div>
-      <p className="mb-2 text-label font-semibold text-danger">Cancel booking</p>
+      <p className="mb-2 text-label font-semibold text-danger">
+        Cancel booking
+      </p>
       <form action={cancelEntry} className="flex flex-col gap-3">
         <input type="hidden" name="sessionId" value={sessionId} />
         <input type="hidden" name="entryId" value={entry.id} />
         <fieldset className="flex flex-col gap-1.5">
-          <legend className={label + ' mb-1'}>Who decided this?</legend>
+          <legend className={label + " mb-1"}>Who decided this?</legend>
           <label className="flex items-center gap-2 text-body text-ink">
             <input
               type="radio"
@@ -809,17 +896,27 @@ function CancelForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: st
               className="accent-primary"
             />
             The patient asked to cancel
-            <span className="text-caption text-ink-muted">(hospital refund policy applies)</span>
+            <span className="text-caption text-ink-muted">
+              (hospital refund policy applies)
+            </span>
           </label>
           <label className="flex items-center gap-2 text-body text-ink">
-            <input type="radio" name="cause" value="HOSPITAL" className="accent-primary" />
+            <input
+              type="radio"
+              name="cause"
+              value="HOSPITAL"
+              className="accent-primary"
+            />
             The hospital cancelled
             <span className="text-caption text-ink-muted">(full refund)</span>
           </label>
         </fieldset>
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[12rem] flex-1">
-            <label className={label + ' mb-1 block'} htmlFor={`cancel-reason-${entry.id}`}>
+            <label
+              className={label + " mb-1 block"}
+              htmlFor={`cancel-reason-${entry.id}`}
+            >
               Reason
             </label>
             <input
@@ -831,7 +928,7 @@ function CancelForm({ entry, sessionId }: { entry: QueueEntryView; sessionId: st
               className={input}
             />
           </div>
-          <button type="submit" className={btn('danger')}>
+          <button type="submit" className={btn("danger")}>
             Cancel booking
           </button>
         </div>

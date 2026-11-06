@@ -2,6 +2,7 @@ import { requireAdminHospital } from '../../../lib/tenant';
 import { ConfigTabs } from '../nav';
 
 const TABS = [
+  { href: '/config/clinic', label: 'Clinic details' },
   { href: '/config/departments', label: 'Departments' },
   { href: '/config/doctors', label: 'Doctors' },
   { href: '/config/schedules', label: 'Schedules' },
@@ -27,7 +28,7 @@ export default async function ConfigLayout({ children }: { children: React.React
         <p className="mb-1.5 text-eyebrow uppercase text-ink-muted">{hospital.name}</p>
         <h1 className="text-h1 text-ink">Configuration</h1>
         <p className="mt-1 max-w-[70ch] text-body text-ink-muted">
-          Set up in order: departments, then the doctors in them, then when each doctor works. The
+          Start with clinic details, then departments, doctors and when each doctor works. The
           queue policy applies to every session in this hospital.
         </p>
         <div className="mt-4">

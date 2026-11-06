@@ -11,6 +11,13 @@ const valid = {
 };
 
 describe("loadEnv", () => {
+  it("defaults new bookings to verified online payment with a bounded family limit", () => {
+    const config = loadEnv(valid);
+    expect(config.BOOKING_PAYMENT_MODE).toBe("ONLINE");
+    expect(config.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT).toBe(6);
+    expect(() => loadEnv({ ...valid, MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT: "0" })).toThrow();
+    expect(() => loadEnv({ ...valid, BOOKING_PAYMENT_MODE: "UNKNOWN" })).toThrow();
+  });
   it("keeps staging from accepting live payment keys accidentally", () => {
     const values = {
       ...valid,

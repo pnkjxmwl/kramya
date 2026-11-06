@@ -125,6 +125,7 @@ fun <T : Any> useApiWith(
         // Nothing has resolved yet, either way. This is the skeleton state.
         isPending = !hasData && error == null,
         isSuccess = hasData && error == null,
+        receivedAt = entry?.receivedAt ?: 0L,
         refetch = refetch,
     )
 }

@@ -1,6 +1,7 @@
 package app.kramya
 
 import app.kramya.screens.isCheckoutReturn
+import app.kramya.screens.isPaymentAppSchemeAllowed
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,5 +29,10 @@ class CheckoutReturnTest {
         assertFalse(isCheckoutReturn("https://api.example.com:444/webhooks/checkout-complete", callback))
         assertFalse(isCheckoutReturn("https://user@api.example.com/webhooks/checkout-complete", callback))
         assertFalse(isCheckoutReturn("not a valid URL", callback))
+    }
+    @Test
+    fun `allows payment app links but refuses local or executable payloads`() {
+        listOf("upi", "tez", "phonepe", "paytmmp").forEach { assertTrue(isPaymentAppSchemeAllowed(it)) }
+        listOf(null, "", "file", "CONTENT", "javascript", "data", "about", "intent").forEach { assertFalse(isPaymentAppSchemeAllowed(it)) }
     }
 }

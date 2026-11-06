@@ -9506,6 +9506,367 @@ rotating it with Supabase's generator. Credentials must not be sent in chat. Ren
 project. The Render dashboard login requires the owner's normal login method; its GitHub
 deployment connection is not enabled for account sign-in.
 
+---
+
+## 2026-10-17 — UI Lab: five console design directions, as a static demo · branch `demo/ui-lab` (off-plan founder request)
+
+**Did:** Built `docs/ui-lab/` — the clinic console (reception + doctor views) rebuilt as a
+static, fake-data clickable demo in five visual directions: **Ledger** (register/editorial),
+**Vital** (warm, human), **Ops Deck** (dark mission control), **Bold Clinic** (poster/chunky),
+and **Ink Baseline** (the current system, polished, as the control). Eight screens per
+direction — login, overview, queue board, session stage, check-in desk, walk-in form, doctors,
+queue rules — plus an index picker (`docs/ui-lab/index.html`), a shared fake clinic
+(`assets/data.js`: Sai Sunrise, Thu 12 Nov, 11:24 IST frozen), and `SPEC.md`. Plain
+HTML/CSS/JS, no build step, works double-clicked from `file://`. Verified independently:
+41 HTML files / 621 refs all resolve; screenshots of every key screen reviewed; jsdom
+click-throughs of **Call next** and **Check-in** pass in all five directions; no JS console
+errors; no data drift from the shared file.
+
+**Decided:** Demo lives in `docs/ui-lab/` (matches the `docs/design_handoff_opd_queue/`
+precedent) rather than a Next.js route group — deliberately divergent styles would fight the
+shared tailwind theme, and a no-build folder opens anywhere. One frozen fake clinic across all
+five directions so only the design varies. Every direction keeps the product's non-negotiables:
+status is colour + label (+ icon), ETAs are windows, tabular numerals, AA contrast. Interactions
+are in-memory and reset on reload — a demo, not a prototype. Work left uncommitted on the branch
+by versioning rules; the pre-existing uncommitted API work on the base branch was not touched.
+
+**Surprises:** Five parallel builders produced five coherent, *incompatible-looking* systems with
+zero data drift, because every patient/token/time came from one shared file and the spec froze
+the shell and navigation. One harness trap worth remembering: an inline `<script>` embedding of
+a JS file fails if that file contains a literal `</script>` (ours did, in a comment) — fine as
+an external script, breaks only when inlined.
+
+**Next:** Founder reviews `docs/ui-lab/index.html` and picks a direction (or a mix) to carry into
+the real console. If a direction is chosen, the next unit is an in-app implementation pass on the
+existing Next.js console — not more demo work.
+
+---
+
+## 2026-10-19 — UI Lab round 2: three merges of Vital × Ink Baseline · branch `demo/ui-lab` (follow-up to the 2026-10-17 entry)
+
+**Did:** Built three synthesis directions between the two round-1 styles the founder picked (Vital
+for colour/warmth, Ink Baseline for minimalism), each the full 8-screen console on the same frozen
+fake clinic: `merge-ink` ("Ink, warmed" — baseline structure verbatim, warm palette, moss/marigold,
+tinted avatars), `merge-daylight` ("Daylight" — the true middle: warm paper, ring on the session
+hero, crisp ticket chips elsewhere, Bricolage only for display moments), `merge-vital` ("Vital,
+focused" — Vital's language with unified radii, one shadow level, tints reduced to three per
+screen). `docs/ui-lab/index.html` now leads with the three merges; round 1 kept for reference.
+Verified: 65 HTML files / 935 refs resolve; jsdom click-throughs (Call next + Check-in) pass in all
+8 styles; screenshots of every merge screen reviewed. A contrast audit over the merge palettes
+found sub-AA status pairs (merge-ink danger/info/neutral; merge-vital neutral/muted) — all darkened
+minimally with the hue kept, NOTES updated; a walk-in placeholder that reused a real demo patient's
+name was replaced.
+
+**Decided:** the merge was delivered as a three-point spectrum rather than one guess — the point of
+this review is choosing how much of each side to keep. Daylight is the recommendation if a single
+direction is picked. Merge-vital's decorative `--ink-faint` micro-text tier (~3.0–4.2:1) was left
+as-is but documented — it wants a hierarchy re-derivation if that direction ships, not a silent
+darkening.
+
+**Surprises:** the first fan-out died on a platform rate limit mid-write, leaving intact partial
+folders; each agent finished its own remaining pages when resumed — resuming sessions was much
+cheaper than restarting. Daylight's builder ran a real headless-browser (Edge/CDP) assertion suite
+and caught a curly-apostrophe toast mismatch; the byte-exact toast strings in SPEC §5 made that
+checkable.
+
+**Next:** founder reviews the round-2 section of `docs/ui-lab/index.html` and picks a direction (or
+a mix); the next unit is then an in-app implementation pass on the real Next.js console — not more
+demo work. Everything stays uncommitted on the branch by design.
+
+---
+
+## 2026-10-19 — Direction chosen: Daylight, with the doctor-page actions from Ink, warmed · branch `demo/ui-lab`
+
+**Did:** Founder picked **merge-daylight** as the direction, with one layout change: the doctor's
+session page (`session.html`) should arrange its actions the way `merge-ink` does. The hero card
+was moved out of the left column to span the full content width, and the action cluster became its
+own right-hand column — `Complete consultation` full-width on top, then a 2×2 grid (`Call next` /
+`Skip`, `No-show` / `Pause clinic`) in Daylight's styling. Side benefit: the buttons now live
+outside the patient block, so they remain visible and usable in the "No one in the room" state.
+Verified with the jsdom click-through suite plus a dedicated hero-state check (Complete → empty
+state with live buttons → Call next → patient back) and fresh screenshots; all pass, no JS errors.
+
+**Decided:** keep everything else in Daylight untouched (ring, keycaps, palette, page
+architecture below the hero). The other merges stay in place as reference. NOTES updated in the
+folder.
+
+**Next:** this closes the demo phase for this direction — the next unit (on request) is carrying
+Daylight into the real Next.js console as an implementation pass.
+
+---
+
+## 2026-10-19 — Daylight session hero: ring removed, ticket-stub token in · branch `demo/ui-lab`
+
+**Did:** Per founder review, replaced Daylight's circular ring on the session page with a
+ticket-stub hero token (notched ink slab, 56px Bricolage token, dashed tear line, live
+"8th of 20 today" position line that still steps forward on Call next; empty room shows
+"—" / "between patients"). Removed the ring's stroke-dasharray logic from `app.js`, renamed
+the token/position ids (`hero-token`, `hero-pos`), replaced the ring CSS block and updated
+the file header comments. Re-verified: `node --check`, full jsdom click-through suite, the
+hero-state check (Complete → empty with live buttons → Call next → patient back), link
+check, and fresh screenshots — all pass.
+
+**Next:** unchanged — the direction is settled (Daylight, session page in the Ink-warmed
+arrangement); the next unit is the in-app implementation pass on the real console when
+requested. Still uncommitted on the branch by design.
+
+---
+
+## 2026-10-19 — Daylight hero width reverted to the column · branch `demo/ui-lab`
+
+**Did:** Founder review: the session hero's full-width experiment was reverted. The hero card
+sits back in the left column (Queue quick numbers / Session facts / Recently completed beside
+it) with the ticket-stub token and the Ink-warmed action cluster sized to fit — stub 156px,
+actions 244px, middle column keeps the patient's name on one line. Verified: `node --check`,
+link check, full jsdom click-through suite, the hero-state check, and fresh screenshots — all
+passing.
+
+---
+
+## 2026-10-19 — Real-device acceptance and deterministic ETA fixtures
+
+**Did:** Resumed backend and Kotlin acceptance checks after the founder deferred automatic backup scheduling/retention/alerts and excluded demo UI testing. Shared contracts passed 42 tests; type checks and lint passed, with two existing seed console warnings. The earlier broad backend run passed 434 tests and failed one ETA case on a duplicate session/token fixture before reaching its assertions. Replaced random consultation token numbers with a per-test monotonic counter; all 57 ETA engine, evaluation and database cases then passed. All twelve actual restricted-login checks passed separately. The staging debug APK built with all 47 JVM tests passing and was updated on the connected Motorola Edge 50 Neo (Android 16). The founder confirmed real phone clinic/doctor/session browsing, and hosted API browsing independently passed without creating a booking.
+
+**Decided:** Keep suite preparation on dedicated local `*_test` databases; no destructive integration test runs against Supabase. Retain the existing checkout integration while diagnosing the observed failure rather than changing payment SDKs on speculation. No demo results count as phone or hosted acceptance. The narrow ETA rerun is recorded separately from the earlier full run; it is not reported as a fresh all-green full suite.
+
+**Surprises:** The installed Java 25 cannot run this Kotlin/Gradle combination. Downloaded a portable official Temurin 17 archive into an ignored workspace directory and verified its vendor-published checksum; no machine-wide Java setting changed. The founder then reported that Pay showed only Razorpay's TEST ribbon. On-device read-only debug WebView measurements found a 776px viewport but zero-height body, checkout container and iframe. Added explicit full-height root document styling; repaired APK/device rendering and actual TEST payment confirmation still require verification.
+
+**Next:** Verify the checkout frame has nonzero height in the repaired APK, complete a real Razorpay TEST checkout, confirm server-issued booking and staff queue progression, then prove phone notification receipt and reconnect behaviour. Supervised clinic ETA evaluation remains a later gate.
+
+## 2026-10-19 — Existing checkout repaired and TEST booking confirmed on Android
+
+**Did:** Confirmed that root document sizing alone did not repair checkout. Razorpay injects a fixed container with `height:100%` and `max-height:100dvh`; the phone's WebView computed that cap as zero. Temporarily removing only the cap restored the container and iframe to the measured 776.53px viewport, and the founder confirmed the form appeared. Persisted the override in the existing checkout HTML, rebuilt with all 47 Android JVM tests passing, and installed the permanent APK. Reopened the existing fictional visit through Discover → TEST clinic → Cardiology → Finish payment → Pay, without applying another debugger layout patch. Observed Razorpay TEST Netbanking success and the app's return to C001 with a check-in QR. Independent patient and reception API reads confirmed the same entry with payment SUCCESS / booking CONFIRMED and a signed check-in code. Removed the temporary Android debug forwarding and hierarchy file.
+
+**Decided:** Preserve the existing booking screen, payment gateway, order creation, callback flow and server confirmation model. The measured viewport defect needed a narrow presentation fix, not a new checkout screen or an SDK replacement. No backend deployment, new dependency or synthetic captured-payment row was needed. Keep the fictional confirmed booking available for subsequent queue/notification acceptance.
+
+**Surprises:** Real-device WebView layout failed while all HTML-generation/JVM tests passed. The first attempted fix was insufficient and was not marked accepted. The device trial, followed by an unpatched installed APK and actual gateway TEST confirmation, supplied the missing integration evidence. The specific originating webhook request was not traced in delivery logs, so the result is recorded as server confirmation rather than independent webhook delivery proof.
+
+**Next:** Exercise check-in, call/start/complete, cancellation/refund, notification receipt and reconnect against this TEST clinic. Keep scheduled backups and demo UI testing excluded as requested. Local code and documentation changes remain uncommitted.
+
+## 2026-10-19 — Full-screen checkout above patient navigation
+
+**Did:** At the founder's request, wrapped the existing checkout WebView in a full-screen Compose Dialog. Disabled outside-tap dismissal, routed Android Back through the same payment-aware close callback, and applied safe drawing insets so Close and the payment controls avoid system bars. Booking state, confirmation polling, gateway configuration and the preceding viewport-height fix remain in their existing places. The APK built with all 47 Android JVM tests passing and was installed on the connected Android 16 Motorola. Device checks in the fictional Paediatrics session proved payment methods render with no app tabs visible, Android Back returns to booking, checkout reopens, and Close also returns to booking. Saved a local screenshot of the full-screen result; removed the temporary hierarchy dump after verification.
+
+**Decided:** Use a separate modal window rather than a navigation-specific tab visibility flag. It covers and blocks the underlying navigation without spreading checkout state into the app shell or changing the payment integration. No dependency, backend change or additional payment was required. This build's device evidence covers presentation and dismissal; the previously confirmed C001 payment was completed on the preceding build.
+
+**Next:** Continue the remaining real patient/staff journey checks in TESTING.md. The presentation change is local and installed for acceptance, not published to an app store.
+
+## 2026-10-19 — Failed checkout returns and compact header
+
+**Did:** Reproduced the founder's screenshot: Razorpay returns form POSTs, while Android's shouldOverrideUrlLoading does not run for POST and the backend had only GET for checkout-complete. Added exact-origin/path return interception through shouldInterceptRequest and a neutral static POST backend fallback. Return fields never confirm a payment. The phone consults server state and shows a cautious retry notice for FAILED payments. Reduced the dedicated Close header from 76dp to 48dp, preserving its 44dp target and system-bar insets. All 50 Android JVM tests and 41 local payment/authorization cases passed, including forged callback data remaining unpaid. A real Razorpay TEST mock-bank Failure in Bandra returned to booking without raw JSON; backend status was RESERVED / FAILED. Existing confirmed Andheri visits remained confirmed.
+
+**Decided:** Keep the distinction between a browser return and authoritative payment confirmation. Use a neutral fallback for either outcome, intercept POST as well as GET, and match the server's exact endpoint rather than a URL prefix. Created an isolated checkout-return worktree and PR #24 for the related Android/API changes, preserving unrelated primary-workspace edits. The phone build is installed; protected hosted release verification is still in progress.
+
+**Next:** Finish exact-commit CI and protected staging deployment, verify hosted GET/POST fallback and readiness, then continue queue/refund/push acceptance. Automated backup scheduling remains deferred.
+
+## 2026-10-19 — Checkout return fallback released and verified
+
+**Did:** Merged PR #24 after exact-head CI 39176700848 passed. Main CI 39176992153 passed for 391904dac0f4f6a7ac09465f762ec35733cc2f2a. Protected workflow 39177273690 completed its migration check and triggered the exact commit; Render deploy dep-dbalgftg1s2s73cii2i0 reached live. Hosted GET and form POST checkout returns both returned 200 HTML with neutral checking-status text and did not reflect forged callback fields. Database and Redis readiness passed. The Android 50-test build is installed, with the compact 48dp header, full-screen modal and POST return handling already verified through a real TEST bank Failure on the phone. Private proof: .backups/checkout-return-live-20261019.proof.json.
+
+**Decided:** Publish only the isolated checkout changes and regression fixtures through the protected workflow; preserve unrelated primary workspace work. No schema, hosting plan, account credential or backup schedule changes were made.
+
+**Next:** Continue check-in, call/start/complete, refund, notification/reconnect and supervised ETA pilot acceptance. These are not implied passed by the checkout fixes.
+
+## 2026-10-19 — UI Lab Round 3: the home page, three ways · branch `demo/ui-lab`
+
+**Did:** At the founder's request, ran the deep craft research for the landing redesign — Cursor's icon system, Apple's 2025 design-system talk, Airbnb Cereal, Linear, Stripe (Dot Dev plus the year-long homepage redesign), Vercel Geist, Inter, The Pudding, GOV.UK/NHS, Vignelli, Chimero — distilled to `docs/ui-lab/landing-research.md` (principles, anti-patterns, three direction seeds), with the binding brief in `docs/ui-lab/SPEC-landing.md`. Then built three independent redesigns of the public home page as static demos, each keeping the page's copy verbatim and pointing at the real site: `home-ledger` (the OPD register, alive), `home-panel` (the instrument panel — a sticky now-serving spine that steps forward as you read and never rewinds), `home-paper` (the clinical paper — numbered sections, figures with serif captions, text that never animates). Verified: node syntax on all three; a uniform gate — local refs, allowed hosts, required links and meta, 65 byte-exact copy strings per direction — all clean; each builder's screenshot self-review fixed 8–11 real defects per direction (ledger: missing focus rings, class collisions; panel: an invisible white-on-white console plate; paper: caption-size collision, chair-leave order); fold/full/mobile captures of all three reviewed. Lab index updated with a Round 3 section.
+
+**Decided:** The copy is the contract — this round is execution, not story (founder may overrule). The research's "what must survive" held in all three: the hero as the product drawn and running, honesty as structure, restraint enforced (progressive-enhancement stills, reduced motion, one looping element). Demos link to the deployed site for demo/sign-in. Everything stays uncommitted on `demo/ui-lab` by design.
+
+**Next:** Founder review of the three side by side; pick or merge, then carry the winner into `apps/web/app/page.tsx` when asked.
+
+## 2026-10-19 — Google Play release readiness review
+
+**Did:** Reviewed native auth/profile/checkout/push, API logout/notification behavior, release configuration, manifests and existing artifacts against current official Play policies. Recorded evidence, sources, submission gaps and implementation order in `docs/google-play-readiness.md`. The founder confirmed no Play Console account exists. Identified a concrete privacy gap: native logout sends no `pushToken`, while API logout only unlinks the device when that value is present. This can leave the signed-out device registered for queue alerts; delivery was not reproduced during this review. Inspected the existing AAB's two 64-bit native libraries: their ELF load alignment is 16 KB; the older release APK passed `zipalign -c -P 16 4`. These are limited artifact checks, not final release certification.
+
+**Decided:** Recommend organization/health classification verification, privacy and deletion controls, push unlink and account recovery before public release; use internal testing followed by controlled clinic acceptance and the supervised ETA pilot. Google Play registration costs US$25 once; no registration, purchase, paid hosting change, deployment or payment-mode change was made. Keep Razorpay for the current in-person consultation model under the physical-services billing rule. Treat the existing release bundle as outdated because it predates checkout fixes. Preserve the founder's deferral of scheduled backup/retention automation and alerts; patient-data retention disclosure remains a separate release requirement.
+
+**Surprises:** A Kotlin application still packages a native graphics library, so source language alone is insufficient evidence of 16 KB compatibility. The personal-account 12-testers/14-day rule is not a universal organization-account requirement. Organization verification for health apps can be a release prerequisite before the first upload.
+
+**Next:** Implement privacy/account controls and push cleanup, decide the production boundary and prepare a current Play-signed internal test release. No application behavior was changed by this assessment.
+
+## 2026-11-01 — Reservation-first product and release plan
+
+**Did:** Created docs/reservation-release-plan.md with ordered implementation and acceptance gates for reservation/check-in, abuse prevention, unified clinic operations/ETA, logout notification privacy, deletion/privacy/recovery, production separation, reviewer access, signed release and clinic onboarding. Added phase 11 to the progress board. Recorded the authorized support email; legal operator identity is undecided.
+
+**Decided:** The founder explicitly replaced advance online payment with clinic-collected payment. Updated Rules.md to reflect that new bookings can be confirmed without money moving; historical gateway settlements and refunds retain their verification safeguards. Clinic admins enter their own details, but public verification stays operator controlled. No paid service, production deployment or automatic backup scheduling is introduced by this plan.
+
+**Next:** Implement and verify each gate in order; do not treat an engineering plan as legal approval, phone verification or a successful clinic pilot.
+
+## 2026-11-01 — Local reservation command and Android checkout removal
+
+**Did:** Added ReserveRequest/ReserveResponse and authenticated POST /sessions/:id/reserve. The new RESERVE_AT_CLINIC domain command issues CONFIRMED tokens and opaque check-in references without Payment records or gateway calls, retaining the session capacity check, patient ownership checks and append-only audit/events. Account-before-session locking serializes the new account-wide limit (default six active future reservations) and overlapping-session checks. Same-session retries return the existing usable booking. New deployments default BOOKING_PAYMENT_MODE to AT_CLINIC, rejecting old-client payment-order creation while retaining webhook/refund recovery. Historical gateway tests explicitly opt into ONLINE. Added eight reservation integration scenarios; these have NOT yet run against PostgreSQL.
+
+**Did:** Removed the Android WebView checkout implementation and its two checkout-only test files; added the native reserve/patient selection/fee-at-clinic screen and cache invalidation. Updated discovery actions, token instructions, legacy-hold messaging and cancellation copy. A missing online payment now advertises no online refund. Updated the misleading first-in-line message because absent reservations do not guarantee immediate service. Backend/web/contracts type checks passed; 43 queue/registration/environment tests and 42 shared contract tests passed. API lint passed with two existing seed console warnings.
+
+**Surprises:** This environment no longer has the previous SDK or a working Docker executable/local PostgreSQL listener. The initial Android build failed on the missing SDK, so no updated APK or phone acceptance is claimed. Restored locked Node dependencies and Prisma generation. At the founder's request, downloaded Google's official command-line SDK tools into ignored .env.android-sdk and verified the published SHA-256; SDK packages/build verification are in progress. No tests/reset commands were run against hosted Supabase.
+
+**Decided:** Reuse CONFIRMED as reservation acceptance rather than inventing a successful payment. Do not automatically expire a confirmed reservation from a moving ETA. Keep existing late-arrival/call rules until the pilot clinic agrees to a changed policy. Do not deploy the local changes before database, restricted-role and patient/staff acceptance. Phone verification, repeat-no-show controls, privacy/deletion/recovery, push logout, production separation and store distribution remain open gates.
+
+**Next:** Finish SDK restore and native compilation, restore local PostgreSQL/Redis for the new real-database concurrency/tenant/arrival scenarios, then continue the remaining plan gates. Nothing in this entry is a production release.
+
+## 2026-11-01 — Clinic onboarding responsibilities clarified
+
+**Did:** Added docs/clinic-onboarding.md with information collection, clinic/operator responsibilities, public listing review, staff practice scenarios and pilot data-quality/ETA checks. Verified that current onboarding bootstraps the tenant and first admin through a command; current config services cover departments, providers, schedules and policies rather than a complete public clinic self-registration flow.
+
+**Decided:** Clinic-supplied information should be reviewed before public visibility. Do not collect bank/gateway credentials for the clinic-payment model. A full clinic profile approval interface remains future implementation, not an existing capability. Assess waiting/time saved separately from ETA prediction error.
+
+**Next:** Review the intake with the first clinic and implement the remaining profile/approval gaps after the reservation acceptance gate passes.
+
+## 2026-11-01 — Android SDK restored and reservation build verified
+
+**Did:** Reinstalled the requested Android SDK under ignored .env.android-sdk using Google's command-line tools. Verified tools ZIP SHA-256 against Google's download page before extraction; installed API 36, platform-tools and build-tools 35/36, and pointed ignored apps/native/local.properties to this SDK. No machine-wide SDK path was changed. The reservation debug APK built successfully with 40 Android JVM tests, zero failures/errors; the ten tests for the removed checkout implementation were removed with it. Follow-up build checks the final wording for patients with historical online payments. No APK was installed or distributed: the hosted API has not yet received the additive reservation endpoint.
+
+**Decided:** Keep the portable SDK ignored and preserve the existing JDK/project dependency versions. An SDK restore is build infrastructure, not permission to cut over hosting or claim physical reception/ETA acceptance. Local PostgreSQL/Redis remain unavailable; Docker was not found even outside the restricted shell, so database acceptance remains blocked pending runtime restoration.
+
+**Next:** Finish final incremental build, restore the isolated database test runtime, and run reservation/payment/tenant regression cases before proceeding past this integration gate. Play/privacy and remaining anti-abuse gates remain explicitly pending in reservation-release-plan.md.
+
+## 2026-11-01 — Final local reservation build checkpoint
+
+**Did:** Final incremental Android build passed after the historical-payment wording correction; all 40 Android JVM tests passed with zero failures/errors. Earlier TypeScript checks, 43 pure API tests, 42 contract tests and API lint remain green. git diff --check passed. SDK restoration is complete. Updated TESTING.md and the reservation plan with this limited acceptance evidence.
+
+**Next:** Restore local Docker/PostgreSQL/Redis and execute the eight reservation integration cases plus existing payment/authorization/restricted-role regressions. The backend endpoint, new APK and all later Play/privacy/clinic gates remain unreleased; no hosted mutation or phone installation was performed.
+
+## 2026-11-01 — Docker and WSL development runtime restored
+
+**Did:** At the founder's request, installed Microsoft WSL 2.7.14 and Docker Desktop 4.97.0 from official packages. The first Docker per-user installation failed because VirtualMachinePlatform was disabled. An administrator helper installed WSL and enabled that Windows feature with /norestart; the subsequent signed Docker installer succeeded. Docker's Linux engine reports 29.9.2 and its WSL distribution is running. No Windows restart was performed or needed to reach the responding engine. Added Docker's per-user resources/bin to the current command's PATH so its credential helper can be found. PostgreSQL/Redis image pulls and project-local container startup are underway.
+
+**Decided:** Use per-user Docker and the existing compose services/volumes, preserving the existing project configuration. Tests will use explicitly named local kramya_reservation_test and kramya_reservation_rls_test databases and a separate local Redis database; hosted Supabase, Render and patient fixtures remain untouched. No Docker account or paid subscription was created.
+
+**Next:** Run the reservation/payment/queue/ETA suites and the actual restricted-role reservation→check-in→consultation tests. The added RLS acceptance cases type-check but have not yet passed database execution.
+
+## 2026-11-01 — Reservation database and restricted-role acceptance passed
+
+**Did:** Started existing compose PostgreSQL 16 and Redis 7 services on local ports 5433/6380. Ran five targeted database suites against kramya_reservation_test: 41 payment/reservation, 14 queue scenarios, 7 locking, 15 ETA and 8 route authorization tests, all 85 passed. Then ran the actual non-owner/non-BYPASSRLS login suite against kramya_reservation_rls_test: all 14 passed. Added two cases proving account-limit serialization across clinics and the complete reservation→signed QR/token check-in→call→start→complete flow with zero Payment rows. The latter also rejects another patient's booking, patient self-check-in, another clinic's staff and a tampered QR, and preserves arrival time on repeat check-in. API typecheck/lint passed; lint retains only the two pre-existing seed console warnings.
+
+**Decided:** Mark only the local backend reservation foundation accepted. These tests prove server transactions, tenant isolation and queue progression, not real clinic payment handling, phone UI/reconnect, push receipt, production cutover, store approval or ETA time saved. Keep the running local services available for subsequent implementation/testing. No hosted API/database or installed phone app changed. No commit or push was made.
+
+**Next:** Continue the remaining release-plan gates: verified-phone/repeat-abuse controls, arrival/pilot policy, notification logout privacy, account deletion/privacy/recovery, production/reviewer separation and signed distribution. Phone/staff visual acceptance remains pending. Automatic backup scheduling remains deferred.
+
+## 2026-11-01 — Logout privacy and local account controls
+
+**Did:** Added version-2 recipient-guarded, data-only push delivery and Android account matching before notifications or token deep links are shown. Native logout persists a device cleanup request before clearing identity, handles HTTP 204 correctly and retries offline cleanup after restart/resume. Device reassignment and account switching are serialized. Existing notification-format compatibility remains for old installs. Auth/push suites passed 57 tests; Android debug build and all 45 JVM tests passed. Physical background/locked-device and delayed-push acceptance remains pending.
+
+**Did:** Added hashed, expiring, single-use verification/recovery/deletion proofs; password reset invalidates previous access/refresh sessions, sockets and push registrations. Password-confirmed deletion cancels eligible visits through queue commands, removes login/profile/device details, and retains limited pseudonymous historical records. Clinical/staff handover leaves a recorded pending request; an operator retry command refuses unverified requests. Added public privacy/support/deletion/recovery pages and native links/controls. The first account/auth/authorization run passed 29 tests; broader regression and updated actual restricted-role acceptance are in progress. The additive migration has only been applied to isolated local test databases.
+
+**Decided:** Founder approved “Pankaj Semwal, operating Kramya” and the existing support Gmail address. Paid SMS is excluded. Brevo was proposed, then declined because the founder does not want another unfamiliar provider; its adapter/configuration/policy references were removed before release. No provider account was created and no email was sent. Keep the mail boundary explicitly disabled and the optional verified-email booking gate off. Email-based recovery, verification and external proof delivery are not live; do not claim these gates complete. The founder needs a plain explanation before any future sender authorization, rather than another setup-choice question now.
+
+**Next:** Finish local regression and actual restricted-login tests, test phone push privacy and account controls, decide a sender later, review retention and external deletion fulfilment, and publish only after coordinated migration/API/web/native acceptance. Production/reviewer separation, current signed distribution and supervised clinic ETA validation remain open. No commit, push, hosted migration, deployment, paid SMS or backup scheduling occurred.
+
+## 2026-11-01 — Account/realtime regression and disabled-delivery acceptance
+
+**Did:** Ran the complete API suite locally: 450 tests passed, 7 realtime tests failed and 15 restricted-role tests were intentionally skipped in that ordinary run. The failures exposed a real race introduced by asynchronous account revocation checks: Nest binds socket message handlers without awaiting handleConnection, so an immediate subscribe could observe no identity. The gateway now shares a per-socket authentication promise, waits for both account checks and the private room join, and then binds the authorized database identity before reading a session. Failed authentication still disconnects; no authorization check was removed and no test wait was increased to hide the fault.
+
+**Did:** Reran all realtime and account-control scenarios: 29/29 passed, including immediate subscription and old-token rejection/socket disconnection after revocation. Repeated the actual restricted-login suite after this fix: 15/15 passed, including socket discovery and account proof/deletion isolation. The ordinary run's other 32 files passed; it was not repeated in full after the targeted fix. API lint/type checks passed (two pre-existing seed console warnings). Web production build and web type checking passed; four public account pages returned HTTP 200 without login and contained the authorized support contact. Final subsequent web edits only clarified disabled-delivery copy and removed an outdated login comment; no demo UI or phone acceptance was performed.
+
+**Decided:** Keep the unconfigured sender boundary explicit: known/unknown email requests both return the same unavailable response and create no proofs when delivery is off (now tested). Email reset/verification cannot be presented as operational until a sender is selected. Passwordless and external deletion still need a verified fulfilment path before release. Do not deploy these account schema changes independently from the API/client rollout. Repeated-no-show sanctions also require distinguishing clinic/session closure from patient misuse and an agreed review/appeal policy; the current automatic session-end NO_SHOW outcome alone is insufficient evidence for a ban.
+
+**Next:** Continue repeat-misuse review and clinic arrival policy, agree the production/reviewer boundary, complete physical notification/account/reservation acceptance and current signed release, and run a supervised clinic ETA pilot. Email provider choice, retention/legal review and clinic agreements remain explicit external gates. No hosted configuration, database, deployment or payment changed.
+
+## 2026-11-01 — Reservation operations and environment-boundary implementation checkpoint
+
+**Did:** Added public clinic arrival instructions and policy guidance before reservation and on the token screen; reservation-only mode enforces reception check-in even when an older policy disabled it. Early clinic closure now cancels unfinished reservations instead of accusing absent patients of no-show; normal end-of-session and historical settlement paths retain explicit outcomes. Added reception/admin review of recent no-show evidence, separating staff-marked incidents from session-end absence. A reviewed remote-booking pause is profile/clinic-specific, expires within seven days, can be lifted with an audited reason, and does not cancel existing tokens or block walk-in care. Patient profile creation is bounded and serialized under the account lock.
+
+**Did:** Added a database environment marker, startup mismatch refusal, environment-bound access tokens/HTTP/socket/push clients, staging labels, seed protection and explicit production build URLs. An owner-only initializer refuses any populated application dataset; it cannot silently relabel fictional staging as production. Added operator-approved pilot account access, with production refusing OPEN_TEST and a database trigger preventing runtime self-approval. Pilot approval is deliberately separate from email verification, allowing a controlled pilot without paid SMS or a new email sender. Added public password-confirmed account deletion without exposing login tokens to the browser. Automatic email requests remain disabled and the UI explains this instead of inviting an unavailable verification action.
+
+**Verification in progress:** Initial focused queue/account/state tests passed 47 cases, while the six new launch cases initially failed on a test fixture using an unsupported PARENT relation; corrected to the actual MOTHER enum. Restricted-role testing found patient cancellation attempting to insert missing clinic policy; changed that path to read defaults without creating settings. The first full release lint found two existing errors (API-27 navigation styling in API-26 resources, and unescaped local SDK properties); corrected the resource split and ignored local SDK path. Final full API, restricted-role, web and signed Android debug/release/lint runs are in progress. One parallel fresh-database setup collided while altering a cluster-wide Postgres role; rerun migrations sequentially. This is a local setup failure, not hosted data loss or an application acceptance pass.
+
+**Decided:** No automatic no-show bans or claims of verified identity from operator approval. Keep family access and existing care separate from temporary remote booking restrictions, and require clinic agreement and an appeal/review process. Preserve synchronous private logout persistence despite lint suggestions because losing the cleanup request across process death would violate the privacy guarantee. Keep existing dependencies rather than chase every newer-version lint warning during release stabilization. No commit, push, hosted migration, deployment, store upload, paid service or phone installation occurred at this checkpoint.
+
+**Next:** Finish final regression/artifact checks and functional public-deletion/staff acceptance, update the release gates with exact results, and continue the clinic/operator setup and supervised ETA pilot. Engineering preparation cannot replace clinic-approved operating rules, live recovery delivery, production provisioning or Play account verification.
+
+## 2026-11-01 — Restricted-role coordination and local release verification
+
+**Did:** Full local API regression passed 473 tests, with 18 restricted-role cases intentionally skipped; those 18 passed separately using an actual non-owner login. After the final coordination correction, reran 22 account/release/clinic/public-deletion cases, 48 queue-lock/payment regressions and all 18 RLS cases. Two encrypted-notice security tests also pass. These overlapping runs are not additive unique totals. Public deletion includes three tests invoking the actual web route and real local API.
+
+**Found and fixed:** Staff cannot see private patient Account rows under RLS, so selecting that row FOR UPDATE did not serialize clinic booking-review writes with reservation/deletion. Added a transaction advisory lock before row locks in all three paths, without broadening Account access. The actual restricted-login test holds that lock, observes the waiting staff transaction in pg_locks and verifies release. Patient erasure is marked; a subsequent review cannot recreate erased booking-control data. The runtime SQL privilege probe passed and rolled back its objects. Parallel fresh migrations collided on a cluster-wide role change; fresh DB setup must run sequentially. No hosted database was mutated.
+
+**Verified:** Signed staging APK/AAB versionCode 2, version 0.1.0-staging, target API 36 built. All 48 Android unit tests pass in each debug/release variant. Release lint has zero errors and 41 warnings; deliberate synchronous durable logout persistence and nonblocking upgrade/icon suggestions remain, not suppressed. Current APK signature, 16 KB ZIP and APK/AAB 64-bit ELF alignment checks pass. A production bundle without explicit distinct production URLs correctly refuses to build. Physical-device and Play-generated package checks remain pending.
+
+**Decided:** Keep operator-approved pilot access separate from verified email/phone: this permits a controlled free pilot without inventing successful delivery or buying SMS. Production refuses OPEN_TEST and needs a separate empty database, marker, secrets and hosts. Existing Razorpay settlement/refund obligations remain protected while new bookings use pay-at-clinic. No commit, push, hosted migration/deploy, production initialization, payment, email, store upload or phone installation occurred.
+
+## 2026-11-01 — Real reception workflow and private feedback
+
+**Did:** Tested the actual local Next console and Nest API with fictional fixtures only, excluding /demo. Clinic profile/contact and arrival-policy saves persist; the patient API receives saved Desk 2/15-minute guidance. A patient reserved through the API with no Payment; reception checked in/called the token and admin started/completed consultation. A clinic booking pause was reviewed then lifted. Added a walk-in and checked in a second online reservation through the real staff UI.
+
+**Found and fixed:** A settings action returned an API object, interpolated as [object Object] in the URL. Helpers now redirect only deliberate strings; clinic/policy/review saves show feedback and disable repeat submits while pending. Staff confirmations and search previously carried patient names in URLs. Feedback now uses a 30-second authenticated encrypted, login/session-bound httpOnly cookie. Tampering, expiry and cross-login/session reads fail closed. Search stays in page memory with no URL submission/name attribute. Browser acceptance showed the correct named confirmation with a name-free ?notice=1 URL and a clean search URL. This does not erase old browser history/logs. Proof screenshots contain fictional names only in ignored .env.ui-proof/.
+
+**Limitations:** Roster reads cap at 200. Truncated screens now warn and label page-local counts; QR/token lookup still addresses any booking. Complete large-session aggregates/navigation remain required above 200 entries. Camera permission/stream was unavailable in this browser; manual check-in passed but no camera pass is claimed. Physical Android, push privacy, accessibility, hosted rollout, final recovery/retention operations and real-clinic ETA acceptance remain open. Scheduled backup/retention automation and alerts remain deferred.
+
+**Next:** Follow the ordered gates in reservation-release-plan.md. Local evidence does not mean the hosted app changed or that Play/clinic/legal acceptance passed.
+
+### Final console/build checkpoint (1 November)
+
+The existing full staff-console HTTP/server-action walkthrough passed **72 checks, zero failures** against a freshly migrated/seeded local kramya_console_release_test database; provider credentials and workers were disabled. Final API build/typecheck/lint and Next production build/typecheck/lint pass. API lint retains two existing seed console warnings; Next notes the existing ESLint plugin configuration. The first final Next build caught a Windows-encoding error in a new save-label character; corrected to UTF-8-compatible source and the full build passed. The populated-production initializer was also exercised against a populated isolated local test database: it refused initialization and its marker remained STAGING. No hosted environment changed.
+
+## 2026-11-01 — Physical-device testing deferred
+
+**Did:** Founder replied that no phone is available. Read-only inventory confirmed the local Android SDK has no emulator/system image/configured AVD, so no device acceptance was attempted or claimed. Recorded the deferred checks in TESTING.md.
+
+**Decided:** Stop requesting USB connection until a phone is available. Continue release preparation; an emulator can provide additional native functional/UI evidence later without replacing physical push/background and Play-distribution acceptance. No software installed, hosted changes made or new cost incurred.
+
+## 2026-11-05 — Restore Razorpay before token confirmation
+
+**Request:** Founder reversed the payment-at-clinic decision and requested restoration of booking payment with all relevant success/failure/recovery cases. This supersedes the 1 November payment choice; independent account deletion, privacy/logout, tenant isolation, ETA freshness, clinic configuration and environment safeguards remain.
+
+**Did:** Restored Kotlin Join.kt and checkout tests from the checkout-fix commit aa3813c, including full-screen dialog/blocked tabs, compact header, Android WebView height correction and exact GET/POST return interception. Restored JoinResponse and resume-payment actions from discovery/My Visits; saved pending entry identity survives activity recreation and confirmation consults active/history server state. WebView resources/bridge are destroyed on release; app handoff strips explicit components/selectors/grant flags, rejects local/executable schemes and reports missing payment-app handlers. Checkout option JSON escapes script-opening characters. No new SDK/dependency introduced.
+
+**Backend:** ONLINE is the default again. The no-payment /reserve endpoint rejects that mode before mutation; explicit AT_CLINIC compatibility is retained. Shared booking limits, overlapping-session prevention and clinic review pauses now apply to JOIN as well, include live unpaid holds and run under the existing account/session lock order. An existing hold resumes on the same order; an already-confirmed clinic reservation is preserved without a retroactive charge or fake financial record. Sub-INR-1 online fees are refused before allocating a hold or contacting Razorpay, following the provider's documented minimum. Added regressions for cutover bypass, existing clinic bookings, order-creation failure recovery, failed-then-successful attempts, concurrent account ceilings, overlap and review pauses. Existing signed capture, duplicate/stale/late capture, expiry, cancellation, refund and worker recovery paths remain.
+
+**Checks so far:** Initial payment/account/release run passed 65 cases. All 18 actual restricted-login checks passed separately, including signed online capture/refund. The complete API suite (including the new fee-boundary case), final web checks and signed Android release are in progress. An initial Android run overlapped source/test editing and compiled tests against the prior source snapshot, producing an unresolved new helper reference; rerunning the final frozen source, not claiming that failed run as a pass. Staging version advanced to code 3 / 0.1.1. Privacy/support copy and the current payment plan were updated.
+
+**Scope:** Tests use local PostgreSQL/Redis and a fake gateway with real HMAC validation. No gateway transaction, live-key activation, hosted migration, deployment, commit/push or phone installation occurred. Phone acceptance remains deferred because the founder has no phone. Follow payment-restoration-plan.md for the current product decision.
+
+## 2026-11-05 — Restored checkout release acceptance
+
+**Verified:** All 49 payment integration cases pass in a complete rerun on a separate isolated local database; all 18 actual restricted-login cases pass. Android debug/release each pass 59 tests. Signed staging APK/AAB code 3 / 0.1.1-staging built with target API 36; signature, ZIP 16 KB and both artifacts' 64-bit ELF alignment checks pass. Release lint reports 0 errors and 41 warnings. Final API build/typecheck/lint and web production build/typecheck/lint pass; existing nonblocking lint notices remain.
+
+**Failure and recovery:** The broad API run hit one 30-second fixture hook timeout while multiple heavy builds competed on the 8 GB machine (under 1 GB free memory observed). No failed domain assertion was reported for that case. Staggered the web build, reran it successfully and reran the full 49-case payment file after heavy builds finished; the previously timed-out setup/case passes. Preserve the broad-run outcome in the testing record rather than presenting it as an uninterrupted green suite. No test deadline, authorization or signature check was weakened. Initial Android source/test snapshot overlap was resolved by rebuilding the frozen source successfully.
+
+**Next:** Hosted migration/configuration/deployment and real Razorpay TEST/Android acceptance remain separate gates. No commit, push, live payment activation or hosted mutation occurred; no phone is available. The payment decision is restored without discarding independent privacy/account/ETA/clinic safeguards or old clinic reservations.
+
+### Broad regression outcome — payment restoration
+
+Final broad run: **482 passed, 1 setup-hook timeout, 18 intentionally skipped restricted-role checks** (501 total; 36 files passed, one payment file failed, one restricted-role file skipped). The skipped restricted-role file separately passed all 18 cases. The only broad-run failure was beforeEach timing out after 30 seconds for the already-paid duplicate-booking case during heavy local build contention. The complete payment file was rerun without the heavy builds and **all 49 cases passed**, including that setup/case; no source or timeout relaxation was used to obtain that pass. The broad suite itself was not rerun a second time. Preserve this distinction when reporting results. No payment/booking domain assertion remains failing in the completed payment acceptance run.
+
+## 2026-11-05 — Daylight Android HTML design study
+
+**Request:** Founder asked for HTML mockups of all patient-app screens using the chosen merge-daylight web direction.
+
+**Did:** Added docs/ui-lab/android-daylight/ with an interactive patient prototype and a filterable all-screens collection: 48 screens/states covering sign-in, manual city selection, clinic/department/doctor discovery, sessions, patient selection, online-payment review and outcomes, token/queue lifecycle, cancellation/refunds, history, family profiles, notifications, privacy/support/deletion and system/access states. Added a launcher to the existing UI Lab catalogue. Fonts and OFL licenses are bundled locally; SVG icons/artwork are code-native, without third-party image assets, CDN dependencies, backend connections or a new package dependency. Packaged an offline ZIP under ignored .env.ui-proof/ and saved browser previews in the study's previews/ folder.
+
+**Decided:** Follow the latest Daylight addendum: warm paper, ink/moss, amber for timing, tinted initials, quiet hairlines and the notched ticket token. The earlier ring was already removed in the selected web design. Adapt hierarchy and fixed actions to touch/mobile rather than shrinking a staff console. Keep the restored Razorpay prerequisite visible, but use an explicitly simulated TEST checkout without provider scripts or real card/PIN/OTP fields. Pending payment never shows a confirmed status or QR. Offline confirmed tokens retain their QR while hiding stale estimates. No navigation fade. Proposed welcome/recovery-link/profile-edit/inbox concepts are identified in the review notes; none is presented as a shipped native feature.
+
+**Verified:** Actual browser discovery-to-doctor/session/booking/checkout/confirmation/token journey; success, delayed, failed and expired simulations; pending My Visits without confirmation/QR; fictional family add/edit; doctor search and specialty filtering; offline QR preservation. All 48 screens rendered at 360 px with zero measured horizontal overflow, empty screen or unnamed icon action. Inspected/captured 390 px phone layouts; checkout has no app tabs and a compact header. Verified gallery contains exactly 48 previews, seven booking/payment previews under that filter, no empty preview, no measured content overflow and no browser error logs. Initial gallery markup nested preview links inside outer links; corrected to semantic article cards with separate open links before final acceptance. JavaScript syntax and changed catalogue whitespace checks pass. ZIP integrity and required files verified.
+
+**Scope:** This work changes the HTML study/catalogue and this log only. It does not change Kotlin, backend/database, deployed UI, payment keys or any real account, charge, notification permission, phone call or support message. Physical-device testing and the existing release gates remain separate. Open index.html or all-screens.html from the extracted folder; local preview server is bound to 127.0.0.1:4176 and serves only docs/ui-lab.
+
+## 2026-11-05 — Refined Daylight patient UI and design research
+
+**Request:** Founder asked for thoughtful detail across the Android HTML mockup, including branding/icons, every screen/state and lessons from popular product-design case studies, avoiding a generic generated appearance.
+
+**Research:** Read the first-party Swiggy Android DLS article (2022), Airbnb/Google Design interview (2017), Linear redesign account (2024), Monzo writing-system publication (2025) and official Android accessibility guidance. Linked the sources and distinguished historical published evidence, our interpretations and patient-study hypotheses in DESIGN-RESEARCH.md and the new visual design-guide.html. Did not claim an exhaustive survey, patient research, conversion gains or ETA-accuracy improvement.
+
+**Did:** Preserved the first mockup/source locally in ignored .env.ui-proof/daylight-v1/. Refined all shared components and 48 layouts/states with a custom ticket-inspired K mark/app-icon SVG concept, clearer type/touch hierarchy, task-oriented headings, compact search-first home, quieter clinic/provider lists, consistent headers/actions and improved original ticket/clinic/clock/discovery icons. Removed the arbitrary queue-progress bar and unsubstantiated clinic-verification badge. Current design keeps Daylight's warm paper, moss, semantic amber and notched ink ticket; no navigation fade. Added a design guide covering the identity, foundations, representative journey, uncertainty matrix and source-to-decision reasoning. Linked it from the existing UI Lab and prototype.
+
+**Interaction detail:** Four fictional providers carry their own clinic/specialty/qualifications/fee/estimate into details, booking and checkout. Confirmed provider/patient identity survives browsing a different provider. Closed dates cannot show today's booking action; global specialties and clinic-specific departments use appropriate scope. Combined search/filter handling provides counts, an honest no-match view and explicit clear action. Added accessible password visibility controls and consistent edited initials. Past visits show terminal status rather than a future-looking ETA. Pending financial state cannot borrow a confirmed token/QR; cancelled booking and refund settlement remain distinct. The mockup is a focused single-current-booking scenario, not a multi-booking production state store.
+
+**Verified:** JavaScript syntax passes. All 48 actual browser views at 360 px had no measured document/content horizontal overflow, empty screen, unresolved template text or unnamed icon action. Standalone visible controls/inputs/disclosure targets meet the measured 48 CSS px minimum dimensions (inline links excluded); corrected three narrow text actions found in the initial sweep. Actual General-care → Meera → closed date → Today → session → Mira family profile → ₹400 review/checkout → confirmation/token journey passes. Browsing Anjali preserves the confirmed Meera/Mira visit. Offline preserves the QR and hides ETA. Clinic no-match search/clear and password show/hide pass. Pending/failure/expired simulations show distinct recovery; pending My Visits has no allocated token or QR. Checkout has zero app tabs. Gallery has exactly 48 nonempty previews; booking filter has seven. Guide has four reused phone templates and five primary-source links; desktop and 390 px guide layouts have no document overflow and mobile guide scrolling is enabled. Prototype/gallery error logs are empty. Saved current browser JPEG previews, a complete guide capture and refreshed the offline archive. Temporary viewport overrides were reset; refined app and design guide remain open.
+
+**Limits/next:** These are HTML design checks, not a native build, phone test, Razorpay transaction or proof of user satisfaction. Native Compose mapping, adaptive launcher assets, large-font/TalkBack/device acceptance and observed patient/reception tasks remain necessary. No Kotlin/API/database/payment/deployment change, commit or push occurred. Token contrast calculations and patient-study tasks are documented. No new dependency, remote image asset, CDN or provider integration was introduced.
+
+## 2026-11-06 — Daylight implementation foundations and public-site rebuild
+
+**Request:** Founder authorised implementing the approved Android/web Daylight designs in the actual Kotlin and Next.js products, replacing the landing-page narrative/composition and pushing the changes. Recorded scope and acceptance in daylight-implementation-plan.md. Preserved the previous source and tracked diff privately before editing, because the working tree also contains the earlier release/payment/privacy work.
+
+**Did:** Added shared Daylight paper/ink/moss/amber tokens, locally bundled Manrope/Bricolage variable fonts and OFL licenses, original ticket-K vectors and Android adaptive launcher assets. Updated native shared controls, field labels/password visibility, touch targets, navigation labels, auth branding, booking review steps, API-backed discovery, clinic details, session estimates and token presentation. Removed decorative progress bars; unpaid holds are explicitly pending and cannot look like allocated tokens. Existing payment callbacks, signed QR values, polling, cancellation, family profiles, privacy, authentication and server commands are retained. Unsupported mockup-only inbox features are not promoted into production controls.
+
+**Web:** Updated actual shared tokens, local fonts, staff shell, auth shell, doctor-stage presentation and operational controls. Replaced the landing page with new positioning, role-based workflow explanation, original interactive reception/doctor/patient product illustrations, uncertainty states, pilot contact, FAQ and public support/privacy/deletion links. Illustrations are labelled fictional and never used by authenticated routes. Reviewed a focused set of current primary pages (Linear, Attio, Stripe, Mercury) and the preceding documented first-party design studies; no copied competitor assets, fabricated customers, accuracy/conversion claims or false store-download button.
+
+**Checks in progress:** First native compile caught an unavailable arrow-icon constant; corrected to the existing typed icon. An intermediate Android debug build/tests/lint passed before the final clinic/session layout pass; final-source verification is running. Web typecheck and lint pass so far. The initial pnpm/Windows formatter invocation mishandled parenthesised paths; formatting uses the existing Prettier API with explicit file paths instead. No dependency was added. The local Next page renders and is being inspected. Docker's per-user binary exists but its launcher cannot find its installation registry key; isolated database regression verification is still pending, and no hosted data is used as a test fallback.
+
+**Decided:** Preserve the earlier release safeguards as required dependencies of a runnable release, distinguish their commit from the visual implementation, and keep secrets/build artifacts/unrelated plans out of Git. Continue with staged/CI verification rather than labelling an unverified deployment live. Physical-device and Play acceptance remain separate.
+
 ## 2026-10-19 — Android checkout layout and gateway return fixes
 
 **Did:** Fixed the WebView checkout container whose inline 100dvh height cap resolved to zero on Android 16. Presented checkout in a full-screen modal above app tabs, kept Close/Back working, and reduced the close header from 76dp to 48dp. Intercepted POST returns as well as GET returns using the exact server-provided endpoint, and added neutral static GET/POST backend fallbacks. Callback fields never confirm payment. Server-reported failed attempts return to a cautious retry message. Also removed random token collisions from an ETA test fixture.
@@ -9515,3 +9876,9 @@ deployment connection is not enabled for account sign-in.
 **Evidence:** The preceding Android build completed a real Razorpay TEST Netbanking success, with C001 confirmed in both patient and reception API views. The full-screen build passed 47 JVM tests and device Back/Close/reopen checks. The return-handling build passed 50 JVM tests and a real TEST mock-bank Failure returned to booking without raw JSON; the API showed payment FAILED and the hold RESERVED. All 41 local payment/route authorization tests passed, including forged return-field checks; typecheck and focused ESLint passed. ETA integration/engine/evaluation rerun passed 57 tests; actual restricted-login suite passed 12 separately. Hosted release verification is recorded after deployment.
 
 **Next:** Release through exact-commit CI and the protected main-only staging workflow, then check hosted GET/POST return content and readiness. Remaining queue, refund, notification and ETA pilot acceptance stays in TESTING.md.
+
+
+## 2026-11-06 — Daylight merged-source validation and actual console review
+**Did:** Preserved the earlier payment/privacy/clinic safeguards in a prerequisite commit, applied the Daylight implementation separately, and merged current main while retaining the newer local protections. Pushed `codex/daylight-product` and opened [PR #25](https://github.com/pnkjxmwl/kramya/pull/25). Browser review uses the actual local Next.js product connected to the existing fictional staging API, not the demo routes. Inspected reception overview, dated session listing and an existing real session board without changing patient/queue state. Checked the public page at desktop and 390px, role-tab keyboard navigation, FAQ, and sign-in. Polished the console wordmark, removed duplicate sign-in links, and made the mobile public menu close on selection/Escape.
+**Evidence:** [CI 42229566104](https://github.com/pnkjxmwl/kramya/actions/runs/42229566104) passed both jobs on the merged implementation: full lint/typecheck/build, 42 contracts tests, 483 API cases (18 restricted-role cases deliberately skipped in the owner-backed pass), 72 HTTP console checks, followed by the separate restricted-login RLS suite with no failures or skips. The source contains 18 restricted-role cases; CI asserts the separate suite executed. Local debug and signed release variants each passed 59 JVM tests. Debug lint/build and signed release APK/AAB succeeded. The release APK passed signature verification, ELF 16 KB alignment and zipalign 16 KB checks; SHA-256 `7631c278b70faf543f5508100b6513703c330addec204f9a44f001dbd190d735`. Final web polish passes local typecheck/lint; its pushed commit receives fresh CI.
+**Limits / next:** Docker Desktop exits because its installed launcher cannot find its registration; isolated PostgreSQL/Redis CI provides the database evidence instead. No phone is connected, so native visual/payment/notification acceptance is not claimed. Check the final commit, merge and run the existing protected main-only migration/deploy path, then verify hosted web/API identity and actual staff/doctor layouts. Keep staging, TEST gateway and Play/commercial-release gates explicit.

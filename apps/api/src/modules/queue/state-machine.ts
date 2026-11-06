@@ -36,6 +36,7 @@ import {
  * The string values are what `AuditLog.action` records, so they must stay stable.
  */
 export type QueueCommand =
+  | 'RESERVE_AT_CLINIC'
   | 'JOIN'
   | 'SETTLE_PAYMENT'
   | 'CONFIRM_PAYMENT'
@@ -59,6 +60,7 @@ export type QueueCommand =
   | 'CLOSE_REGISTRATION';
 
 export const QUEUE_COMMANDS: readonly QueueCommand[] = [
+  'RESERVE_AT_CLINIC',
   'JOIN',
   'SETTLE_PAYMENT',
   'CONFIRM_PAYMENT',
@@ -177,6 +179,7 @@ const ENTRY_TRANSITIONS: Record<
    * and nobody may be called from it.
    */
   JOIN: {},
+  RESERVE_AT_CLINIC: {},
   // Financial settlement may arrive after closure. Entry transitions still use
   // CONFIRM_PAYMENT or REINSTATE after inspecting the locked session.
   SETTLE_PAYMENT: {},
@@ -351,11 +354,16 @@ export const JOIN_INITIAL_STATUS: QueueEntryStatus = 'RESERVED';
 export function nextEntryStatus(
   command: QueueCommand,
   from: QueueEntryStatus,
+  context: { earlySessionEnd?: boolean } = {},
 ): QueueEntryStatus {
   const to = ENTRY_TRANSITIONS[command][from];
   if (to === undefined) {
     throw new InvalidQueueTransitionError(command, from);
   }
+  // A clinic cutting its session short has not established patient absence at
+  // the agreed end time. Preserve already-terminal outcomes; cancel open visits.
+  if (command === 'END_SESSION' && context.earlySessionEnd && to === 'NO_SHOW'
+    && !TERMINAL_ENTRY_STATUSES.includes(from)) return 'CANCELLED';
   return to;
 }
 
@@ -384,6 +392,7 @@ const SESSION_ACCEPTS: Record<QueueCommand, readonly SessionStatus[]> = {
   // A running clinic still takes bookings and still takes payment for them
   // (docs/PRD.md 8.12 closes registration on its own limits, never on ACTIVE).
   JOIN: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
+  RESERVE_AT_CLINIC: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   SETTLE_PAYMENT: SESSION_STATUSES,
   CONFIRM_PAYMENT: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   // Refused once the session is over, which is what routes a too-late payment to a

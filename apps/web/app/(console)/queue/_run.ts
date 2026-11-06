@@ -34,7 +34,7 @@ export async function runQueueAction(
   }
 
   revalidatePath(path);
-  redirect(result ? `${path}?${result}` : path);
+  redirect(typeof result === 'string' && result ? `${path}?${result}` : path);
 }
 
 /** Reads a required text field, trimmed. */

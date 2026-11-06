@@ -135,6 +135,8 @@ export type HospitalCard = z.infer<typeof HospitalCard>;
 
 export const HospitalDetail = HospitalCard.extend({
   address: z.string().nullable(),
+  receptionPhone: z.string().nullable().optional(),
+  receptionEmail: z.string().nullable().optional(),
 });
 export type HospitalDetail = z.infer<typeof HospitalDetail>;
 
@@ -254,10 +256,22 @@ export const SessionCard = z.object({
 export type SessionCard = z.infer<typeof SessionCard>;
 
 /** The card plus what is worth a second screen but not worth sending per-card. */
+export const ArrivalGuidance = z.object({
+  arriveBeforeMins: z.number().int().min(0).max(180),
+  gracePeriodSec: z.number().int().min(0),
+  recallAttempts: z.number().int().min(0),
+  requeueBehavior: z.enum(['END_OF_QUEUE', 'NO_REQUEUE']),
+  instructions: z.string(),
+});
+export type ArrivalGuidance = z.infer<typeof ArrivalGuidance>;
+
 export const SessionDetail = SessionCard.extend({
   hospitalArea: z.string().nullable(),
   hospitalAddress: z.string().nullable(),
+  receptionPhone: z.string().nullable().optional(),
+  receptionEmail: z.string().nullable().optional(),
   doctorDefaultConsultMins: z.number().int().positive(),
+  arrivalGuidance: ArrivalGuidance.optional(),
 });
 export type SessionDetail = z.infer<typeof SessionDetail>;
 

@@ -1,4 +1,4 @@
-import { Icon, type IconName } from '../../../components/icon';
+import { Icon, type IconName } from "../../../components/icon";
 
 /**
  * The board's shared furniture - drawn once, used by the real board and the demo.
@@ -40,46 +40,53 @@ export function Stage({
   return (
     <section
       aria-label="Now with the doctor"
-      // shrink-0: it sits in the board's height-capped, scrolling left column, and a
-      // flex child with overflow-hidden is allowed to shrink - which silently cut the
-      // "Up next" list off the bottom of the ticket.
-      className="shrink-0 overflow-hidden rounded-xl border border-ink bg-surface shadow-raised"
+      className="daylight-stage shrink-0 rounded-xl border border-line bg-surface"
     >
-      <div className="relative bg-ink px-5 pb-6 pt-4 text-white">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-eyebrow uppercase text-white/50">Now with the doctor</span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-caption font-medium text-white/85 ring-1 ring-inset ring-white/15">
-            {state.live === true ? (
-              <span className="live-dot text-brand-live" aria-hidden="true" />
-            ) : (
-              <Icon name={state.icon} className="h-3 w-3" />
-            )}
-            {state.label}
-          </span>
-        </div>
-
-        <div className="mt-5 flex items-end gap-4">
-          <span
-            // Keyed on the token so a change re-mounts it and the number settles in
-            // (animate-tick) instead of silently swapping under somebody's eyes.
-            key={token ?? 'none'}
-            className={
-              'animate-tick text-[56px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums ' +
-              (dim ? 'text-white/40' : 'text-white')
-            }
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-5 py-3">
+        <span className="text-eyebrow uppercase text-ink-muted">
+          {dim ? "Next patient" : "Now with the doctor"}
+        </span>
+        <span
+          className={
+            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-caption " +
+            (state.live
+              ? "bg-brand-100 text-primary"
+              : "bg-sunken text-ink-soft")
+          }
+        >
+          <Icon name={state.icon} className="h-3.5 w-3.5" />
+          {state.label}
+        </span>
+      </header>
+      <div className="daylight-stage-body">
+        <div className="daylight-stage-person">
+          <div
+            className="daylight-stub"
+            aria-label={token ? `Token ${token}` : "No token"}
           >
-            {token ?? '—'}
-          </span>
-          <div className="min-w-0 pb-0.5">
-            <p className={'truncate text-h2 ' + (dim ? 'text-white/70' : 'text-white')}>{name}</p>
-            {meta !== undefined && <div className="mt-0.5 text-caption text-white/55">{meta}</div>}
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-white/70">
+              {dim ? "Next token" : "Token"}
+            </span>
+            <span className="mt-3 block font-display text-[48px] font-semibold leading-none tracking-[-.05em] tabular-nums text-white">
+              {token ?? "—"}
+            </span>
+            <span className="mt-5 block border-t border-dashed border-white/35 pt-3 text-[11px] text-white/70">
+              {dim ? "Ready when called" : "Current patient"}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <p className="break-words font-display text-[24px] font-semibold leading-tight tracking-tight text-ink">
+              {name}
+            </p>
+            {meta !== undefined && (
+              <div className="mt-2 text-caption leading-relaxed text-ink-muted">
+                {meta}
+              </div>
+            )}
           </div>
         </div>
+        <div className="daylight-stage-actions">{children}</div>
       </div>
-
-      <Perforation />
-
-      <div className="px-5 pb-5 pt-4">{children}</div>
     </section>
   );
 }
@@ -89,17 +96,13 @@ export function Stage({
  * The ink/white boundary already IS the line; a dashed rule on top of it was either
  * invisible (white on white) or noise (white on ink).
  */
-function Perforation() {
-  return (
-    <div aria-hidden="true" className="relative h-0">
-      <span className="absolute -left-[11px] -top-[11px] h-[22px] w-[22px] rounded-full border border-ink bg-canvas" />
-      <span className="absolute -right-[11px] -top-[11px] h-[22px] w-[22px] rounded-full border border-ink bg-canvas" />
-    </div>
-  );
-}
 
 /** "B004 Deepa Nair · B005 Harpreet Singh · …" - the next few, in the server's order. */
-export function UpNext({ entries }: { entries: { id: string; token: string; name: string }[] }) {
+export function UpNext({
+  entries,
+}: {
+  entries: { id: string; token: string; name: string }[];
+}) {
   if (entries.length === 0) return null;
   const shown = entries.slice(0, 4);
   return (
@@ -111,7 +114,9 @@ export function UpNext({ entries }: { entries: { id: string; token: string; name
             <span className="w-3 text-right text-caption tabular-nums text-ink-disabled">
               {i + 1}
             </span>
-            <span className="font-semibold tabular-nums text-ink">{e.token}</span>
+            <span className="font-semibold tabular-nums text-ink">
+              {e.token}
+            </span>
             <span className="min-w-0 truncate text-ink-muted">{e.name}</span>
           </li>
         ))}
@@ -150,15 +155,15 @@ export function RosterShell({
   return (
     <section
       className={
-        'rounded-xl border bg-surface ' +
-        (emphasis ? 'border-line-strong shadow-sm' : 'border-line shadow-xs')
+        "rounded-xl border bg-surface " +
+        (emphasis ? "border-line-strong shadow-sm" : "border-line shadow-xs")
       }
     >
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-soft px-5 py-3.5">
         <span
           className={
-            'grid h-7 w-7 place-items-center rounded-lg ' +
-            (emphasis ? 'bg-ink text-white' : 'bg-sunken text-ink-muted')
+            "grid h-7 w-7 place-items-center rounded-lg " +
+            (emphasis ? "bg-ink text-white" : "bg-sunken text-ink-muted")
           }
         >
           <Icon name={icon} className="h-3.5 w-3.5" />
@@ -168,7 +173,9 @@ export function RosterShell({
           {count}
         </span>
         {description !== undefined && (
-          <p className="w-full pl-10 text-caption text-ink-muted">{description}</p>
+          <p className="w-full pl-10 text-caption text-ink-muted">
+            {description}
+          </p>
         )}
       </header>
       {children}
@@ -185,7 +192,13 @@ export function RosterShell({
  * actions; one "⋯" per row is enough to find them, and the forms themselves are
  * unchanged underneath.
  */
-export function RowMenu({ label, children }: { label: string; children: React.ReactNode }) {
+export function RowMenu({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   // A popover, not an inline panel: opened under a row, it floats over the rows
   // below instead of pushing the whole list down. The roster frame deliberately has
   // no overflow-hidden so this is never clipped by the card it sits in.

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ClinicProfileController } from './clinic-profile.controller';
+import { ClinicProfileService } from './clinic-profile.service';
 import { DepartmentsController } from './departments.controller';
 import { DepartmentsService } from './departments.service';
 import { DoctorsController } from './doctors.controller';
@@ -23,12 +25,13 @@ import { QueuePolicyService } from './queue-policy.service';
  */
 @Module({
   controllers: [
+    ClinicProfileController,
     DepartmentsController,
     DoctorsController,
     SchedulesController,
     QueuePolicyController,
   ],
-  providers: [DepartmentsService, DoctorsService, SchedulesService, QueuePolicyService],
+  providers: [DepartmentsService, DoctorsService, SchedulesService, QueuePolicyService, ClinicProfileService],
   exports: [DepartmentsService, DoctorsService, SchedulesService, QueuePolicyService],
 })
 export class ConfigModule {}

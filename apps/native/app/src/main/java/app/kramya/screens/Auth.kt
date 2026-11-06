@@ -36,6 +36,7 @@ import app.kramya.ui.ButtonVariant
 import app.kramya.ui.ErrorNote
 import app.kramya.ui.Field
 import app.kramya.ui.pressable
+import app.kramya.ui.AccountWebLink
 import kotlinx.coroutines.launch
 
 // Mirror of apps/mobile/app/(auth)/login.tsx and signup.tsx.
@@ -72,22 +73,7 @@ fun LoginScreen(onSignup: () -> Unit) {
         // Brand mark, then the greeting - both left-aligned, at the handoff's large title
         // size. A centred wordmark over a centred subtitle is a splash screen; this is a
         // form, and a form starts at the left margin like every other screen in the app.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Theme.Space.x3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(Theme.Colors.Primary),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.ACTIVITY, size = 22.dp, tint = androidx.compose.ui.graphics.Color.White) }
-            BasicText(
-                text = "KRAMYA",
-                style = Theme.Font.Overline.copy(color = Theme.Colors.Primary),
-            )
-        }
+        app.kramya.ui.BrandLockup()
 
         Column(
             Modifier.padding(top = Theme.Space.x6, bottom = Theme.Space.x4),
@@ -95,7 +81,7 @@ fun LoginScreen(onSignup: () -> Unit) {
         ) {
             BasicText("Welcome back", style = Theme.Font.Display.copy(color = Theme.Colors.Ink))
             BasicText(
-                text = "Join a doctor's queue from home and arrive when it is nearly your turn.",
+                text = "Sign in to book for yourself or your family and follow your clinic’s queue.",
                 style = Theme.Font.Body.copy(color = Theme.Colors.InkTertiary),
             )
         }
@@ -118,6 +104,7 @@ fun LoginScreen(onSignup: () -> Unit) {
         error?.let { ErrorNote(it) }
 
         Button("Sign in", onClick = ::submit, pending = pending)
+        AccountWebLink("Forgot password?", "/account-action")
 
         Box(
             Modifier
@@ -222,10 +209,14 @@ private fun AuthScaffold(content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Theme.Colors.Surface)
+            .background(Theme.Colors.Canvas)
             .verticalScroll(rememberScrollState())
             .imePadding()
             .padding(horizontal = Theme.Gutter, vertical = Theme.Space.x8),
         verticalArrangement = Arrangement.spacedBy(Theme.Space.x4, Alignment.CenterVertically),
-    ) { content() }
+    ) {
+        content()
+        AccountWebLink("Privacy notice", "/privacy")
+        AccountWebLink("Help & support", "/support")
+    }
 }

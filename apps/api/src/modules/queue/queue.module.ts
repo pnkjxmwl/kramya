@@ -7,6 +7,8 @@ import { CutoffSweeper } from './cutoff-sweeper';
 import { EtaModule } from '../eta/eta.module';
 import { ConfigModule } from '../config/config.module';
 import { RealtimeModule } from '../../realtime/realtime.module';
+import { BookingAccessService } from './booking-access.service';
+import { BookingAccessController } from './booking-access.controller';
 
 /**
  * The queue engine (docs/Architecture.md 7). Owns QueueEntry, QueueEvent,
@@ -21,8 +23,8 @@ import { RealtimeModule } from '../../realtime/realtime.module';
   // RealtimeModule so every command announces itself AFTER it commits (P7-BE-02).
   // The dependency runs one way only: the gateway knows nothing about the queue.
   imports: [ConfigModule, RealtimeModule, EtaModule],
-  controllers: [QueueController],
-  providers: [QueueService, ReservationSweeper, GraceSweeper, CutoffSweeper],
-  exports: [QueueService, ReservationSweeper, GraceSweeper, CutoffSweeper],
+  controllers: [QueueController, BookingAccessController],
+  providers: [QueueService, BookingAccessService, ReservationSweeper, GraceSweeper, CutoffSweeper],
+  exports: [QueueService, BookingAccessService, ReservationSweeper, GraceSweeper, CutoffSweeper],
 })
 export class QueueModule {}

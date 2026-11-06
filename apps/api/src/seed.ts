@@ -675,6 +675,10 @@ const ONLINE_PLAN = [
 ] as const;
 
 async function assertSafeToSeed(): Promise<void> {
+  const boundary = await prisma.deploymentIdentity.findUnique({ where: { id: 'singleton' } });
+  if (boundary?.environment !== 'STAGING' || process.env.DEPLOYMENT_ENVIRONMENT === 'PRODUCTION') {
+    throw new Error('refusing to seed: only an explicitly STAGING database accepts fictional fixtures');
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error("refusing to seed: NODE_ENV is production");
   }

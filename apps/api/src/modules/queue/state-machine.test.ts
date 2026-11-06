@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueEntryStatus, SessionStatus } from '@opd/contracts';
+
+describe('early clinic closure fairness', () => {
+  it('cancels open absent reservations without changing prior terminal outcomes', () => {
+    for (const status of ['CONFIRMED', 'VIRTUAL_WAITING', 'SKIPPED'] as const) {
+      expect(nextEntryStatus('END_SESSION', status, { earlySessionEnd: true })).toBe('CANCELLED');
+      expect(nextEntryStatus('END_SESSION', status)).toBe('NO_SHOW');
+    }
+    expect(nextEntryStatus('END_SESSION', 'NO_SHOW', { earlySessionEnd: true })).toBe('NO_SHOW');
+    expect(() => nextEntryStatus('END_SESSION', 'IN_CONSULTATION', { earlySessionEnd: true })).toThrow();
+  });
+});
 import {
   ELIGIBLE_TO_CALL,
   ENTRY_STATUSES,
@@ -114,7 +125,7 @@ describe('entry state machine (P4-BE-01)', () => {
   });
 
   it('covers every command and every status, so a new one cannot slip through untested', () => {
-    expect(QUEUE_COMMANDS).toHaveLength(20);
+    expect(QUEUE_COMMANDS).toHaveLength(21);
     expect(ENTRY_STATUSES).toHaveLength(12);
     // 19 x 12 pairs considered; only these are legal. CLOSE_REGISTRATION (Phase 8)
     // adds none: it shuts the session's doors and moves nobody.
@@ -230,6 +241,7 @@ describe('entry state machine (P4-BE-01)', () => {
 
 /** Which session statuses accept each command - again written out independently. */
 const EXPECTED_SESSION_ACCEPTS: Record<QueueCommand, SessionStatus[]> = {
+  RESERVE_AT_CLINIC: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   JOIN: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],
   SETTLE_PAYMENT: ['SCHEDULED', 'OPEN_FOR_REGISTRATION', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'ENDED_EARLY'],
   CONFIRM_PAYMENT: ['OPEN_FOR_REGISTRATION', 'ACTIVE'],

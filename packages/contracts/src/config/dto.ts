@@ -48,6 +48,22 @@ export type ConfigListQuery = z.infer<typeof ConfigListQuery>;
 /** docs/Rules.md 5: money is an integer count of paise. Never a float, never rupees. */
 export const Paise = z.number().int().min(0).max(10_000_000);
 
+export const UpdateClinicProfileRequest = z.object({
+  name: z.string().trim().min(2).max(160),
+  city: z.string().trim().min(1).max(80),
+  area: z.string().trim().min(1).max(120).nullable(),
+  address: z.string().trim().min(5).max(600),
+  receptionPhone: z.string().trim().regex(/^\+?[0-9 ()-]{7,24}$/).refine(v => { const n = v.replace(/\D/g, '').length; return n >= 7 && n <= 15; }, 'Use a valid reception phone number').nullable(),
+  receptionEmail: z.string().trim().email().max(254).transform(v => v.toLowerCase()).nullable(),
+}).strict();
+export type UpdateClinicProfileRequest = z.infer<typeof UpdateClinicProfileRequest>;
+export const ClinicProfile = z.object({
+  id: z.string().uuid(), name: z.string(), city: z.string(), area: z.string().nullable(), address: z.string().nullable(),
+  receptionPhone: z.string().nullable(), receptionEmail: z.string().nullable(),
+  status: z.enum(['PENDING', 'VERIFIED', 'SUSPENDED']), updatedAt: z.string().datetime(),
+});
+export type ClinicProfile = z.infer<typeof ClinicProfile>;
+
 // ---------------------------------------------------------------------------
 // Department
 // ---------------------------------------------------------------------------
@@ -269,6 +285,8 @@ export const QueuePolicyFields = z.object({
    * holds hospital configuration.
    */
   arriveBeforeMins: z.number().int().min(0).max(180).default(30),
+  /** Public instructions from reception; no patient-specific or clinical details. */
+  arrivalInstructions: z.string().trim().max(600).default(''),
 
   cancellationRules: CancellationRules.default({}),
 });

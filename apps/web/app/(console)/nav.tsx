@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useId, useState } from 'react';
-import { Mark } from '../../components/mark';
-import { Icon, type IconName } from '../../components/icon';
-import { btn } from '../../components/ui';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useId, useState, useRef } from "react";
+import { Mark } from "../../components/mark";
+import { Icon, type IconName } from "../../components/icon";
+import { btn } from "../../components/ui";
 
 /**
  * The console's chrome: the rail on a desktop, a bar and a drawer on anything
@@ -42,7 +42,7 @@ export interface Viewer {
 
 const isActive = (pathname: string, href: string): boolean =>
   // `/` is a prefix of every route and would otherwise light up permanently.
-  href === '/' ? pathname === '/' : pathname.startsWith(href);
+  href === "/" ? pathname === "/" : pathname.startsWith(href);
 
 /**
  * The real mark, not initials in a box - and it is a link.
@@ -65,18 +65,29 @@ function Brand({ compact = false, href }: { compact?: boolean; href: string }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-2.5 rounded-md transition-opacity hover:opacity-70"
+      className="flex min-h-12 items-center gap-1 rounded-md"
       aria-label="Kramya home"
     >
-      <Mark className="h-[22px] w-[22px] shrink-0 text-ink" />
-      <span className={'text-label font-semibold tracking-tight text-ink' + (compact ? ' sr-only sm:not-sr-only' : '')}>
+      <Mark className="h-9 w-9 shrink-0 text-primary" />
+      <span
+        className={
+          "font-display text-[25px] font-semibold tracking-[-.05em] text-ink" +
+          (compact ? " sr-only sm:not-sr-only" : "")
+        }
+      >
         Kramya
       </span>
     </Link>
   );
 }
 
-function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => void }) {
+function Links({
+  links,
+  onNavigate,
+}: {
+  links: NavLink[];
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -88,12 +99,12 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
             key={link.href}
             href={link.href}
             onClick={onNavigate}
-            aria-current={active ? 'page' : undefined}
+            aria-current={active ? "page" : undefined}
             className={
-              'group relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-label transition-colors duration-100 ' +
+              "group relative flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-label transition-colors duration-100 " +
               (active
-                ? 'bg-sunken font-semibold text-ink'
-                : 'text-ink-muted hover:bg-hover hover:text-ink')
+                ? "bg-brand-100 font-semibold text-primary"
+                : "text-ink-muted hover:bg-hover hover:text-ink")
             }
           >
             {/*
@@ -104,13 +115,18 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
             <span
               aria-hidden="true"
               className={
-                'absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary transition-opacity ' +
-                (active ? 'opacity-100' : 'opacity-0')
+                "absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary transition-opacity " +
+                (active ? "opacity-100" : "opacity-0")
               }
             />
             <Icon
               name={link.icon}
-              className={'h-[18px] w-[18px] ' + (active ? 'text-ink' : 'text-ink-disabled group-hover:text-ink-muted')}
+              className={
+                "h-[18px] w-[18px] " +
+                (active
+                  ? "text-ink"
+                  : "text-ink-disabled group-hover:text-ink-muted")
+              }
             />
             {link.label}
           </Link>
@@ -121,7 +137,7 @@ function Links({ links, onNavigate }: { links: NavLink[]; onNavigate?: () => voi
 }
 
 function Identity({ viewer }: { viewer: Viewer }) {
-  const name = viewer.hospitalName ?? 'No active hospital';
+  const name = viewer.hospitalName ?? "No active hospital";
   return (
     <div className="flex min-w-0 items-center gap-3">
       {/* The hospital as a mark of its own - initials on ink - so the one fact that
@@ -141,7 +157,9 @@ function Identity({ viewer }: { viewer: Viewer }) {
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 text-caption text-ink-muted">
           {viewer.role !== null && (
-            <span className="shrink-0 text-eyebrow uppercase text-ink-soft">{viewer.role}</span>
+            <span className="shrink-0 text-eyebrow uppercase text-ink-soft">
+              {viewer.role}
+            </span>
           )}
           {viewer.role !== null && <span aria-hidden="true">·</span>}
           <span className="truncate" title={viewer.email}>
@@ -156,7 +174,7 @@ function Identity({ viewer }: { viewer: Viewer }) {
 /** "Apollo Clinic" -> "AC"; one word -> its first two letters. */
 function initials(name: string): string {
   const words = name.split(/\s+/).filter((w) => /^[A-Za-z]/.test(w));
-  if (words.length === 0) return 'K';
+  if (words.length === 0) return "K";
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
   return (words[0]![0]! + words[1]![0]!).toUpperCase();
 }
@@ -182,26 +200,26 @@ function IstClock() {
     <div className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-caption text-ink-muted">
       <span className="flex items-center gap-2">
         <Icon name="clock" className="h-3.5 w-3.5 text-ink-disabled" />
-        {now === null ? '\u00a0' : IST_DAY.format(now)}
+        {now === null ? "\u00a0" : IST_DAY.format(now)}
       </span>
       <span className="font-semibold tabular-nums text-ink">
-        {now === null ? '' : IST_CLOCK.format(now)}
+        {now === null ? "" : IST_CLOCK.format(now)}
         <span className="ml-1 font-medium text-ink-disabled">IST</span>
       </span>
     </div>
   );
 }
 
-const IST_DAY = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Kolkata',
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
+const IST_DAY = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Kolkata",
+  weekday: "short",
+  day: "numeric",
+  month: "short",
 });
-const IST_CLOCK = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Asia/Kolkata',
-  hour: 'numeric',
-  minute: '2-digit',
+const IST_CLOCK = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Kolkata",
+  hour: "numeric",
+  minute: "2-digit",
 });
 
 function SignOut({ compact = false }: { compact?: boolean }) {
@@ -213,13 +231,15 @@ function SignOut({ compact = false }: { compact?: boolean }) {
       disabled={pending}
       onClick={async () => {
         setPending(true);
-        await fetch('/api/auth/logout', { method: 'POST' });
-        window.location.href = '/login';
+        await fetch("/api/auth/logout", { method: "POST" });
+        window.location.href = "/login";
       }}
-      className={btn('ghost', 'sm') + (compact ? '' : ' h-8 w-full justify-start px-2.5')}
+      className={
+        btn("ghost", "sm") + (compact ? "" : " h-8 w-full justify-start px-2.5")
+      }
     >
       <Icon name="log-out" className="h-3.5 w-3.5" />
-      {pending ? 'Signing out…' : 'Sign out'}
+      {pending ? "Signing out…" : "Sign out"}
     </button>
   );
 }
@@ -232,7 +252,7 @@ export function ConsoleChrome({
    * this component in every case but one - the public demo, which passes the site
    * root so a visitor with no session is not bounced to /login by their own logo.
    */
-  homeHref = '/overview',
+  homeHref = "/overview",
   /** Off in the demo, whose sample day is a fixed Friday - a real clock beside it contradicts it. */
   clock = true,
 }: {
@@ -244,6 +264,7 @@ export function ConsoleChrome({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const drawerId = useId();
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   // Navigating with the drawer open must not leave it open over the new page.
   useEffect(() => setOpen(false), [pathname]);
@@ -251,15 +272,33 @@ export function ConsoleChrome({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Tab") {
+        const nodes = drawerRef.current?.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),select,input,[tabindex="0"]',
+        );
+        if (!nodes?.length) return;
+        const first = nodes[0]!,
+          last = nodes[nodes.length - 1]!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
-    window.addEventListener('keydown', onKey);
+    const previousFocus = document.activeElement as HTMLElement | null;
+    drawerRef.current?.querySelector<HTMLElement>("a,button")?.focus();
+    window.addEventListener("keydown", onKey);
     // The page behind a drawer must not scroll under it.
     const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
+      previousFocus?.focus();
     };
   }, [open]);
 
@@ -268,17 +307,19 @@ export function ConsoleChrome({
       {/* ------------------------------------------------------------------
           Desktop: the rail. Fixed, and it does not scroll with the content.
       ------------------------------------------------------------------- */}
-      <aside className="hidden w-[252px] shrink-0 flex-col border-r border-line bg-surface lg:flex">
-        <div className="flex h-14 items-center px-5">
+      <aside className="hidden w-[232px] shrink-0 flex-col border-r border-line bg-sunken lg:flex">
+        <div className="flex h-[76px] items-center px-5">
           <Brand href={homeHref} />
         </div>
         <div className="px-3">
-          <div className="rounded-xl border border-line bg-canvas px-3 py-3">
+          <div className="rounded-lg border border-line bg-surface px-3 py-3">
             <Identity viewer={viewer} />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-3 pb-3 pt-5">
-          <p className="mb-1.5 px-2.5 text-eyebrow uppercase text-ink-disabled">Workspace</p>
+          <p className="mb-1.5 px-2.5 text-eyebrow uppercase text-ink-disabled">
+            Workspace
+          </p>
           <Links links={links} />
         </div>
         <div className="flex flex-col gap-1 border-t border-line-soft px-3 py-3">
@@ -298,13 +339,17 @@ export function ConsoleChrome({
           onClick={() => setOpen(true)}
           aria-expanded={open}
           aria-controls={drawerId}
-          className={btn('quiet', 'md') + ' w-9 px-0'}
+          className={btn("quiet", "md") + " w-9 px-0"}
         >
-          <Icon name="menu" className="h-[18px] w-[18px]" title="Open navigation" />
+          <Icon
+            name="menu"
+            className="h-[18px] w-[18px]"
+            title="Open navigation"
+          />
         </button>
         <Brand compact href={homeHref} />
         <span className="ml-auto min-w-0 truncate text-caption text-ink-muted">
-          {viewer.hospitalName ?? 'No active hospital'}
+          {viewer.hospitalName ?? "No active hospital"}
         </span>
       </header>
 
@@ -318,16 +363,24 @@ export function ConsoleChrome({
           />
           <div
             id={drawerId}
-            className="absolute inset-y-0 left-0 flex w-[264px] max-w-[85vw] animate-fade-up flex-col border-r border-line bg-surface shadow-lg"
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Clinic navigation"
+            className="absolute inset-y-0 left-0 flex w-[264px] max-w-[85vw] flex-col border-r border-line bg-surface shadow-lg"
           >
             <div className="flex items-center justify-between px-4 py-3.5">
               <Brand href={homeHref} />
-              <button type="button" onClick={() => setOpen(false)} className={btn('ghost', 'sm') + ' w-7 px-0'}>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className={btn("ghost", "sm") + " w-7 px-0"}
+              >
                 <Icon name="x" className="h-4 w-4" title="Close navigation" />
               </button>
             </div>
             <div className="px-3">
-              <div className="rounded-xl border border-line bg-canvas px-3 py-3">
+              <div className="rounded-lg border border-line bg-surface px-3 py-3">
                 <Identity viewer={viewer} />
               </div>
             </div>
@@ -351,7 +404,11 @@ export function ConsoleChrome({
  *
  * It scrolls horizontally below `sm` instead of wrapping into three ragged rows.
  */
-export function ConfigTabs({ tabs }: { tabs: { href: string; label: string }[] }) {
+export function ConfigTabs({
+  tabs,
+}: {
+  tabs: { href: string; label: string }[];
+}) {
   const pathname = usePathname();
 
   return (
@@ -365,12 +422,12 @@ export function ConfigTabs({ tabs }: { tabs: { href: string; label: string }[] }
           <Link
             key={tab.href}
             href={tab.href}
-            aria-current={active ? 'page' : undefined}
+            aria-current={active ? "page" : undefined}
             className={
-              'whitespace-nowrap rounded-lg px-3 py-1.5 text-label transition-colors duration-100 ' +
+              "whitespace-nowrap rounded-lg px-3 py-1.5 text-label transition-colors duration-100 " +
               (active
-                ? 'bg-surface font-semibold text-ink shadow-xs'
-                : 'text-ink-muted hover:text-ink')
+                ? "bg-surface font-semibold text-ink shadow-xs"
+                : "text-ink-muted hover:text-ink")
             }
           >
             {tab.label}

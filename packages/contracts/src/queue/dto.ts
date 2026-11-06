@@ -310,3 +310,20 @@ export const StaffCancelEntryResponse = z.object({
     .nullable(),
 });
 export type StaffCancelEntryResponse = z.infer<typeof StaffCancelEntryResponse>;
+
+export const ReviewBookingAccessRequest = z.object({
+  /** null lifts a pause; the server limits pauses to at most seven days. */
+  pausedUntil: z.string().datetime().nullable(),
+  reason: z.string().trim().min(10).max(500),
+});
+export type ReviewBookingAccessRequest = z.infer<typeof ReviewBookingAccessRequest>;
+export const BookingAccessReview = z.object({
+  patientName: z.string(),
+  reviewAllowed: z.boolean(),
+  pausedUntil: z.string().datetime().nullable(),
+  reason: z.string().nullable(),
+  reviewedAt: z.string().datetime().nullable(),
+  manuallyMarkedNoShowsIn30Days: z.number().int().nonnegative(),
+  sessionEndNoShowsIn30Days: z.number().int().nonnegative(),
+});
+export type BookingAccessReview = z.infer<typeof BookingAccessReview>;

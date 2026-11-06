@@ -196,7 +196,7 @@ export function toMyQueueEntry(
     completedAt: row.completedAt?.toISOString() ?? null,
 
     cancellable: isCancellable(row.status),
-    refundPctIfCancelledNow: refundPctIfCancelledAt(
+    refundPctIfCancelledNow: row.payment === null ? 0 : refundPctIfCancelledAt(
       rules,
       row.session.scheduledStart,
       now,

@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { Icon, type IconName } from './icon';
+import Link from "next/link";
+import { Icon, type IconName } from "./icon";
 
 /**
  * The console's design system - every control, surface and state on every screen.
@@ -26,13 +26,13 @@ import { Icon, type IconName } from './icon';
 // Controls
 // ---------------------------------------------------------------------------
 
-type Variant = 'primary' | 'quiet' | 'ghost' | 'danger';
-type Size = 'sm' | 'md' | 'lg';
+type Variant = "primary" | "quiet" | "ghost" | "danger";
+type Size = "sm" | "md" | "lg";
 
 const SIZE: Record<Size, string> = {
-  sm: 'h-7 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 gap-1.5 rounded-md px-2.5 text-caption',
-  md: 'h-9 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 gap-2 rounded-lg px-3.5 text-label',
-  lg: 'h-12 gap-2 rounded-xl px-5 text-body-lg font-semibold',
+  sm: "h-8 [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:min-w-12 gap-1.5 rounded-md px-2.5 text-caption",
+  md: "h-10 [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:min-w-12 gap-2 rounded-lg px-3.5 text-label",
+  lg: "h-12 gap-2 rounded-xl px-5 text-body-lg font-semibold",
 };
 
 /**
@@ -51,16 +51,16 @@ const VARIANT: Record<Variant, string> = {
   // a near-black fill read as something you press. Hover lifts the fill one step
   // toward grey rather than darkening a colour that is already nearly black.
   primary:
-    'bg-primary text-white shadow-button hover:bg-brand-700 active:bg-brand-900 ' +
-    'disabled:bg-line disabled:text-ink-disabled disabled:shadow-none',
+    "bg-primary text-white shadow-button hover:bg-brand-800 active:bg-brand-900 " +
+    "disabled:bg-line disabled:text-ink-disabled disabled:shadow-none",
   quiet:
-    'border border-line bg-surface text-ink shadow-xs hover:border-line-strong hover:bg-hover ' +
-    'active:bg-sunken disabled:border-line-soft disabled:bg-surface disabled:text-ink-disabled disabled:shadow-none',
+    "border border-line bg-surface text-ink shadow-xs hover:border-line-strong hover:bg-hover " +
+    "active:bg-sunken disabled:border-line-soft disabled:bg-surface disabled:text-ink-disabled disabled:shadow-none",
   ghost:
-    'text-ink-muted hover:bg-sunken hover:text-ink active:bg-line-soft disabled:text-ink-disabled',
+    "text-ink-muted hover:bg-sunken hover:text-ink active:bg-line-soft disabled:text-ink-disabled",
   danger:
-    'border border-danger-line bg-surface text-danger shadow-xs hover:border-danger/40 hover:bg-danger-bg ' +
-    'active:bg-danger-bg disabled:border-line disabled:text-ink-disabled disabled:shadow-none',
+    "border border-danger-line bg-surface text-danger shadow-xs hover:border-danger/40 hover:bg-danger-bg " +
+    "active:bg-danger-bg disabled:border-line disabled:text-ink-disabled disabled:shadow-none",
 };
 
 /*
@@ -68,18 +68,18 @@ const VARIANT: Record<Variant, string> = {
   as seen. Disabled buttons do not move - a control that reacts but does nothing is
   worse than one that plainly will not.
 */
-export const btn = (variant: Variant = 'primary', size: Size = 'md'): string =>
-  'inline-flex select-none items-center justify-center whitespace-nowrap font-medium ' +
-  'transition-[color,background-color,border-color,box-shadow,transform] duration-100 ' +
-  'active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100 ' +
+export const btn = (variant: Variant = "primary", size: Size = "md"): string =>
+  "inline-flex select-none items-center justify-center whitespace-nowrap font-medium " +
+  "transition-[color,background-color,border-color,box-shadow,transform] duration-100 " +
+  " disabled:cursor-not-allowed disabled:active:scale-100 " +
   SIZE[size] +
-  ' ' +
+  " " +
   VARIANT[variant];
 
 /** The names the config screens already import. Same look, one definition behind them. */
-export const button = btn('primary');
-export const buttonQuiet = btn('quiet');
-export const buttonDanger = btn('danger');
+export const button = btn("primary");
+export const buttonQuiet = btn("quiet");
+export const buttonDanger = btn("danger");
 
 /**
  * A text control.
@@ -89,13 +89,13 @@ export const buttonDanger = btn('danger');
  * tinted, is distinguishable from an editable one at a glance.
  */
 export const input =
-  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-body text-ink shadow-xs ' +
-  'transition-[border-color,box-shadow] duration-100 placeholder:text-ink-disabled hover:border-line-strong ' +
+  "h-10 w-full rounded-md border border-line bg-surface px-2.5 text-body text-ink shadow-xs " +
+  "transition-[border-color,box-shadow] duration-100 placeholder:text-ink-disabled hover:border-line-strong " +
   // The focus state is the ink border plus a soft 3px halo. The global
   // :focus-visible outline is switched off HERE ONLY, because on a field it stacked
   // on top of both and drew a heavy double ring around every input you clicked.
-  'focus:border-ink focus:shadow-[0_0_0_3px_rgba(11,11,12,0.12)] focus-visible:outline-none ' +
-  'disabled:bg-sunken disabled:text-ink-muted';
+  "focus:border-primary focus:shadow-[0_0_0_3px_rgba(46,107,79,0.12)] focus-visible:outline-none " +
+  "disabled:bg-sunken disabled:text-ink-muted";
 
 /**
  * The auth forms' control size, paired with `btn(_, 'lg')`.
@@ -105,9 +105,9 @@ export const input =
  * invitation are pressed once, under mild stress, often on a phone - the one place in
  * this product where the desk-density argument does not apply.
  */
-export const inputLg = input + ' h-11 px-3';
+export const inputLg = input + " h-11 px-3";
 
-export const label = 'text-caption font-medium text-ink-muted';
+export const label = "text-caption font-medium text-ink-muted";
 
 /** A field label that sits above its control, with the gap already in it. */
 export function Label({
@@ -120,9 +120,11 @@ export function Label({
   optional?: boolean;
 }) {
   return (
-    <label htmlFor={htmlFor} className={label + ' mb-1 block'}>
+    <label htmlFor={htmlFor} className={label + " mb-1 block"}>
       {children}
-      {optional === true && <span className="ml-1 font-normal text-ink-disabled">optional</span>}
+      {optional === true && (
+        <span className="ml-1 font-normal text-ink-disabled">optional</span>
+      )}
     </label>
   );
 }
@@ -133,7 +135,7 @@ export function Field({
   label: text,
   hint,
   optional,
-  className = '',
+  className = "",
   children,
 }: {
   id: string;
@@ -149,7 +151,9 @@ export function Field({
         {text}
       </Label>
       {children}
-      {hint !== undefined && <p className="mt-1 text-caption text-ink-muted">{hint}</p>}
+      {hint !== undefined && (
+        <p className="mt-1 text-caption text-ink-muted">{hint}</p>
+      )}
     </div>
   );
 }
@@ -177,14 +181,20 @@ export function PageHeader({
     <header className="mb-7 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
         {eyebrow !== undefined && (
-          <p className="mb-1.5 text-eyebrow uppercase text-ink-muted">{eyebrow}</p>
+          <p className="mb-1.5 text-eyebrow uppercase text-ink-muted">
+            {eyebrow}
+          </p>
         )}
         <h1 className="text-h1 text-ink">{title}</h1>
         {description !== undefined && (
-          <div className="mt-1 max-w-[70ch] text-body text-ink-muted">{description}</div>
+          <div className="mt-1 max-w-[70ch] text-body text-ink-muted">
+            {description}
+          </div>
         )}
       </div>
-      {actions !== undefined && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+      {actions !== undefined && (
+        <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>
+      )}
     </header>
   );
 }
@@ -206,7 +216,9 @@ function CardHeader({
           <p className="mt-0.5 text-caption text-ink-muted">{description}</p>
         )}
       </div>
-      {actions !== undefined && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions !== undefined && (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      )}
     </header>
   );
 }
@@ -222,23 +234,25 @@ export function Card({
   title,
   description,
   actions,
-  tone = 'default',
-  className = '',
+  tone = "default",
+  className = "",
   children,
 }: {
   title?: string;
   description?: string;
   actions?: React.ReactNode;
-  tone?: 'default' | 'accent';
+  tone?: "default" | "accent";
   className?: string;
   children: React.ReactNode;
 }) {
   return (
     <section
       className={
-        'rounded-lg border bg-surface ' +
-        (tone === 'accent' ? 'border-line-strong shadow-raised' : 'border-line shadow-xs') +
-        ' ' +
+        "rounded-lg border bg-surface " +
+        (tone === "accent"
+          ? "border-line-strong shadow-raised"
+          : "border-line shadow-xs") +
+        " " +
         className
       }
     >
@@ -297,25 +311,38 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
   already says "this is a label". A hairline is enough.
 */
 export const th =
-  'sticky top-0 z-10 border-b border-line bg-surface px-3 py-2.5 text-left text-eyebrow ' +
-  'uppercase text-ink-muted first:pl-5 last:pr-5';
+  "sticky top-0 z-10 border-b border-line bg-surface px-3 py-2.5 text-left text-eyebrow " +
+  "uppercase text-ink-muted first:pl-5 last:pr-5";
 
-export const td = 'border-b border-line-soft px-3 py-3 text-body text-ink first:pl-5 last:pr-5';
+export const td =
+  "border-b border-line-soft px-3 py-3 text-body text-ink first:pl-5 last:pr-5";
 
 /** A whole row, so a long table stays readable as the eye travels across it. */
-export const tr = 'transition-colors duration-75 hover:bg-hover';
+export const tr = "transition-colors duration-75 hover:bg-hover";
 
-export const table = 'w-full border-collapse text-left';
+export const table = "w-full border-collapse text-left";
 
 // ---------------------------------------------------------------------------
 // States
 // ---------------------------------------------------------------------------
 
-const TONE: Record<'success' | 'warning' | 'danger' | 'info', { wrap: string; icon: IconName }> = {
-  success: { wrap: 'border-success-line bg-success-bg text-success', icon: 'check-circle' },
-  warning: { wrap: 'border-warning-line bg-warning-bg text-warning', icon: 'alert-triangle' },
-  danger: { wrap: 'border-danger-line bg-danger-bg text-danger', icon: 'alert-circle' },
-  info: { wrap: 'border-info-line bg-info-bg text-info', icon: 'info' },
+const TONE: Record<
+  "success" | "warning" | "danger" | "info",
+  { wrap: string; icon: IconName }
+> = {
+  success: {
+    wrap: "border-success-line bg-success-bg text-success",
+    icon: "check-circle",
+  },
+  warning: {
+    wrap: "border-warning-line bg-warning-bg text-warning",
+    icon: "alert-triangle",
+  },
+  danger: {
+    wrap: "border-danger-line bg-danger-bg text-danger",
+    icon: "alert-circle",
+  },
+  info: { wrap: "border-info-line bg-info-bg text-info", icon: "info" },
 };
 
 /**
@@ -332,17 +359,22 @@ export function Banner({
   tone: keyof typeof TONE;
   title?: string;
   children: React.ReactNode;
-  role?: 'alert' | 'status';
+  role?: "alert" | "status";
 }) {
   const { wrap, icon } = TONE[tone];
   return (
     <div
-      role={role ?? (tone === 'danger' ? 'alert' : 'status')}
-      className={'flex items-start gap-2.5 rounded-md border px-3.5 py-2.5 text-body ' + wrap}
+      role={role ?? (tone === "danger" ? "alert" : "status")}
+      className={
+        "flex items-start gap-2.5 rounded-md border px-3.5 py-2.5 text-body " +
+        wrap
+      }
     >
       <Icon name={icon} className="mt-0.5 h-4 w-4" />
       <span className="min-w-0">
-        {title !== undefined && <strong className="font-semibold">{title} </strong>}
+        {title !== undefined && (
+          <strong className="font-semibold">{title} </strong>
+        )}
         {children}
       </span>
     </div>
@@ -376,7 +408,7 @@ export function SuccessBanner({ message }: { message?: string }) {
  * shape and no next step reads as a product that has not finished loading.
  */
 export function EmptyState({
-  icon = 'inbox',
+  icon = "inbox",
   title,
   children,
   action,
@@ -388,7 +420,7 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center px-6 py-10 text-center">
-      <span className="mb-3 grid h-10 w-10 place-items-center rounded-full bg-sunken text-ink-disabled">
+      <span className="mb-3 grid h-10 w-10 place-items-center rounded-md bg-sunken text-ink-disabled">
         <Icon name={icon} className="h-[18px] w-[18px]" />
       </span>
       <p className="text-h3 text-ink">{title}</p>
@@ -412,8 +444,8 @@ export function Empty({ children }: { children: React.ReactNode }) {
  * block in the shape of a table says "a table is coming, and it will be this big",
  * which also means nothing jumps when the data lands.
  */
-export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={'animate-pulse rounded bg-sunken ' + className} />;
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={"animate-pulse rounded bg-sunken " + className} />;
 }
 
 /** The shape of a roster or a config list, for a route's `loading.tsx`. */
@@ -430,7 +462,7 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
             <div key={row} className="flex items-center gap-4 px-4 py-3">
               <Skeleton className="h-5 w-14" />
               <Skeleton className="h-4 w-56 max-w-[40%]" />
-              <Skeleton className="ml-auto h-5 w-20 rounded-full" />
+              <Skeleton className="ml-auto h-5 w-20 rounded-md" />
             </div>
           ))}
         </div>
@@ -444,12 +476,12 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
 // ---------------------------------------------------------------------------
 
 const BADGE = {
-  neutral: 'bg-sunken text-ink-soft ring-line',
-  brand: 'bg-surface text-ink ring-line-strong',
-  success: 'bg-success-bg text-success ring-success-line',
-  warning: 'bg-warning-bg text-warning ring-warning-line',
-  danger: 'bg-danger-bg text-danger ring-danger-line',
-  info: 'bg-info-bg text-info ring-info-line',
+  neutral: "bg-sunken text-ink-soft ring-line",
+  brand: "bg-surface text-ink ring-line-strong",
+  success: "bg-success-bg text-success ring-success-line",
+  warning: "bg-warning-bg text-warning ring-warning-line",
+  danger: "bg-danger-bg text-danger ring-danger-line",
+  info: "bg-info-bg text-info ring-info-line",
 };
 
 export type BadgeTone = keyof typeof BADGE;
@@ -463,7 +495,7 @@ export type BadgeTone = keyof typeof BADGE;
  * also simply faster to read across a room than a word is.
  */
 export function Badge({
-  tone = 'neutral',
+  tone = "neutral",
   icon,
   children,
 }: {
@@ -474,8 +506,8 @@ export function Badge({
   return (
     <span
       className={
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-full py-0.5 pl-1.5 pr-2 text-caption ' +
-        'font-medium ring-1 ring-inset ' +
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-md py-0.5 pl-1.5 pr-2 text-caption " +
+        "font-medium ring-1 ring-inset " +
         BADGE[tone]
       }
     >
@@ -497,17 +529,17 @@ export function Badge({
  */
 export function TokenChip({
   children,
-  size = 'md',
+  size = "md",
 }: {
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
 }) {
   const scale =
-    size === 'lg'
-      ? 'min-w-[4.5rem] rounded-lg px-3 py-1 text-h2'
-      : size === 'sm'
-        ? 'min-w-[3rem] rounded-md px-1.5 py-0.5 text-caption'
-        : 'min-w-[3.5rem] rounded-md px-2 py-[3px] text-label';
+    size === "lg"
+      ? "min-w-[4.5rem] rounded-lg px-3 py-1 text-h2"
+      : size === "sm"
+        ? "min-w-[3rem] rounded-md px-1.5 py-0.5 text-caption"
+        : "min-w-[3.5rem] rounded-md px-2 py-[3px] text-label";
   /*
     A keycap: white face, hairline, a darker bottom edge. The token is the one
     physical object in this system - it is printed, held, read out across a room -
@@ -516,8 +548,8 @@ export function TokenChip({
   return (
     <span
       className={
-        'inline-flex items-center justify-center border border-line bg-surface shadow-keycap ' +
-        'font-semibold tabular-nums tracking-tight text-ink ' +
+        "inline-flex items-center justify-center border border-line bg-surface shadow-keycap " +
+        "font-semibold tabular-nums tracking-tight text-ink " +
         scale
       }
     >
@@ -540,7 +572,9 @@ export function Stat({
     <div className="min-w-0">
       <dt className="text-eyebrow uppercase text-ink-muted">{name}</dt>
       <dd className="mt-1 text-h1 tabular-nums text-ink">{value}</dd>
-      {note !== undefined && <p className="mt-0.5 text-caption text-ink-muted">{note}</p>}
+      {note !== undefined && (
+        <p className="mt-0.5 text-caption text-ink-muted">{note}</p>
+      )}
     </div>
   );
 }
@@ -555,22 +589,22 @@ export function Stat({
  */
 export function Disclosure({
   summary,
-  tone = 'quiet',
+  tone = "quiet",
   children,
 }: {
   summary: string;
-  tone?: 'quiet' | 'danger';
+  tone?: "quiet" | "danger";
   children: React.ReactNode;
 }) {
   return (
     <details className="group">
       <summary
         className={
-          'inline-flex cursor-pointer list-none items-center gap-1 rounded-md px-1.5 py-1 ' +
-          'text-caption font-medium transition-colors ' +
-          (tone === 'danger'
-            ? 'text-danger hover:bg-danger-bg'
-            : 'text-ink-muted hover:bg-sunken hover:text-ink')
+          "inline-flex cursor-pointer list-none items-center gap-1 rounded-md px-1.5 py-1 " +
+          "text-caption font-medium transition-colors " +
+          (tone === "danger"
+            ? "text-danger hover:bg-danger-bg"
+            : "text-ink-muted hover:bg-sunken hover:text-ink")
         }
       >
         <Icon
@@ -611,8 +645,9 @@ export function Pager({
 
   const link = (value: number) => {
     const search = new URLSearchParams();
-    for (const [key, entry] of Object.entries(filters)) if (entry) search.set(key, entry);
-    search.set('offset', String(Math.max(0, value)));
+    for (const [key, entry] of Object.entries(filters))
+      if (entry) search.set(key, entry);
+    search.set("offset", String(Math.max(0, value)));
     return `${path}?${search.toString()}`;
   };
 
@@ -626,13 +661,13 @@ export function Pager({
       </span>
       <span className="flex gap-2">
         {offset > 0 && (
-          <Link className={btn('quiet', 'sm')} href={link(offset - limit)}>
+          <Link className={btn("quiet", "sm")} href={link(offset - limit)}>
             <Icon name="arrow-left" className="h-3 w-3" />
             Previous
           </Link>
         )}
         {offset + limit < total && (
-          <Link className={btn('quiet', 'sm')} href={link(offset + limit)}>
+          <Link className={btn("quiet", "sm")} href={link(offset + limit)}>
             Next
             <Icon name="arrow-right" className="h-3 w-3" />
           </Link>

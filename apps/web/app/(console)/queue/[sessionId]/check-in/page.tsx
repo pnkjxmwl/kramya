@@ -1,3 +1,5 @@
+import { ArrivalList } from './arrival-list';
+import { readQueueNotice } from '../../../../../lib/queue-notice';
 import Link from 'next/link';
 import type { Paginated, QueueEntryView } from '@opd/contracts';
 import { requireStaffHospital } from '../../../../../lib/tenant';
@@ -6,15 +8,12 @@ import { Icon } from '../../../../../components/icon';
 import {
   Badge,
   Card,
-  EmptyState,
   ErrorBanner,
   SuccessBanner,
-  TokenChip,
   btn,
   input,
   label,
 } from '../../../../../components/ui';
-import { StatusPill } from '../../ui';
 import { checkInByToken } from './actions';
 import { Scanner } from './scanner';
 
@@ -47,7 +46,7 @@ export default async function CheckInPage({
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; q?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const { sessionId } = await params;
   const query = await searchParams;
@@ -57,15 +56,6 @@ export default async function CheckInPage({
     `/sessions/${sessionId}/queue?limit=${LIMIT}`,
   );
 
-  const search = (query.q ?? '').trim().toLowerCase();
-  const awaiting = queue.items
-    .filter((e) => AWAITING.includes(e.status))
-    .filter(
-      (e) =>
-        search === '' ||
-        e.patientName.toLowerCase().includes(search) ||
-        e.tokenLabel.toLowerCase().includes(search),
-    );
   const outstanding = queue.items.filter((e) => AWAITING.includes(e.status)).length;
   const alreadyHere = queue.items.filter((e) => e.status === 'CHECKED_IN' || e.status === 'READY');
 
@@ -83,10 +73,10 @@ export default async function CheckInPage({
           <h1 className="text-h1 text-ink">Check in</h1>
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={outstanding > 0 ? 'info' : 'success'} icon={outstanding > 0 ? 'home' : 'check'}>
-              {outstanding} still to arrive
+              {outstanding} still to arrive{queue.total > queue.items.length ? ' on this page' : ''}
             </Badge>
             <Badge tone="brand" icon="check-circle">
-              {alreadyHere.length} here
+              {alreadyHere.length} here{queue.total > queue.items.length ? ' on this page' : ''}
             </Badge>
           </div>
         </div>
@@ -97,10 +87,10 @@ export default async function CheckInPage({
         before the wrong person is called in. Full width and above everything else,
         because a receptionist glances up from the patient in front of them.
       */}
-      {(query.error !== undefined || query.ok !== undefined) && (
+      {(query.error !== undefined || query.notice !== undefined) && (
         <div className="mb-4 flex flex-col gap-2">
           <ErrorBanner message={query.error} />
-          <SuccessBanner message={query.ok} />
+          <SuccessBanner message={query.notice === '1' ? await readQueueNotice(sessionId) ?? 'Action completed. Confirm the updated patient record below.' : undefined} />
         </div>
       )}
 
@@ -141,95 +131,7 @@ export default async function CheckInPage({
           </Card>
         </div>
 
-        <section className="overflow-hidden rounded-lg border border-line bg-surface shadow-xs">
-          <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-line-soft px-4 py-3">
-            <h2 className="text-h3 text-ink">Or find them in the list</h2>
-            {/* A GET form: the search stays in the URL, so a desk can keep a
-                filtered view open across a check-in without retyping it. */}
-            <form className="flex items-end gap-2">
-              <div className="w-full min-w-[12rem] sm:w-64">
-                <label className={label + ' sr-only'} htmlFor="q">
-                  Search by name or token
-                </label>
-                <input
-                  id="q"
-                  name="q"
-                  defaultValue={query.q ?? ''}
-                  placeholder="Anita, or A027"
-                  className={input}
-                />
-              </div>
-              <button type="submit" className={btn('quiet')}>
-                <Icon name="search" className="h-4 w-4" />
-                Search
-              </button>
-              {search !== '' && (
-                <Link className={btn('ghost')} href={`/queue/${sessionId}/check-in`}>
-                  Clear
-                </Link>
-              )}
-            </form>
-          </header>
-
-          {awaiting.length === 0 ? (
-            search === '' ? (
-              <EmptyState icon="check" title="Everyone who booked has arrived">
-                Nothing left to check in for this session.
-              </EmptyState>
-            ) : (
-              <EmptyState
-                icon="search"
-                title={`Nobody matching “${query.q}” is still to arrive`}
-                action={
-                  <Link className={btn('quiet')} href={`/queue/${sessionId}/check-in`}>
-                    Show everyone
-                  </Link>
-                }
-              >
-                They may already be checked in, or the booking may be under a relative’s name.
-              </EmptyState>
-            )
-          ) : (
-            <ul className="divide-y divide-line-soft">
-              {awaiting.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 transition-colors hover:bg-hover"
-                >
-                  <TokenChip>{entry.tokenLabel}</TokenChip>
-                  <span className="min-w-0 flex-1 truncate text-body font-medium text-ink">
-                    {entry.patientName}
-                  </span>
-                  <StatusPill status={entry.status} />
-                  {/* Same action as the manual field, so reception stays on this
-                      page instead of being thrown back to the board. */}
-                  <form action={checkInByToken}>
-                    <input type="hidden" name="sessionId" value={sessionId} />
-                    <input type="hidden" name="tokenNumber" value={entry.tokenNumber} />
-                    <button type="submit" className={btn('quiet', 'sm')}>
-                      Check in
-                    </button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {alreadyHere.length > 0 && (
-            <div className="border-t border-line bg-canvas px-4 py-3">
-              <p className="mb-2 text-eyebrow uppercase text-ink-muted">
-                Already checked in · {alreadyHere.length}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {alreadyHere.map((e) => (
-                  <TokenChip key={e.id} size="sm">
-                    {e.tokenLabel}
-                  </TokenChip>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
+        <ArrivalList key={sessionId} sessionId={sessionId} entries={queue.items} hasMore={queue.total > queue.items.length} />
       </div>
     </>
   );

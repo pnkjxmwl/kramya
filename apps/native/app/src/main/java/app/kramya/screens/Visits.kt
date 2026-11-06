@@ -1,5 +1,6 @@
 package app.kramya.screens
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -117,7 +118,7 @@ fun VisitsScreen(onOpenVisit: (String) -> Unit) {
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            .shadow(Theme.Elevation.Card, RoundedCornerShape(Theme.Radius.Group))
+                            .border(1.dp,Theme.Colors.Border,RoundedCornerShape(Theme.Radius.Group))
                             .clip(RoundedCornerShape(Theme.Radius.Group))
                             .background(Theme.Colors.Surface)
                             .pressable(
@@ -132,7 +133,7 @@ fun VisitsScreen(onOpenVisit: (String) -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             BasicText(
-                                text = if (scope == "active") "YOUR TOKEN" else "TOKEN",
+                                text = if(entry.status==app.kramya.net.QueueEntryStatus.RESERVED) "BOOKING" else if (scope == "active") "YOUR TOKEN" else "TOKEN",
                                 style = Theme.Font.Micro.copy(
                                     letterSpacing = 1.2.sp,
                                     color = Theme.Colors.InkTertiary,
@@ -142,11 +143,11 @@ fun VisitsScreen(onOpenVisit: (String) -> Unit) {
                         }
 
                         BasicText(
-                            text = entry.tokenLabel,
+                            text = if(entry.status==app.kramya.net.QueueEntryStatus.RESERVED) "Payment not confirmed" else entry.tokenLabel,
                             modifier = Modifier.padding(top = 4.dp),
                             // Tabular numerals so a column of token numbers does not
                             // jitter.
-                            style = Theme.Font.TokenSm.copy(
+                            style = (if(entry.status==app.kramya.net.QueueEntryStatus.RESERVED) Theme.Font.H3 else Theme.Font.TokenSm).copy(
                                 color = Theme.Colors.Ink,
                                 fontFeatureSettings = "tnum",
                             ),

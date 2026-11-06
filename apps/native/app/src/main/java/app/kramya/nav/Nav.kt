@@ -92,13 +92,13 @@ object Routes {
 
 /** The three tabs, in the order the bar draws them. */
 enum class Tab(val graph: String, val start: String, val label: String, val icon: IconName) {
-    Discover(Routes.DISCOVER_GRAPH, Routes.DISCOVER, "Discover", Icons.COMPASS),
+    Discover(Routes.DISCOVER_GRAPH, Routes.DISCOVER, "Find care", Icons.COMPASS),
 
     // "Visits", the handoff's word. The SCREEN is still titled "My Visits" - a tab label
     // has ten pixels of height and no room for a possessive.
-    Visits(Routes.VISITS_GRAPH, Routes.VISITS, "Visits", Icons.CLIPBOARD),
+    Visits(Routes.VISITS_GRAPH, Routes.VISITS, "My visits", Icons.CLIPBOARD),
 
-    Profile(Routes.PROFILE_GRAPH, Routes.PROFILE, "Profile", Icons.USER),
+    Profile(Routes.PROFILE_GRAPH, Routes.PROFILE, "You", Icons.USER),
 }
 
 /**
@@ -195,7 +195,7 @@ fun TabBar(navController: NavHostController) {
                     verticalArrangement = Arrangement.Top,
                 ) {
                     Box(
-                        Modifier.background(if (selected) Theme.Colors.PrimarySoft else Color.Transparent, RoundedCornerShape(18.dp))
+                        Modifier.background(if (selected) Theme.Colors.PrimarySoft else Color.Transparent, RoundedCornerShape(10.dp))
                             .padding(horizontal = 18.dp, vertical = 4.dp),
                     ) { Icon(tab.icon, size = 24.dp, tint = tint) }
                     BasicText(
@@ -243,7 +243,7 @@ fun NavBar(
             // shift when a right-hand action appears.
             BasicText(
                 text = title,
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 72.dp),
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = if(onBack!=null || left!=null) 64.dp else 22.dp,end=64.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = Theme.Font.Label.copy(
@@ -251,7 +251,7 @@ fun NavBar(
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = (-0.4).sp,
                     color = Theme.Colors.Ink,
-                    textAlign = TextAlign.Center,
+                    textAlign = TextAlign.Start,
                 ),
             )
 
@@ -261,7 +261,7 @@ fun NavBar(
                     onBack != null -> Box(
                         Modifier
                             .minTouchTarget()
-                            .size(44.dp)
+                            .size(48.dp)
                             .pressable(radius = Theme.Radius.Full, label = "Back", onClick = onBack),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.CHEVRON_LEFT, size = 22.dp, tint = Theme.Colors.Ink) }

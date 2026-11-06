@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.kramya.core.Theme
 import app.kramya.core.calendarDate
 import app.kramya.core.istClock
@@ -47,6 +50,10 @@ import app.kramya.net.useApi
 import app.kramya.net.useApiPost
 import app.kramya.ui.Button
 import app.kramya.ui.ButtonVariant
+import app.kramya.ui.queueFreshness
+import app.kramya.ui.ReceptionContacts
+import app.kramya.net.LocalQueryClient
+import app.kramya.net.SessionDetail
 import app.kramya.ui.Card
 import app.kramya.ui.EntryStatusPill
 import app.kramya.ui.ErrorNote
@@ -55,7 +62,6 @@ import app.kramya.ui.KeyValue
 import app.kramya.ui.LiveState
 import app.kramya.ui.QrCode
 import app.kramya.ui.QueryState
-import app.kramya.ui.QueueStrip
 import app.kramya.ui.SectionLabel
 import app.kramya.ui.holdRemaining
 import app.kramya.ui.nextStepFor
@@ -87,7 +93,7 @@ private const val FALLBACK_POLL_MS = 90_000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TokenScreen(entryId: String, onBack: () -> Unit) {
+fun TokenScreen(entryId: String, onBack: () -> Unit, onResumePayment: (String) -> Unit) {
     val context = LocalContext.current
 
     // There is no GET /me/queue-entries/:id: the active list is small and already carries
@@ -101,6 +107,16 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
 
     // Watch the queue this token is in, so the ETA and "ahead of you" move with it.
     val connected = useLiveSession(entry?.sessionId)
+    val clinic = useApi<SessionDetail>("/sessions/${entry?.sessionId.orEmpty()}", enabled = entry != null)
+    val queryClient = LocalQueryClient.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var freshnessNow by remember { mutableLongStateOf(queryClient.clock()) }
+    LaunchedEffect(entryId, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { freshnessNow = queryClient.clock(); delay(15_000) }
+        }
+    }
+    val freshness = queueFreshness(active.receivedAt, freshnessNow, connected, active.error != null)
 
     val cancel = useApiPost<CancelEntryRequest, CancelEntryResponse>(
         "/queue-entries/$entryId/cancel",
@@ -119,7 +135,7 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
     val hold = holdRemaining(entry?.reservationExpiresAt, now)
 
     Column(Modifier.fillMaxSize().background(Theme.Colors.Canvas)) {
-        NavBar(entry?.tokenLabel ?: "Your token", onBack = onBack)
+        NavBar(if (entry?.status == app.kramya.net.QueueEntryStatus.RESERVED) "Payment pending" else entry?.tokenLabel ?: "Your token", onBack = onBack)
 
         PullToRefreshBox(
             isRefreshing = active.isFetching && !active.isPending,
@@ -146,114 +162,47 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                 )
 
                 if (entry != null) {
-                    /*
-                      1. The handoff's sheet: the eyebrow, the token, who it is for, and
-                      the two facts underneath it on hairline rows.
-
-                      White, not a filled brand surface. The teal system painted this card
-                      teal-50 on the argument that the token is the one object the whole
-                      product hands over and should be what your eye lands on. That
-                      argument was right and the fill was the wrong way to serve it: the
-                      token is SIXTY-FOUR POINTS of ink on white, which is louder than any
-                      tint, and a tinted card would only dilute it.
-                    */
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .shadow(Theme.Elevation.Card, RoundedCornerShape(Theme.Radius.Card))
-                            .clip(RoundedCornerShape(Theme.Radius.Card))
-                            .background(Theme.Colors.Surface)
-                            .padding(
-                                start = Theme.Gutter,
-                                end = Theme.Gutter,
-                                top = Theme.Space.x6,
-                                bottom = Theme.Space.x5,
-                            ),
-                    ) {
-                        BasicText(
-                            "YOU'RE IN THE QUEUE",
-                            style = Theme.Font.Overline.copy(color = Theme.Colors.InkTertiary),
-                        )
-                        BasicText(
-                            text = entry.tokenLabel,
-                            modifier = Modifier.padding(top = 10.dp),
-                            // The number must not shift as it changes.
-                            style = Theme.Font.TokenXl.copy(
-                                color = Theme.Colors.Ink,
-                                fontFeatureSettings = "tnum",
-                            ),
-                        )
-                        BasicText(
-                            text = "${entry.patientName} · ${entry.doctorName}",
-                            modifier = Modifier.padding(top = 6.dp),
-                            style = Theme.Font.BodyLg.copy(color = Theme.Colors.InkSecondary),
-                        )
-
-                        Row(
-                            Modifier.fillMaxWidth().padding(top = Theme.Space.x4),
-                            horizontalArrangement = Arrangement.spacedBy(Theme.Space.x2),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            EntryStatusPill(entry.status)
-                            /*
-                              The most important place in the app for this. Every number
-                              below - both "ahead" counts and the ETA window - is only true
-                              while updates are arriving. A dropped socket freezes them
-                              rather than clearing them, so a patient reading "2 checked in
-                              ahead" on a phone that lost signal will sit down and wait for
-                              a turn that has already passed. Nothing renders while
-                              connected.
-                            */
-                            LiveState(connected)
-                        }
-
-                        // The same strip the department screen draws, from the same
-                        // numbers. A patient who joined from that card should recognise
-                        // their place in the queue here without having to re-read it.
-                        QueueStrip(
-                            ahead = entry.checkedInAheadCount,
-                            started = entry.nowServingToken != null,
-                            modifier = Modifier.padding(top = Theme.Space.x6),
-                        )
-
-                        Hairline(Modifier.padding(top = Theme.Space.x5))
-
-                        Column(
-                            Modifier.padding(top = Theme.Space.x3),
-                            verticalArrangement = Arrangement.spacedBy(Theme.Space.x3),
-                        ) {
-                            KeyValue(
-                                label = "Expected",
-                                // Saying nothing is better than a guess: the ETA is the
-                                // server's.
-                                value = run {
-                                    val from = entry.etaFrom
-                                    val to = entry.etaTo
-                                    if (from != null && to != null) "~${istRange(from, to)}"
-                                    else "Not available yet"
-                                },
-                                emphasis = true,
-                            )
-                            Hairline()
-                            KeyValue("Now serving", entry.nowServingToken ?: "Not started")
-                            Hairline()
-                            KeyValue(
-                                label = "Ahead of you",
-                                // docs/PRD.md: the two counts stay separate and stay
-                                // labelled. Collapsing them into one number is the lie
-                                // that makes an ETA feel arbitrary.
-                                value = "${entry.checkedInAheadCount} here · " +
-                                    "${entry.bookedAheadCount} booked",
-                            )
-                        }
-
-                        BasicText(
-                            text = nextStepFor(entry),
-                            modifier = Modifier.padding(top = Theme.Space.x5),
-                            style = Theme.Font.Caption.copy(color = Theme.Colors.InkSecondary),
-                        )
+                    val reserved=entry.status==app.kramya.net.QueueEntryStatus.RESERVED
+                    val terminal=entry.status in setOf(app.kramya.net.QueueEntryStatus.COMPLETED,
+                        app.kramya.net.QueueEntryStatus.CANCELLED,app.kramya.net.QueueEntryStatus.NO_SHOW,
+                        app.kramya.net.QueueEntryStatus.RESCHEDULED)
+                    val delayed=clinic.data?.doctorPresence in setOf(app.kramya.net.DoctorPresence.ON_BREAK,app.kramya.net.DoctorPresence.LEFT)
+                    EntryStatusPill(entry.status)
+                    BasicText(freshness.message,Modifier.padding(top=10.dp),
+                        style=Theme.Font.Caption.copy(color=Theme.Colors.InkSecondary))
+                    Column(Modifier.fillMaxWidth().padding(top=18.dp).clip(app.kramya.ui.TicketShape)
+                        .background(Theme.Colors.Ink).padding(22.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        BasicText(if(reserved) "PAYMENT STATUS" else if(terminal) "VISIT RECORD" else "YOUR TOKEN",
+                            style=Theme.Font.Overline.copy(color=Color(0xFFD5CDC1)))
+                        BasicText(if(reserved) "Pending" else entry.tokenLabel,
+                            style=(if(reserved) Theme.Font.H1 else Theme.Font.TokenXl).copy(color=Color.White,fontFeatureSettings="tnum"))
+                        BasicText(entry.patientName,style=Theme.Font.Label.copy(color=Color.White))
+                        BasicText(entry.doctorName+" · "+entry.departmentName,
+                            style=Theme.Font.Caption.copy(color=Color(0xFFD5CDC1)))
+                        Hairline(Modifier.padding(vertical=10.dp))
+                        BasicText(if(terminal) "STATUS" else "ESTIMATED TURN",style=Theme.Font.Overline.copy(color=Color(0xFFD5CDC1)))
+                        BasicText(when {
+                            reserved -> "Not confirmed"
+                            terminal -> app.kramya.ui.entryLabel(entry.status).first
+                            entry.status==app.kramya.net.QueueEntryStatus.CALLED -> "It’s your turn"
+                            !freshness.current -> "Refresh for estimate"
+                            delayed -> "Doctor delayed"
+                            entry.etaFrom!=null&&entry.etaTo!=null -> istRange(entry.etaFrom,entry.etaTo)
+                            else -> "Not available yet"
+                        },style=Theme.Font.H1.copy(color=Color(0xFFF0B75F),fontFeatureSettings="tnum"))
+                        BasicText(if(reserved) "A token is allocated after payment is verified." else nextStepFor(entry),
+                            style=Theme.Font.Caption.copy(color=Color(0xFFE2DACC)))
                     }
+                    if(!reserved&&!terminal) {
+                        Box(Modifier.padding(top=18.dp)) {
+                            app.kramya.ui.QueueNumbers(entry.checkedInAheadCount,entry.bookedAheadCount,entry.nowServingToken)
+                        }
+                        BasicText("Booked patients may not have arrived yet. Your turn can move.",Modifier.padding(top=10.dp),
+                            style=Theme.Font.Caption.copy(color=Theme.Colors.InkTertiary))
+                    }
+                    if(!freshness.current) Button("Refresh queue",active.refetch,pending=active.isFetching,variant=ButtonVariant.Ghost)
 
+                    if (!terminal) {
                     // 2. The QR, sized to be scanned across a reception desk.
                     Column(Modifier.padding(top = 30.dp, bottom = 10.dp)) {
                         SectionLabel("Checking in")
@@ -285,7 +234,9 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                                     )
                                 }
                                 BasicText(
-                                    "Show this at reception to check in",
+                                    if (entry.paymentStatus == null)
+                                        "Show this at reception. Pay the clinic directly and ask staff to check you in."
+                                    else "Show this at reception to check in. Contact the clinic about your existing payment if needed.",
                                     style = Theme.Font.Caption.copy(
                                         color = Theme.Colors.InkTertiary,
                                         textAlign = TextAlign.Center,
@@ -295,13 +246,19 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                         } else {
                             BasicText(
                                 text = if (hold != null) {
-                                    "Your place is held for $hold. Your QR code appears once payment is confirmed."
+                                    "Payment pending: $hold remaining on this hold. If your bank shows a debit, refresh this booking before paying again."
                                 } else {
-                                    "Your QR code appears once payment is confirmed."
+                                    "This booking is not confirmed. Contact support if your bank shows a debit."
                                 },
                                 style = Theme.Font.Caption.copy(color = Theme.Colors.Warning.Fg),
                             )
                         }
+                    }
+
+                    }
+
+                    if (entry.status == app.kramya.net.QueueEntryStatus.RESERVED && hold != null) {
+                        Button(title = "Resume payment", onClick = { onResumePayment(entry.sessionId) })
                     }
 
                     // 3. Everything that does not change, last, and quietly.
@@ -313,7 +270,17 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                         KeyValue("Hospital", entry.hospitalName)
                         KeyValue("Date", calendarDate(entry.scheduledStart))
                         KeyValue("Session starts", istClock(entry.scheduledStart))
-                        KeyValue("Fee", rupees(entry.feePaise))
+                        KeyValue(if (entry.paymentStatus == null) "Fee payable at clinic" else "Fee", rupees(entry.feePaise))
+                        clinic.data?.hospitalAddress?.takeIf { it.isNotBlank() }?.let {
+                            BasicText(it, style = Theme.Font.Body.copy(color = Theme.Colors.InkSecondary))
+                        }
+                        ReceptionContacts(clinic.data?.receptionPhone, clinic.data?.receptionEmail)
+                        clinic.data?.arrivalGuidance?.let { guidance ->
+                            BasicText("Plan to reach reception ${guidance.arriveBeforeMins} minutes before the estimated window. Contact reception if you are late; a missed turn may be requeued or marked absent under clinic rules.", style = Theme.Font.Caption.copy(color = Theme.Colors.InkSecondary))
+                            guidance.instructions.takeIf { it.isNotBlank() }?.let {
+                                BasicText(it, style = Theme.Font.Body.copy(color = Theme.Colors.InkSecondary))
+                            }
+                        }
                     }
 
                     cancel.error?.let {
@@ -336,7 +303,9 @@ fun TokenScreen(entryId: String, onBack: () -> Unit) {
                                     AlertDialog.Builder(context)
                                         .setTitle("Cancel this booking?")
                                         .setMessage(
-                                            if (entry.refundPctIfCancelledNow > 0) {
+                                            if (entry.paymentStatus == null) {
+                                                "Cancel your reservation? Kramya has not collected an online payment. Contact the clinic about any payment made there."
+                                            } else if (entry.refundPctIfCancelledNow > 0) {
                                                 "You will be refunded ${entry.refundPctIfCancelledNow}% of " +
                                                     "${rupees(entry.feePaise)}. Refunds take a few working days."
                                             } else {

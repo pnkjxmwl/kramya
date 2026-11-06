@@ -24,6 +24,8 @@ import {
 } from "./razorpay.fake";
 import { ReservationSweeper } from "../src/modules/queue/reservation-sweeper";
 import { dateColumnFromString, istToday } from "../src/common/ist";
+import { AccountMailer } from '../src/modules/auth/account-mailer';
+import { lockBookingAccount } from '../src/modules/queue/booking-account-lock';
 
 // A dedicated local DB/process: never silently run owner-only tests as RLS proof.
 describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
@@ -40,8 +42,10 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
       bob: Awaited<ReturnType<typeof signup>>;
     let alicePatient: string, bobPatient: string;
     const gateway = new FakeRazorpay();
+    const accountMail: { token: string; purpose: string }[] = [];
     const http = () => request(app.getHttpServer());
     beforeAll(async () => {
+      process.env.BOOKING_PAYMENT_MODE = 'AT_CLINIC'; resetEnvCache();
       const url = new URL(process.env.DATABASE_URL!);
       if (
         !["localhost", "127.0.0.1"].includes(url.hostname) ||
@@ -73,6 +77,7 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
       ({ app } = await createTestApp([
         { provide: PrismaService, useValue: runtime },
         { provide: RazorpayClient, useValue: gateway },
+        { provide: AccountMailer, useValue: { configured: true, send: async (_email: string, purpose: string, token: string) => { accountMail.push({ purpose, token }); } } },
       ]));
       const role = await runtime.$queryRaw<
         { current_user: string; rolsuper: boolean; rolbypassrls: boolean }[]
@@ -90,9 +95,11 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
       await owner.$disconnect();
     });
     beforeEach(async () => {
+      process.env.BOOKING_PAYMENT_MODE = 'AT_CLINIC'; resetEnvCache();
       await resetDb(owner as unknown as PrismaService);
       gateway.orders = [];
       gateway.refunds = [];
+      accountMail.length = 0;
       admin = await signup(app, "rls-admin@kramya.test");
       alice = await signup(app, "rls-alice@kramya.test");
       bob = await signup(app, "rls-bob@kramya.test");
@@ -161,6 +168,69 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
         },
       });
     });
+    it('keeps reviewed booking pauses tenant-scoped, read-only for patients and removable during verified deletion', async () => {
+      const booked = await http().post(`/sessions/${session}/reserve`).set(auth(alice.accessToken)).send({ patientId: alicePatient }).expect(201);
+      const reviewPath = `/sessions/${session}/booking-access/${booked.body.entry.id}`;
+      let unlock!: () => void, ready!: () => void;
+      const held = new Promise<void>(resolve => { ready = resolve; });
+      const released = new Promise<void>(resolve => { unlock = resolve; });
+      const blocker = owner.$transaction(async tx => { await lockBookingAccount(tx, alice.accountId); ready(); await released; }, { timeout: 15_000 });
+      await held;
+      const review = http().post(reviewPath).set(auth(admin.accessToken)).send({ pausedUntil: new Date(Date.now() + 3_600_000).toISOString(), reason: 'Reception reviewed repeated misuse; contact us for an appeal.' }).then(result => result);
+      let observedWaiter = false;
+      try {
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const [row] = await owner.$queryRaw<{ count: bigint }[]>`SELECT count(*) AS count FROM pg_locks WHERE locktype='advisory' AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database())`;
+          if (Number(row?.count) > 0) { observedWaiter = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      } finally { unlock(); await blocker; }
+      expect(observedWaiter).toBe(true); // A private Account row is invisible to staff; its row lock alone cannot do this.
+      expect((await review).status).toBe(201);
+      await http().get(reviewPath).set(auth(bob.accessToken)).expect(403);
+      expect(await runtime.bookingAccess.count()).toBe(0);
+      await withDatabaseIdentity({ accountId: alice.accountId, purpose: 'account' }, async () => {
+        expect(await runtime.bookingAccess.count()).toBe(1);
+        await expect(runtime.bookingAccess.updateMany({ data: { pausedUntil: null } })).resolves.toEqual({ count: 0 });
+      });
+      await withDatabaseIdentity({ accountId: bob.accountId, purpose: 'account' }, async () => {
+        expect(await runtime.bookingAccess.count()).toBe(0);
+      });
+      const current = await owner.oPDSession.findUniqueOrThrow({ where: { id: session } });
+      const next = await owner.oPDSession.create({ data: { hospitalId: clinic, departmentId: current.departmentId,
+        originalDoctorId: current.originalDoctorId, currentProviderDoctorId: current.currentProviderDoctorId, date: current.date,
+        scheduledStart: new Date(current.scheduledEnd.getTime() + 3_600_000), scheduledEnd: new Date(current.scheduledEnd.getTime() + 10_800_000), feePaise: 50000 } });
+      await http().post(`/sessions/${next.id}/reserve`).set(auth(alice.accessToken)).send({ patientId: alicePatient }).expect(409);
+      expect((await http().post(`/sessions/${session}/reserve`).set(auth(alice.accessToken)).send({ patientId: alicePatient }).expect(201)).body.entry.id).toBe(booked.body.entry.id);
+      await owner.account.update({ where: { id: alice.accountId }, data: { remoteBookingApprovedAt: new Date() } });
+      await http().post('/me/account-deletion').set(auth(alice.accessToken)).send({ password: 'correct-horse-battery', confirmation: 'DELETE' }).expect(200);
+      expect(await owner.bookingAccess.count()).toBe(0);
+      expect((await owner.account.findUniqueOrThrow({ where: { id: alice.accountId } })).remoteBookingApprovedAt).toBeNull();
+      await http().post(reviewPath).set(auth(admin.accessToken)).send({ pausedUntil: null, reason: 'A late staff request must not recreate erased account data.' }).expect(404);
+      expect(await owner.bookingAccess.count()).toBe(0);
+      expect((await owner.account.findUniqueOrThrow({ where: { id: bob.accountId } })).deletedAt).toBeNull();
+    });
+
+    it('allows reading the deployment boundary but never lets the runtime relabel the database', async () => {
+      expect((await runtime.deploymentIdentity.findUniqueOrThrow({ where: { id: 'singleton' } })).environment).toBe('STAGING');
+      await expect(runtime.deploymentIdentity.update({ where: { id: 'singleton' }, data: { environment: 'PRODUCTION' } })).rejects.toThrow();
+      expect((await owner.deploymentIdentity.findUniqueOrThrow({ where: { id: 'singleton' } })).environment).toBe('STAGING');
+      await withDatabaseIdentity({ accountId: alice.accountId, purpose: 'account' }, async () => {
+        await expect(runtime.account.update({ where: { id: alice.accountId }, data: { remoteBookingApprovedAt: new Date() } })).rejects.toThrow();
+      });
+    });
+
+    it('lets clinic admins maintain reception details but blocks runtime listing approval', async () => {
+      await http().put(`/hospitals/${clinic}/profile`).set(auth(admin.accessToken)).send({ name: 'TEST Alpha Edited', city: 'Mumbai', area: null,
+        address: 'TEST Reception desk, Mumbai', receptionPhone: '+91 90000 00000', receptionEmail: 'desk@example.test' }).expect(200);
+      expect((await http().get(`/hospitals/${clinic}`).set(auth(alice.accessToken)).expect(200)).body.receptionPhone).toBe('+91 90000 00000');
+      await owner.hospital.update({ where: { id: clinic }, data: { status: 'PENDING' } });
+      await withDatabaseIdentity({ accountId: admin.accountId, hospitalId: clinic, role: 'ADMIN', purpose: 'account' }, async () => {
+        await expect(runtime.hospital.update({ where: { id: clinic }, data: { status: 'VERIFIED' } })).rejects.toThrow();
+      });
+      expect((await owner.hospital.findUniqueOrThrow({ where: { id: clinic } })).status).toBe('PENDING');
+    });
+
     it("fails closed without identity, blocks owner/clinic changes, and keeps pooled identities apart", async () => {
       const overlaps = await owner.$queryRawUnsafe(`
         SELECT tablename, action FROM pg_policies
@@ -255,7 +325,85 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
         .set(auth(admin.accessToken))
         .expect(403);
     });
+    it('verifies, resets and deletes only the proven account through the restricted role', async () => {
+      await http().post('/me/email-verification').set(auth(alice.accessToken)).send({}).expect(200);
+      await http().post('/auth/account-actions/confirm').send({ purpose: 'VERIFY_EMAIL', token: accountMail[0]!.token }).expect(200);
+      await http().post('/auth/account-actions/request').send({ purpose: 'RESET_PASSWORD', email: 'rls-alice@kramya.test' }).expect(200);
+      await http().post('/auth/account-actions/confirm').send({ purpose: 'RESET_PASSWORD', token: accountMail[1]!.token, newPassword: 'changed-password-long' }).expect(200);
+      await http().get('/me').set(auth(alice.accessToken)).expect(401);
+      const login = await http().post('/auth/login').send({ email: 'rls-alice@kramya.test', password: 'changed-password-long' }).expect(200);
+      const deleted = await http().post('/me/account-deletion').set(auth(login.body.accessToken))
+        .send({ password: 'changed-password-long', confirmation: 'DELETE' }).expect(200);
+      expect(deleted.body.deleted).toBe(true);
+      expect((await owner.patient.findUniqueOrThrow({ where: { id: alicePatient } })).name).toBe('Deleted patient');
+      expect((await owner.patient.findUniqueOrThrow({ where: { id: bobPatient } })).name).toBe('TEST Bob');
+      expect(await runtime.accountActionToken.findMany()).toEqual([]);
+      await http().get('/me').set(auth(login.body.accessToken)).expect(401);
+    });
+
+    it("serializes the reservation account ceiling across clinics under RLS", async () => {
+      const previous = process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT;
+      try {
+        process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT = "1";
+        resetEnvCache();
+        const family = await owner.patient.create({
+          data: { accountId: alice.accountId, name: "TEST Family", relation: "CHILD" },
+        });
+        const responses = await Promise.all([
+          http().post(`/sessions/${session}/reserve`).set(auth(alice.accessToken)).send({ patientId: alicePatient }),
+          http().post(`/sessions/${otherSession}/reserve`).set(auth(alice.accessToken)).send({ patientId: family.id }),
+        ]);
+        expect(responses.map(r => r.status).sort()).toEqual([201, 409]);
+        expect(await owner.queueEntry.count({ where: { accountId: alice.accountId } })).toBe(1);
+        expect(gateway.orders).toHaveLength(0);
+      } finally {
+        if (previous === undefined) delete process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT;
+        else process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT = previous;
+        resetEnvCache();
+      }
+    });
+
+    it("runs reservation, tenant-safe check-in and consultation without a gateway payment", async () => {
+      const reserve = () => http().post(`/sessions/${session}/reserve`)
+        .set(auth(alice.accessToken)).send({ patientId: alicePatient });
+      const results = await Promise.all([reserve(), reserve()]);
+      expect(results.map(r => r.status)).toEqual([201, 201]);
+      const entry = results[0]!.body.entry;
+      expect(results[1]!.body.entry.id).toBe(entry.id);
+      expect(entry.status).toBe("CONFIRMED");
+      expect(entry.paymentStatus).toBeNull();
+      expect(entry.checkInCode).toMatch(/^v1\./);
+      expect(await owner.payment.count()).toBe(0);
+      expect(gateway.orders).toHaveLength(0);
+
+      await http().post(`/sessions/${session}/reserve`).set(auth(bob.accessToken))
+        .send({ patientId: alicePatient }).expect(404);
+      await http().post(`/sessions/${otherSession}/reserve`).set(auth(alice.accessToken))
+        .send({ patientId: alicePatient }).expect(409);
+      await http().post(`/sessions/${session}/check-in`).set(auth(alice.accessToken))
+        .send({ checkInCode: entry.checkInCode }).expect(403);
+      await http().post(`/sessions/${otherSession}/check-in`).set(auth(admin.accessToken))
+        .send({ checkInCode: entry.checkInCode }).expect(403);
+      await http().post(`/sessions/${session}/check-in`).set(auth(admin.accessToken))
+        .send({ checkInCode: `${entry.checkInCode}tampered` }).expect(404);
+      const staff = (command: string, body = {}) => http().post(`/sessions/${session}/${command}`)
+        .set(auth(admin.accessToken)).send(body);
+      await staff("check-in", { checkInCode: entry.checkInCode }).expect(201);
+      const arrived = await owner.queueEntry.findUniqueOrThrow({ where: { id: entry.id } });
+      expect(arrived.status).toBe("CHECKED_IN");
+      await staff("check-in", { tokenNumber: entry.tokenNumber }).expect(201);
+      expect((await owner.queueEntry.findUniqueOrThrow({ where: { id: entry.id } })).checkedInAt)
+        .toEqual(arrived.checkedInAt);
+      await staff("call-next").expect(201);
+      await staff("start-consultation", { entryId: entry.id }).expect(201);
+      await staff("complete-consultation", { entryId: entry.id }).expect(201);
+      expect((await owner.queueEntry.findUniqueOrThrow({ where: { id: entry.id } })).status).toBe("COMPLETED");
+      expect(await owner.consultation.count({ where: { queueEntryId: entry.id } })).toBe(1);
+      expect(await owner.payment.count()).toBe(0);
+    });
+
     it("supports patient booking, signed capture and cancellation/refund on the restricted connection", async () => {
+      process.env.BOOKING_PAYMENT_MODE = 'ONLINE'; resetEnvCache();
       const joined = await http()
         .post(`/sessions/${session}/join`)
         .set(auth(alice.accessToken))
@@ -599,6 +747,7 @@ describe.skipIf(process.env.RLS_RUNTIME_TEST !== "1")(
       );
     });
     it("preserves a patient history when a clinic/provider is no longer discoverable", async () => {
+      process.env.BOOKING_PAYMENT_MODE = 'ONLINE'; resetEnvCache();
       const s = await owner.oPDSession.findUniqueOrThrow({
         where: { id: otherSession },
       });

@@ -1,5 +1,8 @@
 # Production safeguard rollout
 
+> **5 November payment decision:** Online Razorpay payment before token confirmation has been restored in local source. The former pay-at-clinic default below is superseded by [payment-restoration-plan.md](payment-restoration-plan.md). Existing confirmed clinic reservations are preserved. Independent privacy/ETA/environment/clinic acceptance gates still apply.
+
+
 Updated 17 October 2026 (Asia/Kolkata). The hosted service remains fictional staging. Phone acceptance, visual review and the complete patient/staff journey are deliberately deferred to [TESTING.md](../TESTING.md). Development security/build checks continue now.
 
 ## Database credentials and deployment boundary
@@ -68,3 +71,13 @@ On the same date, hosted readiness passed and the admin-only provider preflight 
 - Agree recovery point/time objectives, backup frequency, retention, operator ownership and failure escalation. No scheduled backup or paid upgrade is activated by this change.
 - Maintain access review and define privacy/retention operations. Database context/RLS, owner-password rotation, the restricted live connection and hosted post-RLS recovery are verified. The advisor's overlapping-policy warnings were removed; reviewed informational notices are described in the security runbook. [Clinic operations](clinic-operations.md) documents proposed recovery targets, opening checks and manual fallback; clinic-hour availability still needs a hosting decision and proof.
 - Verify release signing, Firebase delivery, test-mode checkout/webhooks and the final acceptance file before a supervised clinic pilot.
+
+## Reservation-first cutover (2026-11-01, not deployed)
+
+Follow docs/reservation-release-plan.md and TESTING.md before releasing. BOOKING_PAYMENT_MODE defaults to AT_CLINIC; ONLINE is an explicit historical/testing opt-in. MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT defaults to 6 (valid range 1–20). The new Android app requires POST /sessions/:id/reserve; deploy/verify the additive backend before distributing it. Old Android clients receive an update-required conflict on /join in AT_CLINIC mode. Keep historical gateway secrets, webhook and refund recovery until existing obligations are resolved. Never mark clinic-collected payments SUCCESS in the gateway ledger. No current local check implies hosted cutover, clinic acceptance or Play approval.
+
+## 1 November local checkpoint — hosted cutover pending
+
+Migrations 202611010001 through 005 implement account controls, deployment identity, booking-access review, owner-only pilot approval, clinic contacts/listing protection and deletion/review coordination. Applied only to isolated local databases. Use exact-SHA CI/protected owner migrations before the compatible reservation-only API, console and native build; do not distribute the new native build against the old API.
+
+The controlled pilot can use APPROVED_ONLY without paid SMS or another sender. Approval does not mean verified email/phone. Production requires a separate empty dataset/marker, hosts/secrets, recovery/retention operations, clinic-hour availability and signed-client acceptance. Never relabel staging. Follow reservation-release-plan.md and reservation-operations.md. Local build/UI evidence is not production, legal or Play acceptance. Scheduled backup/retention automation and alerts remain deferred; make that recovery gap visible before real clinics.

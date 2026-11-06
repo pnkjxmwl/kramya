@@ -8,6 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +52,7 @@ import app.kramya.nav.NavBar
 import app.kramya.net.JoinRequest
 import app.kramya.net.JoinResponse
 import app.kramya.net.MY_ACTIVE_ENTRIES
+import app.kramya.net.LocalQueryClient
 import app.kramya.net.MyQueueEntry
 import app.kramya.net.Paginated
 import app.kramya.net.Patient
@@ -64,6 +67,7 @@ import app.kramya.ui.ErrorNote
 import app.kramya.ui.Hairline
 import app.kramya.ui.SectionLabel
 import app.kramya.ui.QueryState
+import app.kramya.ui.ReceptionContacts
 import app.kramya.ui.minTouchTarget
 import app.kramya.ui.pressable
 import app.kramya.ui.useMyActiveEntries
@@ -122,8 +126,10 @@ fun JoinScreen(
     // Same cache entry as the polling query below - one request, two readers.
     val myEntries = useMyActiveEntries()
 
-    var patientId by remember { mutableStateOf<String?>(null) }
-    var phase by remember { mutableStateOf<Phase>(Phase.Choosing) }
+    var patientId by rememberSaveable(sessionId) { mutableStateOf<String?>(null) }
+    var pendingEntry by rememberSaveable(sessionId) { mutableStateOf<String?>(null) }
+    var phase by remember(sessionId) { mutableStateOf<Phase>(pendingEntry?.let { Phase.Confirming(it) } ?: Phase.Choosing) }
+    val queryClient = LocalQueryClient.current
     var notice by remember { mutableStateOf<String?>(null) }
 
     /**
@@ -167,7 +173,7 @@ fun JoinScreen(
       dead-end the screen on a patient the server is going to refuse.
     */
     LaunchedEffect(selectable.firstOrNull()?.id, patientId) {
-        if (patientId == null && selectable.isNotEmpty()) patientId = selectable.first().id
+        if (selectable.none { it.id == patientId }) patientId = selectable.firstOrNull()?.id
     }
 
     // ---------------------------------------------------------------------------
@@ -187,12 +193,21 @@ fun JoinScreen(
         refetchMs = if (watching) CONFIRM_POLL_MS else null,
     )
 
-    LaunchedEffect(watching, entryId, active.data, phase) {
+    // Ended/expired/cancelled holds move to history; do not keep waiting on the active list.
+    val past = useApi<Paginated<MyQueueEntry>>(
+        "/me/queue-entries?scope=past&limit=50",
+        enabled = watching && active.data != null && active.data?.items?.none { it.id == entryId } == true,
+        refetchMs = if (watching) CONFIRM_POLL_MS else null,
+    )
+
+    LaunchedEffect(watching, entryId, active.data, past.data, phase) {
         if (!watching || entryId == null) return@LaunchedEffect
-        val entry = active.data?.items?.firstOrNull { it.id == entryId } ?: return@LaunchedEffect
+        val entry = active.data?.items?.firstOrNull { it.id == entryId }
+            ?: past.data?.items?.firstOrNull { it.id == entryId } ?: return@LaunchedEffect
         // RESERVED means the hold exists but nothing is paid for yet. Anything else and the
         // server has decided - the only opinion that counts.
         if (entry.status != QueueEntryStatus.RESERVED) {
+            pendingEntry = null
             onOpenToken(entry.id)
         } else if (phase is Phase.Confirming && entry.paymentStatus == PaymentStatus.FAILED) {
             notice = "Your payment has not been confirmed. Your place is still held. " +
@@ -228,7 +243,7 @@ fun JoinScreen(
     val detail = session.data
 
     Column(Modifier.fillMaxSize().background(Theme.Colors.Canvas)) {
-        NavBar("Confirm booking", onBack = onBack)
+        NavBar("Review your booking", onBack = onBack)
 
         Column(
             Modifier
@@ -248,8 +263,14 @@ fun JoinScreen(
                 onRetry = session.refetch,
             )
 
+            if (app.kramya.BuildConfig.DEPLOYMENT_ENVIRONMENT == "STAGING") {
+                Card(title = "Test environment") {
+                    BasicTextLine("Fictional test clinics. Use Razorpay TEST payment details only.", Theme.Font.Caption, Theme.Colors.InkTertiary)
+                }
+            }
             if (detail != null) {
-                Card(title = "Appointment") {
+                app.kramya.ui.BookingSteps()
+                Card(title = "Your visit") {
                     BasicTextLine(detail.doctorName, Theme.Font.H3, Theme.Colors.Ink)
                     BasicTextLine(
                         "${detail.departmentName} · ${detail.hospitalName}",
@@ -276,7 +297,7 @@ fun JoinScreen(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .shadow(Theme.Elevation.Card, RoundedCornerShape(Theme.Radius.Group))
+                        .border(1.dp, Theme.Colors.Border, RoundedCornerShape(Theme.Radius.Group))
                         .clip(RoundedCornerShape(Theme.Radius.Group))
                         .background(Theme.Colors.Surface)
                         .padding(vertical = Theme.Space.x5),
@@ -388,7 +409,21 @@ fun JoinScreen(
                     )
                 }
 
+                Card(title = "Arrival and payment") {
+                    BasicTextLine("Your token is confirmed after payment is verified. An estimated turn is not an exact appointment time.", Theme.Font.Caption, Theme.Colors.InkTertiary)
+                    detail.hospitalAddress?.takeIf { it.isNotBlank() }?.let { BasicTextLine(it, Theme.Font.Body, Theme.Colors.Ink) }
+                    ReceptionContacts(detail.receptionPhone, detail.receptionEmail)
+                    detail.arrivalGuidance?.let { guidance ->
+                        BasicTextLine("Plan to reach reception ${guidance.arriveBeforeMins} minutes before your estimated window. Follow clinic instructions if you are late.", Theme.Font.Caption, Theme.Colors.InkTertiary)
+                        if (guidance.instructions.isNotBlank()) BasicTextLine(guidance.instructions, Theme.Font.Body, Theme.Colors.Ink)
+                    }
+                }
+                if (detail.feePaise < 100) ErrorNote("Online checkout is unavailable for this fee. Contact the clinic to arrange your visit.")
                 notice?.let { ErrorNote(it) }
+                if (watching) active.error?.let { ErrorNote("Cannot refresh payment status. Check My Visits when you reconnect; do not assume payment failed.") }
+                if (phase is Phase.Confirming && entryId != null) {
+                    Button(title = "View booking status", onClick = { onOpenToken(entryId) })
+                }
                 join.error?.let { ErrorNote(it.message ?: "Could not start this booking") }
 
                 Button(
@@ -402,12 +437,14 @@ fun JoinScreen(
                     pending = join.isPending || phase is Phase.Confirming,
                     // Cannot pay without a patient. Saying so beats a live-looking button
                     // whose only behaviour is to ignore you.
-                    enabled = patientId != null && selectable.isNotEmpty(),
+                    enabled = patientId != null && selectable.isNotEmpty() && !join.isPending && phase is Phase.Choosing && session.error == null && detail.feePaise >= 100,
                     onClick = {
                         val chosen = patientId ?: return@Button
                         notice = null
                         leftOurPage.value = false
                         join.mutate(JoinRequest(chosen)) { order ->
+                            pendingEntry = order.entry.id
+                            queryClient.invalidate { it == MY_ACTIVE_ENTRIES || it == "/sessions/$sessionId" }
                             if (order.entry.status != QueueEntryStatus.RESERVED) {
                                 // Already paid for - the server refuses a second booking,
                                 // so this is the resume path after a crash rather than a
@@ -579,7 +616,7 @@ private fun CheckoutSheet(
                             // sheet dies on a URL it does not understand.
                             if (!url.matches(Regex("^https?:.*", RegexOption.IGNORE_CASE))) {
                                 leftOurPage.value = true
-                                openExternally(context, url)
+                                if (!openExternally(context, url)) onClose("No compatible payment app could be opened. Choose another payment method. If your bank shows a debit, check My Visits first.")
                                 return true
                             }
 
@@ -603,6 +640,11 @@ private fun CheckoutSheet(
                     // is what a bare HTML load gives it.
                     loadDataWithBaseURL(CHECKOUT_ORIGIN, html, "text/html", "utf-8", null)
                 }
+            },
+            onRelease = { view ->
+                view.stopLoading()
+                view.removeJavascriptInterface("ReactNativeWebView")
+                view.destroy()
             },
         )
     }
@@ -642,17 +684,23 @@ private fun handleCheckoutMessage(
     }
 }
 
-private fun openExternally(context: android.content.Context, url: String) {
-    runCatching {
-        val intent = if (url.startsWith("intent:")) {
-            Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
-        } else {
-            Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        }
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+private fun openExternally(context: android.content.Context, url: String): Boolean = runCatching {
+    val intent = if (url.startsWith("intent:", ignoreCase = true)) {
+        Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+    } else {
+        Intent(Intent.ACTION_VIEW, Uri.parse(url))
     }
-}
+    require(isPaymentAppSchemeAllowed(intent.data?.scheme))
+    intent.component = null
+    intent.selector = null
+    intent.action = Intent.ACTION_VIEW
+    intent.addCategory(Intent.CATEGORY_BROWSABLE)
+    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    context.startActivity(intent)
+}.isSuccess
+
+internal fun isPaymentAppSchemeAllowed(scheme: String?): Boolean =
+    !scheme.isNullOrBlank() && scheme.lowercase() !in setOf("file", "content", "javascript", "data", "about", "intent")
 
 /**
  * The checkout page.
@@ -668,7 +716,7 @@ internal fun checkoutHtml(order: JoinResponse, hospitalName: String): String {
         put("currency", order.currency)
         put("name", hospitalName)
         put("description", "${order.entry.departmentName} · Token ${order.entry.tokenLabel}")
-        put("theme", JSONObject().put("color", "#0B0B0C"))
+        put("theme", JSONObject().put("color", "#2E6B4F"))
         /*
           REDIRECT MODE, and it is the whole reason netbanking works.
 
@@ -689,13 +737,14 @@ internal fun checkoutHtml(order: JoinResponse, hospitalName: String): String {
         put("callback_url", order.callbackUrl)
     }
 
+    val safeOptions = options.toString().replace("<", "\\u003c")
     return """<!doctype html>
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       html, body { width: 100%; height: 100%; margin: 0; }
-      body { background: #F7F7F8; }
+      body { background: #FAF7F2; }
       /* Android WebView can resolve Checkout's inline max-height:100dvh to zero.
          Its fixed, 100%-height container is already bounded by the native WebView. */
       .razorpay-container { max-height: none !important; }
@@ -709,7 +758,7 @@ internal fun checkoutHtml(order: JoinResponse, hospitalName: String): String {
           window.ReactNativeWebView.postMessage(JSON.stringify(message));
         }
       }
-      var options = $options;
+      var options = $safeOptions;
       // Only fires in non-redirect mode. Harmless, and a free fast path if Razorpay ever
       // decides a given method does not need the redirect.
       options.handler = function () { post({ type: 'success' }); };

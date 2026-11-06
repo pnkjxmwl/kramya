@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth, createTestApp, request, resetDb, signup } from './helpers';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeRazorpay, WEBHOOK_SECRET } from './razorpay.fake';
@@ -10,6 +10,7 @@ import { QueuePolicyService } from '../src/modules/config/queue-policy.service';
 import { dateColumnFromString, istToday } from '../src/common/ist';
 import { QueueService } from '../src/modules/queue/queue.service';
 import { endSession } from '../src/modules/queue/commands/end-session';
+import { resetEnvCache } from '../src/config/env';
 
 /**
  * P5-BE-01..04 done-when, against a real Postgres.
@@ -80,6 +81,7 @@ describe('join -> pay -> token (Phase 5)', () => {
     await resetDb(prisma);
     razorpay.orders = [];
     razorpay.refunds = [];
+    process.env.BOOKING_PAYMENT_MODE = 'ONLINE'; resetEnvCache();
 
     hospitalId = (await prisma.hospital.create({ data: { name: 'Pay Test', city: 'Pune', status: 'VERIFIED' } })).id;
     departmentId = (await prisma.department.create({ data: { hospitalId, name: 'ENT' } })).id;
@@ -115,6 +117,191 @@ describe('join -> pay -> token (Phase 5)', () => {
   });
 
   // -------------------------------------------------------------------------
+
+  const reserve = (token = accessToken, person = patientId) => {
+    process.env.BOOKING_PAYMENT_MODE = 'AT_CLINIC'; resetEnvCache();
+    return request(app.getHttpServer()).post(`/sessions/${sessionId}/reserve`).set(auth(token)).send({ patientId: person });
+  };
+
+  it('confirms a pay-at-clinic reservation with a signed check-in code and no financial record', async () => {
+    const res = await reserve().expect(201);
+    expect(res.body.paymentCollection).toBe('AT_CLINIC');
+    expect(res.body.entry.status).toBe('CONFIRMED');
+    expect(res.body.entry.paymentStatus).toBeNull();
+    expect(res.body.entry.checkInCode).toMatch(/^v1\./);
+    expect(res.body.entry.reservationExpiresAt).toBeNull();
+    expect(res.body.entry.refundPctIfCancelledNow).toBe(0);
+    expect(razorpay.orders).toHaveLength(0);
+    expect(await prisma.payment.count()).toBe(0);
+    const events = await prisma.queueEvent.findMany({ where: { entryId: res.body.entry.id } });
+    expect(events.map(e => e.type)).toEqual(expect.arrayContaining(['ENTRY_RESERVED', 'ENTRY_CONFIRMED']));
+    expect(await prisma.auditLog.count({ where: { action: 'queue.RESERVE_AT_CLINIC' } })).toBeGreaterThan(0);
+  });
+
+  it('serializes concurrent reservation retries to one token', async () => {
+    const responses = await Promise.all([reserve(), reserve(), reserve()]);
+    expect(responses.map(r => r.status)).toEqual([201, 201, 201]);
+    expect(new Set(responses.map(r => r.body.entry.id)).size).toBe(1);
+    expect(await prisma.queueEntry.count({ where: { sessionId, patientId } })).toBe(1);
+    expect(razorpay.orders).toHaveLength(0);
+  });
+
+  it('refuses another account booking a patient it does not own', async () => {
+    const other = await signup(app, 'reservation-other@test.dev');
+    await reserve(other.accessToken).expect(404);
+    expect(await prisma.queueEntry.count()).toBe(0);
+  });
+
+  it('shares the online capacity ceiling and refuses closed sessions', async () => {
+    await capOnlineTokensAt(1);
+    await reserve().expect(201);
+    const person = await prisma.patient.create({ data: { accountId: (await prisma.patient.findUniqueOrThrow({ where: { id: patientId } })).accountId, name: 'Family', relation: 'OTHER' } });
+    await reserve(accessToken, person.id).expect(409);
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'COMPLETED' } });
+    await reserve().expect(409);
+  });
+
+  it('blocks old-client checkout in clinic-payment mode without disabling reservation', async () => {
+    const previous = process.env.BOOKING_PAYMENT_MODE;
+    try {
+      process.env.BOOKING_PAYMENT_MODE = 'AT_CLINIC'; resetEnvCache();
+      await join().expect(409);
+      await reserve().expect(201);
+      expect(razorpay.orders).toHaveLength(0);
+    } finally {
+      if (previous === undefined) delete process.env.BOOKING_PAYMENT_MODE;
+      else process.env.BOOKING_PAYMENT_MODE = previous;
+      resetEnvCache();
+    }
+  });
+
+  it('enforces the account ceiling for simultaneous family reservations', async () => {
+    const previous = process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT;
+    try {
+      process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT = '1'; resetEnvCache();
+      const owner = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
+      const family = await prisma.patient.create({ data: { accountId: owner.accountId, name: 'Family', relation: 'OTHER' } });
+      const responses = await Promise.all([reserve(), reserve(accessToken, family.id)]);
+      expect(responses.map(r => r.status).sort()).toEqual([201, 409]);
+      expect(await prisma.queueEntry.count()).toBe(1);
+    } finally {
+      if (previous === undefined) delete process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT;
+      else process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT = previous;
+      resetEnvCache();
+    }
+  });
+
+  it('prevents the same patient reserving overlapping sessions', async () => {
+    await reserve().expect(201);
+    const original = await prisma.oPDSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const other = await prisma.oPDSession.create({ data: { ...original, id: undefined,
+      scheduledStart: new Date(original.scheduledStart.getTime() + 30 * 60_000) } });
+    await request(app.getHttpServer()).post(`/sessions/${other.id}/reserve`)
+      .set(auth(accessToken)).send({ patientId }).expect(409);
+    expect(await prisma.queueEntry.count()).toBe(1);
+  });
+
+  it('cancels a clinic-payment reservation without inventing a refund', async () => {
+    const booked = await reserve().expect(201);
+    const cancelled = await request(app.getHttpServer()).post(`/queue-entries/${booked.body.entry.id}/cancel`)
+      .set(auth(accessToken)).send({}).expect(201);
+    expect(cancelled.body.entry.status).toBe('CANCELLED');
+    expect(cancelled.body.refund).toBeNull();
+    expect(razorpay.refunds).toHaveLength(0);
+  });
+
+  it('refuses zero or below-minimum online fees without allocating a hold or payment', async () => {
+    for (const feePaise of [0, 99]) {
+      await prisma.oPDSession.update({ where: { id: sessionId }, data: { feePaise } });
+      const res = await join().expect(409);
+      expect(res.body.error.message).toContain('fee below INR 1');
+      expect(await prisma.queueEntry.count()).toBe(0);
+      expect(await prisma.payment.count()).toBe(0);
+    }
+    expect(razorpay.orders).toHaveLength(0);
+  });
+
+  it('refuses the no-payment endpoint in online mode without creating a token or order', async () => {
+    await request(app.getHttpServer()).post(`/sessions/${sessionId}/reserve`).set(auth(accessToken)).send({ patientId }).expect(409);
+    expect(await prisma.queueEntry.count()).toBe(0);
+    expect(await prisma.payment.count()).toBe(0);
+    expect(razorpay.orders).toHaveLength(0);
+  });
+
+  it('keeps an existing clinic reservation valid without charging or marking it paid during cutover', async () => {
+    const old = await reserve().expect(201);
+    process.env.BOOKING_PAYMENT_MODE = 'ONLINE'; resetEnvCache();
+    await join().expect(409);
+    const mine = await request(app.getHttpServer()).get('/me/queue-entries').set(auth(accessToken)).expect(200);
+    expect(mine.body.items[0]).toMatchObject({ id: old.body.entry.id, status: 'CONFIRMED', paymentStatus: null });
+    expect(await prisma.payment.count()).toBe(0);
+    expect(razorpay.orders).toHaveLength(0);
+  });
+
+  it('reuses the committed hold after gateway order creation fails', async () => {
+    const spy = vi.spyOn(razorpay, 'createOrder').mockRejectedValueOnce(new Error('fixture gateway unavailable'));
+    try {
+      await join().expect(500);
+      const hold = await prisma.queueEntry.findFirstOrThrow();
+      expect(hold.status).toBe('RESERVED'); expect(hold.checkInCode).toBeNull();
+      expect(await prisma.payment.count()).toBe(0);
+      const retried = await join().expect(201);
+      expect(retried.body.entry.id).toBe(hold.id);
+      expect(await prisma.queueEntry.count()).toBe(1);
+      expect(razorpay.orders).toHaveLength(1);
+    } finally { spy.mockRestore(); }
+  });
+
+  it('keeps failed attempts retryable on the same order and does not downgrade a later capture', async () => {
+    const held = await join().expect(201);
+    const failed = JSON.stringify({ event: 'payment.failed', payload: { payment: { entity: { id: 'pay_attempt_failed', order_id: held.body.razorpayOrderId, amount: FEE_PAISE, currency: 'INR', status: 'failed' } } } });
+    await postWebhook(failed).expect(201);
+    expect((await prisma.payment.findFirstOrThrow()).status).toBe('FAILED');
+    expect((await prisma.queueEntry.findFirstOrThrow()).checkInCode).toBeNull();
+    const retry = await join().expect(201);
+    expect(retry.body.razorpayOrderId).toBe(held.body.razorpayOrderId);
+    await postWebhook(capturedBody(held.body.razorpayOrderId, 'pay_retry_success')).expect(201);
+    await postWebhook(failed).expect(201);
+    expect((await prisma.payment.findFirstOrThrow()).status).toBe('SUCCESS');
+    expect((await prisma.queueEntry.findFirstOrThrow()).status).toBe('CONFIRMED');
+    expect(razorpay.orders).toHaveLength(1);
+  });
+
+  it('applies account booking ceilings to concurrent unpaid checkouts across sessions', async () => {
+    const previous = process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT;
+    process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT = '1'; resetEnvCache();
+    try {
+      const session = await prisma.oPDSession.findUniqueOrThrow({ where: { id: sessionId } });
+      const { id: _id, ...values } = session;
+      const other = await prisma.oPDSession.create({ data: { ...values, scheduledStart: new Date(session.scheduledEnd.getTime() + 60_000), scheduledEnd: new Date(session.scheduledEnd.getTime() + 3_600_000) } });
+      const family = await prisma.patient.create({ data: { accountId: (await prisma.patient.findUniqueOrThrow({ where: { id: patientId } })).accountId!, name: 'TEST Checkout Family', relation: 'CHILD' } });
+      const results = await Promise.all([join(), request(app.getHttpServer()).post(`/sessions/${other.id}/join`).set(auth(accessToken)).send({ patientId: family.id })]);
+      expect(results.map(r => r.status).sort()).toEqual([201, 409]);
+      expect(await prisma.queueEntry.count()).toBe(1); expect(razorpay.orders).toHaveLength(1);
+    } finally {
+      if (previous === undefined) delete process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT;
+      else process.env.MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT = previous;
+      resetEnvCache();
+    }
+  });
+
+  it('prevents a second overlapping checkout for the same patient', async () => {
+    await join().expect(201);
+    const session = await prisma.oPDSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const { id: _id, ...values } = session;
+    const other = await prisma.oPDSession.create({ data: { ...values, scheduledStart: new Date(session.scheduledStart.getTime() + 60_000) } });
+    await request(app.getHttpServer()).post(`/sessions/${other.id}/join`).set(auth(accessToken)).send({ patientId }).expect(409);
+    expect(razorpay.orders).toHaveLength(1);
+  });
+
+  it('resumes an existing checkout during a clinic review pause but refuses new bookings', async () => {
+    const held = await join().expect(201);
+    const person = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
+    await prisma.bookingAccess.create({ data: { hospitalId, patientId, reviewedBy: person.accountId!, reviewedAt: new Date(), reason: 'TEST clinic review pause', pausedUntil: new Date(Date.now() + 3600_000) } });
+    expect((await join().expect(201)).body.razorpayOrderId).toBe(held.body.razorpayOrderId);
+    await request(app.getHttpServer()).post(`/queue-entries/${held.body.entry.id}/cancel`).set(auth(accessToken)).send({}).expect(201);
+    await join().expect(409); expect(razorpay.orders).toHaveLength(1);
+  });
 
   it('reserves a place without taking money, and derives the amount from the session', async () => {
     const res = await join().expect(201);
@@ -695,7 +882,7 @@ describe('join -> pay -> token (Phase 5)', () => {
   it('refunds a paid no-show per noShowRefundPct, and nothing when it is 0', async () => {
     await setRules({ noShowRefundPct: 40 });
     const noShow = await paidEntry('CONFIRMED', 'pay_noshow');
-    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE' } });
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE', scheduledStart: new Date(Date.now() - 10_800_000), scheduledEnd: new Date(Date.now() - 1_000) } });
 
     await endIt();
 
@@ -708,7 +895,7 @@ describe('join -> pay -> token (Phase 5)', () => {
 
   it('keeps the whole fee for a no-show when the hospital says 0%', async () => {
     const noShow = await paidEntry('CONFIRMED', 'pay_noshow_zero');
-    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE' } });
+    await prisma.oPDSession.update({ where: { id: sessionId }, data: { status: 'ACTIVE', scheduledStart: new Date(Date.now() - 10_800_000), scheduledEnd: new Date(Date.now() - 1_000) } });
 
     await endIt();
 

@@ -25,6 +25,11 @@ model Account {
   email        String   @unique
   passwordHash String?
   googleId     String?  @unique
+  emailVerifiedAt DateTime?
+  remoteBookingApprovedAt DateTime?
+  deletionRequestedAt DateTime?
+  deletedAt DateTime?
+  authVersion Int @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -36,6 +41,46 @@ model Account {
   payments      Payment[]
   pushTokens    PushToken[]
   notifications Notification[]
+  actionTokens AccountActionToken[]
+  bookingReviews BookingAccess[]
+}
+
+/// A database is staging until explicitly initialized as an empty production dataset.
+model DeploymentIdentity {
+  id String @id
+  environment String
+}
+
+/// Reception-reviewed, temporary remote-booking pause for ONE profile at ONE clinic.
+/// Does not cancel reservations or prevent walk-in/clinical care. No automatic ban.
+model BookingAccess {
+  id String @id @default(uuid())
+  hospitalId String
+  patientId String
+  pausedUntil DateTime?
+  reason String
+  reviewedBy String
+  reviewedAt DateTime @default(now())
+  reviewer Account @relation(fields: [reviewedBy], references: [id], onDelete: Restrict)
+  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  @@unique([hospitalId, patientId])
+  @@index([patientId])
+  @@index([reviewedBy])
+}
+
+/// One-time mailbox proof; only a hash is stored. No plaintext links or passwords.
+model AccountActionToken {
+  id String @id @default(uuid())
+  accountId String
+  kind String
+  tokenHash String @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@index([accountId, kind, createdAt])
+  @@index([expiresAt])
 }
 
 /// The person actually receiving care - the account holder or a family member.
@@ -53,12 +98,14 @@ model Patient {
   gender    Gender?
   relation  PatientRelation @default(SELF)
   abhaId    String?
+  erasedAt DateTime?
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
   account       Account?       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   queueEntries  QueueEntry[]
   consultations Consultation[]
+  bookingAccess BookingAccess[]
 
   @@index([accountId])
 }
@@ -98,6 +145,8 @@ model Hospital {
   city      String
   area      String?
   address   String?
+  receptionPhone String?
+  receptionEmail String?
   /// A photograph of the building, for discovery. Null is an ordinary state, not an
   /// error: a clinic that never uploads one must still render correctly, so every
   /// client falls back to the initials avatar rather than showing a broken image.
@@ -113,6 +162,7 @@ model Hospital {
   schedules   DoctorSchedule[]
   sessions    OPDSession[]
   queuePolicy QueuePolicy?
+  bookingAccess BookingAccess[]
 
   queueEntries  QueueEntry[]
   queueEvents   QueueEvent[]
@@ -283,6 +333,7 @@ model QueuePolicy {
   /// PRD 4.2 - "arrive N minutes before your window", the MVP stand-in for
   /// maps-based "leave now". Read by Phase 6/7 notifications.
   arriveBeforeMins Int
+  arrivalInstructions String @default("")
 
   /// Refund rules. JSON because refund tiers are the part most likely to grow; every
   /// field in the contracts schema defaults, so an old row still parses.

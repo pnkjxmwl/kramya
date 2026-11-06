@@ -75,6 +75,7 @@ object Api {
         val builder = Request.Builder()
             .url(baseUrl + path)
             .header("Content-Type", "application/json")
+            .header("X-Kramya-Environment", app.kramya.BuildConfig.DEPLOYMENT_ENVIRONMENT)
 
         if (accessToken != null) builder.header("Authorization", "Bearer $accessToken")
 

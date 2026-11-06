@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { lockBookingAccount } from './booking-account-lock';
 import type { Prisma } from '@prisma/client';
 import type {
   ActorType,
@@ -11,7 +12,8 @@ import type {
   SessionStatus,
 } from '@opd/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotFoundError, TenantMismatchError } from '../../common/errors';
+import { ForbiddenError, NotFoundError, TenantMismatchError } from '../../common/errors';
+import { env } from '../../config/env';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { assertSessionAccepts, type QueueCommand } from './state-machine';
 import { CALL_ORDER } from './call-order';
@@ -226,6 +228,17 @@ export class QueueService {
 
     const result = await this.prisma.$transaction(
       async (tx) => {
+        // Reservation limits span sessions. Lock the account before the session so
+        // two concurrent reservations cannot both pass an account-wide ceiling.
+        // No other queue command acquires this account lock after a session lock.
+        if ((command === 'RESERVE_AT_CLINIC' || command === 'JOIN') && actor.accountId !== null) {
+          await lockBookingAccount(tx, actor.accountId);
+          await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${actor.accountId} FOR UPDATE`;
+          const account = await tx.account.findUnique({ where: { id: actor.accountId }, select: { deletedAt: true, deletionRequestedAt: true, emailVerifiedAt: true, remoteBookingApprovedAt: true } });
+          if (!account || account.deletedAt || account.deletionRequestedAt) throw new ForbiddenError('This account cannot make new reservations. Contact support about its deletion request.');
+          if (env().REMOTE_BOOKING_ACCESS === 'APPROVED_ONLY' && !account.remoteBookingApprovedAt) throw new ForbiddenError('Remote booking is currently limited to approved pilot accounts. Contact Kramya support or reception to request access; you can still arrange a visit directly with the clinic.');
+          if ((env().REQUIRE_VERIFIED_EMAIL_FOR_RESERVATIONS || env().REMOTE_BOOKING_ACCESS === 'VERIFIED_EMAIL') && !account.emailVerifiedAt) throw new ForbiddenError('Verify your email from Profile before reserving a token.');
+        }
         const session = await lockSession(tx, sessionId);
         if (session === null) {
           throw new NotFoundError('Session not found');

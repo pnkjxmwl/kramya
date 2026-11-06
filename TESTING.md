@@ -15,7 +15,8 @@ Updated 19 October 2026 (Asia/Kolkata). Hands-on acceptance testing has started.
 
 ## Current evidence
 
-- [x] Latest live release is `b34465f50ccc15f9b3a6474da6f029dbefa235ea` (PRs #21–22). Main CI [39073557659](https://github.com/pnkjxmwl/kramya/actions/runs/39073557659) passed verify/native, including all twelve actual restricted-login cases with no skipped cases. Protected deployment [39073841972](https://github.com/pnkjxmwl/kramya/actions/runs/39073841972) applied all 20 migrations; Render deploy `dep-db9v405g1s2s73a5eslg` reached live. Final hosted login, discovery, temporary profile CRUD, queue reads and access denials passed; no runtime error logs were returned in the short post-deploy check window.
+- [x] Checkout release `391904dac0f4f6a7ac09465f762ec35733cc2f2a` ([PR #24](https://github.com/pnkjxmwl/kramya/pull/24)) is live on 19 October. Main CI [39176992153](https://github.com/pnkjxmwl/kramya/actions/runs/39176992153) and protected deployment [39177273690](https://github.com/pnkjxmwl/kramya/actions/runs/39177273690) passed; Render `dep-dbalgftg1s2s73cii2i0` reached live. Hosted GET and POST returns both served neutral 200 HTML without reflecting forged fields; database/Redis readiness passed. Phone TEST failure returned to a cautious retry screen without raw JSON, with payment FAILED and its hold unpaid. The compact 48dp header and full-screen presentation are installed. Fifty Android tests, 41 focused API cases and full CI passed. Further queue/refund/push and clinic pilot acceptance remains pending.
+- [x] Baseline live release before the checkout fixes was `b34465f50ccc15f9b3a6474da6f029dbefa235ea` (PRs #21–22). Main CI [39073557659](https://github.com/pnkjxmwl/kramya/actions/runs/39073557659) passed verify/native, including all twelve actual restricted-login cases with no skipped cases. Protected deployment [39073841972](https://github.com/pnkjxmwl/kramya/actions/runs/39073841972) applied all 20 migrations; Render deploy `dep-db9v405g1s2s73a5eslg` reached live. Final hosted login, discovery, temporary profile CRUD, queue reads and access denials passed; no runtime error logs were returned in the short post-deploy check window.
 - [x] On 18 October 2026, Firebase project `kramya-39390` showed Android app `com.kramya.native` and Cloud Messaging V1 enabled. The staging APK signature was verified locally; its SHA-1 and SHA-256 fingerprints are both registered in Firebase. This does not prove server credential authentication, phone notification receipt or Google sign-in.
 - [x] Kotlin is the sole patient app; Expo was removed in PR #15.
 - [x] PR #15 passed 426 API tests, 42 contract tests, 72 web-console checks and 47 Android JVM tests. These are historical results, not automatic evidence for later changes.
@@ -84,3 +85,115 @@ Credentials are in the local, Git-ignored `.env.staging-test-access.md`. Never c
 ## Result record
 
 For each checked item record date, commit, role/TEST clinic, expected result, observed result and an issue link when it fails. Use fictional identifiers and redact screenshots. Mark **passed**, **failed**, **blocked** or **not run** explicitly; an unchecked box is not a pass.
+
+## Reservation-first rollout acceptance (2026-11-01)
+
+Plan: docs/reservation-release-plan.md. These checks are pending unless an explicit result is recorded below/in PROGRESS.md. Use fictional patients and isolated local databases. Exclude demo UI.
+
+- [ ] AT_CLINIC default rejects legacy /join without creating an order; /reserve works without gateway configuration. Historical signed capture/refund recovery still works.
+- [ ] Simultaneous /reserve retries return one token/QR. Competing patients cannot exceed the session cap; account limits hold across concurrent sessions, family bookings and separate API instances.
+- [ ] Another patient's ID, another clinic's staff, unsigned/tampered check-in QR and anonymous requests are rejected. Repeat under the actual restricted database login.
+- [ ] Same patient cannot reserve overlapping sessions; genuine family bookings remain possible under the configured active-account ceiling. Expired/cancelled visits do not consume the active-account ceiling.
+- [ ] New token is CONFIRMED with no Payment/order and no hold expiry. It appears after navigation, refresh, relaunch and offline→online recovery; duplicate retries do not create extra tokens.
+- [ ] Discovery and booking say reserve/pay at clinic. No Android checkout is reachable. Legacy unpaid holds can be reviewed/cancelled, with clear caution about any prior bank debit.
+- [ ] Reception scans/looks up the session-specific token, verifies the person, collects clinic payment under clinic policy and checks them in. Duplicate check-in preserves the original arrival timestamp.
+- [ ] Absent reservations cannot be called or hold up present patients. Validate walk-ins, emergency priority, early/late arrival, skip/recall/requeue, doctor absence/break, pause/resume, cancellation and end-of-session.
+- [ ] Cancelling a clinic-payment reservation produces no gateway refund and makes no refund promise. Any cash/external-UPI issue is directed to the clinic.
+- [ ] Confirmed reservations are not expired by the old unpaid-hold sweeper. Session-end outcomes and patient messages accurately explain unserved/no-show visits.
+- [ ] Verify phone ownership and repeat-abuse policy before public remote booking; account/IP rate limits alone are not proof of identity.
+- [ ] Complete the separate Play readiness gates: push logout/account switch/offline, account deletion/recovery, public privacy/support, production separation, maintained reviewer access and current signed internal-distribution release.
+
+Local verification: TypeScript across API/web/contracts passed; 43 pure API tests and 42 contract tests passed; API lint has no errors (two pre-existing seed warnings). New reservation database tests, restricted-role tests and Android/phone acceptance remain pending. Initial Android build failed because the previously installed SDK was deleted; founder authorized reinstall.
+
+Android tooling update (2026-11-01): founder authorized SDK reinstall. Project-local .env.android-sdk now supplies API 36/platform-tools/build-tools; local.properties points there. Reservation debug build passed and all 40 remaining Android JVM tests passed (ten removed checkout-only tests no longer apply). Do not install/distribute against the unchanged hosted backend: /reserve must be deployed and verified first. Database/phone/staff and release privacy acceptance are still open.
+
+Database acceptance update (2026-11-01): Docker Desktop/WSL restored; PostgreSQL/Redis healthy. Five local suites passed all 85 tests (41 reservation/payment, 14 queue scenarios, 7 locking, 15 ETA, 8 authorization). Actual restricted-login suite passed all 14 tests, including concurrent account ceilings across clinics and reservation→QR/token check-in→consultation completion with no Payment record. Private reproducible runner: .env.run-reservation-tests.ps1; logs: .env.reservation-database-tests.log and .env.reservation-rls-tests.log. Tests use only dedicated local *_test databases. These results supersede the earlier local-runtime blocker; manual clinic/phone acceptance and later release/privacy gates remain open.
+
+## Account and notification acceptance update (2026-11-01)
+
+Automated local evidence (not hosted or phone acceptance):
+- [x] Hash-only, expiring, purpose-bound and single-use account proofs; concurrent password reset has one winner; old access/refresh credentials stop working.
+- [x] Disabled email delivery returns the same unavailable response for known/unknown addresses, issues no proof and sends nothing.
+- [x] Password-confirmed deletion scrubs account/family details, revokes access/devices, cancels eligible reservations through audited queue commands and records clinical/staff handover requests for retry.
+- [x] Actual restricted database login: 15 tests passed after the realtime fix, including account proof isolation and reservation-to-consultation without a Payment.
+- [x] All 21 realtime tests passed after fixing immediate subscription racing asynchronous authentication; all 8 account-control tests passed in the same targeted run. Earlier full API run passed 450 tests and found 7 realtime failures; other 32 test files passed. A second complete run after the fix has not been performed.
+- [x] API/web type checks and API lint passed (two existing seed warnings); web production build passed. New public privacy/support/delete-account/account-action routes returned 200 without login. Subsequent copy edits clarify that delivery is disabled.
+- [x] Android debug build and 45 JVM tests passed for guarded push, logout retry and account UI. No updated APK was installed during this unit.
+- [ ] Verify on two fictional phone accounts: foreground/background/locked/delayed push, offline logout, restart, reassigned device, notification tap and account switch. Older clients retain legacy notification-format delivery and must be updated before claiming the local privacy guard covers every install.
+- [ ] Select and explicitly authorize an email sender; verify actual reset/verification/deletion delivery and safe one-time links. No Brevo/Gmail integration or paid SMS is enabled. Keep REQUIRE_VERIFIED_EMAIL_FOR_RESERVATIONS=false until delivery works.
+- [ ] Verify passwordless/external account deletion fulfilment, publish reviewed retention/privacy disclosures, and test native deletion/recovery against the coordinated deployed backend.
+- [ ] Agree repeat-misuse evidence, review/appeal rules and clinic arrival policy. Session closure alone must not trigger an automatic misuse sanction.
+- [ ] Coordinate migration/API/web/native rollout, production/reviewer separation, final device/staff acceptance, signed internal-distribution release and supervised clinic ETA pilot.
+
+Logs are ignored local files: .env.release-account-full-tests.log, .env.release-account-realtime-tests.log, .env.release-account-rls-final.log, .env.release-account-web-build.log and .env.release-account-final-types.log. All database suites used explicitly isolated localhost test databases. The public-page HTTP check excluded demo routes.
+
+## 1 November final local evidence and remaining acceptance
+
+Current source only; no hosted deployment. Tests used explicit loopback *_test Postgres and isolated Redis. Demo UI excluded.
+
+| Check | Result |
+|---|---|
+| Full API regression | 473 passed; 18 restricted-role cases skipped here and run separately |
+| Final actual non-owner RLS | 18 passed, including tenant isolation, owner-only approval/listing control, observed advisory-lock waiting and post-erasure review refusal |
+| Final focused regressions | 22 account/release/clinic/public-deletion cases plus 48 queue-lock/payment cases passed; overlapping, not unique totals |
+| Public deletion | 3 real web-route-to-local-API tests pass; credentials/proofs never returned to browser |
+| Staff private feedback | 2 encryption/expiry/tamper/cross-login/session tests pass |
+| Runtime grants | SQL probe passes, changes rolled back |
+| Android debug/release | 48 unit tests per variant; signed staging APK/AAB passes |
+| Native release lint | 0 errors, 41 warnings; not store acceptance |
+| Packaging | Current APK signature, 16 KB ZIP and APK/AAB 64-bit ELF alignment pass |
+| Production boundary | Release without explicit distinct production API/web URLs refuses as intended |
+| Real local reception UI | Clinic/policy save+reload, booking pause/lift, reservation(no Payment), check-in/call/start/complete, walk-in and name-free search/confirmation URL pass |
+
+Ignored local evidence: .env.release-complete-api-tests.log, .env.release-coordination-rls-tests.log, .env.release-booking-coordination-tests.log, .env.release-coordination-queue-tests.log, .env.release-complete-android.log and .env.release-native-artifact-proof.json. Do not publish these private local files.
+
+Remaining explicit acceptance:
+
+- [ ] Coordinated exact-SHA staging CI, owner migrations, API/console deployment and compatible native installation.
+- [ ] Phone reserve/retry/relaunch/offline cancellation; native layout, large font, TalkBack and back navigation.
+- [ ] Foreground/background/locked/force-stop push; account A, offline logout, account B with delayed pushes; token reassignment and deep links.
+- [ ] Camera QR scan with approved permission. Manual token/list check-in passes locally.
+- [ ] Separate empty production dataset, hosts/secrets, correctly tagged clients and invited APPROVED_ONLY accounts; actual clinic-hour API/worker/realtime availability.
+- [ ] Verified lost-password/Google-only deletion fulfilment, final retention/disclosures and production public pages. Automatic mail disabled.
+- [ ] Play account/verification/signing/internal track, reviewer access, disclosures and actual 16 KB device.
+- [ ] Complete roster navigation/aggregates before sessions exceed 200 records. Truncation warnings are not full large-hospital acceptance.
+- [ ] One-clinic staff agreement/training, outage fallback and supervised held-out ETA/waiting/missed-turn targets before expansion.
+
+No live email/SMS, payment, provider signup, production setup or scheduled backup automation was performed.
+
+### Final console/build checkpoint (1 November)
+
+The existing full staff-console HTTP/server-action walkthrough passed **72 checks, zero failures** against a freshly migrated/seeded local kramya_console_release_test database; provider credentials and workers were disabled. Final API build/typecheck/lint and Next production build/typecheck/lint pass. API lint retains two existing seed console warnings; Next notes the existing ESLint plugin configuration. The first final Next build caught a Windows-encoding error in a new save-label character; corrected to UTF-8-compatible source and the full build passed. The populated-production initializer was also exercised against a populated isolated local test database: it refused initialization and its marker remained STAGING. No hosted environment changed.
+
+### Device availability update (1 November)
+
+Founder confirmed no Android phone is available. Physical-device acceptance is deferred, not passed; do not repeatedly request a USB connection. The local SDK contains build/platform tools but no emulator executable, system image or configured AVD. Existing automated/native build and local reception results remain valid. Emulator setup may cover native functional/UI checks later, but physical push/background behavior and Play-delivered acceptance still require appropriate devices. Continue release preparation independently of phone availability.
+
+## Razorpay restoration acceptance — 5 November 2026
+
+This supersedes the new-booking pay-at-clinic decision in the 1 November section. ONLINE is the default; AT_CLINIC is explicit compatibility only. Plan: docs/payment-restoration-plan.md. Existing confirmed clinic reservations remain valid and are not marked paid or charged retroactively.
+
+Covered by payment regressions: server-derived fee, no-payment endpoint refusal, no QR before signed capture, forged callback/signature rejection, repeated/concurrent requests, same-order resume, failed attempt then success, gateway order error/retry, account cap including unpaid holds, profile ownership/overlap/review pauses, expiry/abandonment, cancelled or stale second checkout, late capture/capacity/session closure, duplicate refund safety, historical reservation preservation and read-after-relaunch. Gateway interactions are faked; database transactions, HMAC and authorization are real. Sub-INR-1 fees are unsupported for online checkout and refuse without allocating a hold/payment.
+
+- Initial focused API run: 65 passed.
+- Actual restricted-role suite: 18 passed separately.
+- Complete API, final debug/release Android tests/lint/signature and web build results will be recorded below after completion.
+- Still deferred: real Android full-screen/UPI handoff/back/cancel, offline/process-death/payment return, Razorpay TEST checkout/webhook delivery and real phone push acceptance. No phone/emulator is available. Automated results do not establish these manual passes.
+- Before hosted rollout: explicitly set BOOKING_PAYMENT_MODE=ONLINE (remove AT_CLINIC overrides), use matching TEST credentials/webhook secret and reachable callback URL, verify exact-SHA CI/migrations/API/web then install the compatible build. This change activates no live keys or merchant payment setup.
+
+### Payment restoration final build and targeted acceptance
+
+- All **49 payment integration cases pass** on the isolated local console-release test database, including unsupported-fee refusal and the previously timed-out paid-duplicate setup/case. Log: .env.payment-restoration-payments-retry.log.
+- All **18 restricted-login cases pass**, including actual signed capture/refund and tenant/account privacy controls. Log: .env.payment-restoration-rls.log.
+- All **59 Android tests pass in each debug/release variant**. Signed APK/AAB **code 3 / 0.1.1-staging**, target API 36 built; native release lint **0 errors / 41 warnings**. APK signing verification, ZIP 16 KB and APK/AAB 64-bit ELF alignment pass. Logs: .env.payment-restoration-android-final.log, .env.payment-restoration-artifacts.json and .env.payment-restoration-signature.log.
+- Final Nest build/typecheck/lint and Next production build/typecheck/lint pass. Existing two seed console warnings and Next ESLint plugin notice remain. Logs: .env.payment-restoration-api-build.log and .env.payment-restoration-web-final.log.
+- The broad API run encountered one 30-second **beforeEach setup hook timeout** while Android/Next builds were running on the 8 GB host with less than 1 GB free RAM. The initial focused run passed this scenario, and the full payment-file rerun after heavy builds finished passes all 49. Do not call the original broad run completely green or hide its timeout. No test timeout or security setting was relaxed. The broad run's final aggregate is recorded separately below.
+
+No physical phone, actual Razorpay TEST transaction/webhook delivery, hosted rollout or real charge occurred. The fake provider verifies actual HMAC and real database transactions; it does not establish real gateway availability or device behavior. Existing pay-at-clinic bookings remain uncharged and unchanged.
+
+### Broad regression outcome — payment restoration
+
+Final broad run: **482 passed, 1 setup-hook timeout, 18 intentionally skipped restricted-role checks** (501 total; 36 files passed, one payment file failed, one restricted-role file skipped). The skipped restricted-role file separately passed all 18 cases. The only broad-run failure was beforeEach timing out after 30 seconds for the already-paid duplicate-booking case during heavy local build contention. The complete payment file was rerun without the heavy builds and **all 49 cases passed**, including that setup/case; no source or timeout relaxation was used to obtain that pass. The broad suite itself was not rerun a second time. Preserve this distinction when reporting results. No payment/booking domain assertion remains failing in the completed payment acceptance run.
+
+Historical pre-redesign deployment evidence (not the current release):
+- [x] Latest live release is `b34465f50ccc15f9b3a6474da6f029dbefa235ea` (PRs #21–22). Main CI [39073557659](https://github.com/pnkjxmwl/kramya/actions/runs/39073557659) passed verify/native, including all twelve actual restricted-login cases with no skipped cases. Protected deployment [39073841972](https://github.com/pnkjxmwl/kramya/actions/runs/39073841972) applied all 20 migrations; Render deploy `dep-db9v405g1s2s73a5eslg` reached live. Final hosted login, discovery, temporary profile CRUD, queue reads and access denials passed; no runtime error logs were returned in the short post-deploy check window.

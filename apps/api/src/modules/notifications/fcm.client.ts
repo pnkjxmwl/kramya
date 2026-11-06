@@ -84,20 +84,16 @@ export class FcmClient implements PushApi {
 
     const messaging = getMessaging(this.app);
 
-    /*
-      `notification` AND `data`, not data-only.
-
-      A data-only message is handled by the app, which means it is not shown at all when
-      the process has been killed - and a phone that has been in a pocket for an hour is
-      exactly the case these notifications exist for. A `notification` block is rendered by
-      the system tray whatever state the app is in, and the `data` rides along so a tap
-      still deep-links to the right booking.
-    */
+    // v2 clients must decide locally whether the recipient is still signed in.
+    // Notification payloads bypass that check in the background. Preserve the legacy
+    // payload only for clients that have not advertised support for guarded delivery.
     const sends = messages.map(async (message): Promise<PushResult> => {
       const payload: Message = {
         token: message.token,
-        notification: { title: message.title, body: message.body },
-        data: message.data,
+        ...(message.guarded ? {} : { notification: { title: message.title, body: message.body } }),
+        data: message.guarded
+          ? { ...message.data, title: message.title, body: message.body }
+          : message.data,
         android: {
           // Delivery needs to wake a dozing Android device.
           priority: "high",
@@ -105,12 +101,12 @@ export class FcmClient implements PushApi {
           // rather than delivering "you are next" an hour after the patient was seen.
           // Firebase uses milliseconds.
           ttl: 30 * 60 * 1000,
-          notification: {
+          ...(message.guarded ? {} : { notification: {
             // The channel apps/native creates at HIGH importance. Naming a channel that
             // does not exist on the device means Android shows nothing at all on API 26+.
             channelId: "queue",
             sound: "default",
-          },
+          } }),
         },
       };
 

@@ -59,6 +59,8 @@ export const RegisterPushTokenRequest = z.object({
       'Register an FCM token from the Android app',
     ),
   platform: z.literal('android').optional(),
+  /** v2 clients check the signed-in recipient before displaying a data-only push. */
+  deliveryVersion: z.literal(2).optional(),
 });
 export type RegisterPushTokenRequest = z.infer<typeof RegisterPushTokenRequest>;
 

@@ -1,3 +1,5 @@
+> **Current design authority — 6 November 2026:** The founder approved Daylight for the actual native patient app and staff/doctor console. Current tokens are `apps/native/app/src/main/java/app/kramya/core/Theme.kt` and `apps/web/tailwind.config.ts`, with bundled Manrope/Bricolage fonts. See `daylight-implementation-plan.md` and `ui-lab/android-daylight/DESIGN-RESEARCH.md`. The older teal/ink/iOS handoff notes below are historical and do not override the approved Daylight implementation. Immediate navigation, semantic statuses, server truth and accessibility still apply.
+
 > Current implementation note (16 October 2026): the patient app is Kotlin-only (`apps/native`). References to the removed Expo app below are historical design context; `apps/native/core/Theme.kt` (under `app/src/main/java/app/kramya`) and native UI components are the current implementation.
 
 # Design

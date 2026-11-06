@@ -7,6 +7,8 @@ import {
   EndSessionRequest,
   type QueueCommandResult,
   JoinRequest,
+  ReserveRequest,
+  type ReserveResponse,
   MyQueueEntriesQuery,
   type CancelEntryResponse,
   type JoinResponse,
@@ -40,6 +42,16 @@ import { PaymentsService } from './payments.service';
 @Controller()
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('sessions/:id/reserve')
+  reserve(
+    @Param('id') sessionId: string,
+    @CurrentAccount() account: AuthedAccount,
+    @Body(new ZodBody(ReserveRequest)) body: ReserveRequest,
+  ): Promise<ReserveResponse> {
+    return this.payments.reserve(sessionId, account.id, body);
+  }
 
   /**
    * Tighter than the global ceiling because a join reserves a real seat and creates

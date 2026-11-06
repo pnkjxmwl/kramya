@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
         // The tap that STARTED the app. Without this, a patient who taps "you are being
         // called" on a locked phone lands on the home screen - the one moment push exists
         // for. `onNewIntent` below covers the app-already-running case.
-        PendingDeepLink.offer(intent?.getStringExtra(KramyaMessagingService.EXTRA_ENTRY_ID))
+        handleNotificationIntent(intent)
 
         val services = (application as KramyaApp).services
         setContent {
@@ -53,6 +53,19 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        PendingDeepLink.offer(intent.getStringExtra(KramyaMessagingService.EXTRA_ENTRY_ID))
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val environment = intent?.getStringExtra(KramyaMessagingService.EXTRA_ENVIRONMENT)
+            ?: intent?.getStringExtra("environment")
+        if (!app.kramya.push.matchesPushEnvironment(environment, BuildConfig.DEPLOYMENT_ENVIRONMENT)) return
+        val recipient = intent?.getStringExtra(KramyaMessagingService.EXTRA_ACCOUNT_ID)
+            ?: intent?.getStringExtra("accountId")
+        val entryId = intent?.getStringExtra(KramyaMessagingService.EXTRA_ENTRY_ID)
+            ?: intent?.getStringExtra("entryId")
+        (application as KramyaApp).services.auth.forCurrentPushRecipient(recipient) {
+            PendingDeepLink.offer(entryId)
+        }
     }
 }

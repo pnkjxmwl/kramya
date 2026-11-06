@@ -56,7 +56,7 @@ export function Live({ sessionId }: { sessionId: string }) {
           .then(async (res) => {
             if (!res.ok) throw new Error('Session unavailable');
             const { token } = await res.json() as { token: string };
-            if (!cancelled) done({ token });
+            if (!cancelled) done({ token, environment: process.env.NEXT_PUBLIC_DEPLOYMENT_ENVIRONMENT ?? 'STAGING' });
           }).catch(() => { if (!cancelled) done({ token: '' }); });
       },
       transports: ['websocket'], withCredentials: true,

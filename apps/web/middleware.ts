@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type { AuthTokens } from '@opd/contracts';
-import { ACCESS_COOKIE, REFRESH_COOKIE, ROTATION_COOKIE, apiUrl, writeSession } from './lib/session';
+import { ACCESS_COOKIE, REFRESH_COOKIE, ROTATION_COOKIE, apiFetch, writeSession } from './lib/session';
 
 /**
  * Route protection + silent token refresh.
@@ -19,7 +19,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // No refresh token, or refresh fails: this is a logged-out visitor.
   if (!refresh) return toLogin(req);
 
-  const upstream = await fetch(apiUrl('/auth/refresh'), {
+  const upstream = await apiFetch('/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken: refresh, rotationKey: req.cookies.get(ROTATION_COOKIE)?.value }),
@@ -106,6 +106,6 @@ export const config = {
     browser's default and nothing errors.
   */
   matcher: [
-    '/((?!login|accept-invite|demo|api/auth|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|$).*)',
+    '/((?!login|accept-invite|privacy|support|delete-account|account-action|demo|api/auth|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|$).*)',
   ],
 };

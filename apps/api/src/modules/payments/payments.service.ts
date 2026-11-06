@@ -8,6 +8,8 @@ import {
   type CancelEntryResponse,
   type JoinRequest,
   type JoinResponse,
+  type ReserveRequest,
+  type ReserveResponse,
   type MyQueueEntriesQuery,
   type MyQueueEntry,
   type Paginated,
@@ -18,8 +20,9 @@ import {
 } from "@opd/contracts";
 import { PrismaService } from "../../prisma/prisma.service";
 import { env } from "../../config/env";
-import { NotFoundError, ValidationFailedError } from "../../common/errors";
+import { ConflictError, NotFoundError, ValidationFailedError } from "../../common/errors";
 import { isUniqueViolation } from "../../common/prisma-errors";
+import { canApplyToEntry, TERMINAL_ENTRY_STATUSES } from '../queue/state-machine';
 import {
   QueueService,
   type CommandContext,
@@ -31,6 +34,7 @@ import { EtaService } from "../eta/eta.service";
 import { isEtaAvailable } from "../eta/eta.engine";
 import { endSession } from "../queue/commands/end-session";
 import { joinQueue } from "../queue/commands/join";
+import { reserveAtClinic } from "../queue/commands/reserve-at-clinic";
 import {
   applyPaymentConfirmation,
   whyPaymentCannotBook,
@@ -191,6 +195,18 @@ const AWAITING_A_TURN: QueueEntryStatus[] = [
 
 @Injectable()
 export class PaymentsService implements OnModuleInit {
+  async cancelForAccountDeletion(accountId: string): Promise<boolean> {
+    const entries = await this.prisma.queueEntry.findMany({ where: { accountId, status: { notIn: [...TERMINAL_ENTRY_STATUSES] } }, select: { id: true, status: true } });
+    for (const entry of entries) {
+      if (!canApplyToEntry('CANCEL_ENTRY', entry.status)) return false;
+      await this.cancel(entry.id, accountId, { reason: 'Account deletion requested by patient' });
+    }
+    return true;
+  }
+
+  async hasActiveEntries(accountId: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    return (await tx.queueEntry.count({ where: { accountId, status: { notIn: [...TERMINAL_ENTRY_STATUSES] } } })) > 0;
+  }
   private readonly log = new Logger(PaymentsService.name);
 
   constructor(
@@ -282,11 +298,24 @@ export class PaymentsService implements OnModuleInit {
    * fails, the hold simply lapses - the failure mode is self-healing rather than a
    * half-written booking.
    */
+  async reserve(sessionId: string, accountId: string, input: ReserveRequest): Promise<ReserveResponse> {
+    if (env().BOOKING_PAYMENT_MODE !== "AT_CLINIC") {
+      throw new ConflictError("This deployment requires online payment. Update Kramya and use the payment checkout to confirm your token. Existing confirmed reservations remain valid.");
+    }
+    const hospitalId = await this.hospitalOfSession(sessionId);
+    const entry = await reserveAtClinic(this.queue, sessionId,
+      { accountId, hospitalId, type: "PATIENT" }, { patientId: input.patientId, accountId });
+    return { entry: await this.readMyEntry(entry.id), paymentCollection: "AT_CLINIC" };
+  }
+
   async join(
     sessionId: string,
     accountId: string,
     input: JoinRequest,
   ): Promise<JoinResponse> {
+    if (env().BOOKING_PAYMENT_MODE === "AT_CLINIC") {
+      throw new ConflictError("This deployment accepts payment at the clinic. Online checkout is unavailable; use a compatible app or contact reception.");
+    }
     if (!this.razorpay.configured) {
       // A misconfigured server, not a domain outcome: the filter turns this into
       // INTERNAL_ERROR and pino keeps this message (docs/Rules.md 7).
@@ -860,7 +889,8 @@ export class PaymentsService implements OnModuleInit {
       throw new NotFoundError("Booking not found");
     }
 
-    const policy = await this.policies.ensure(entry.hospitalId);
+    // Patient cancellation reads defaults without writing clinic configuration.
+    const policy = await this.policies.read(entry.hospitalId);
     const now = new Date();
     const pct = refundPctIfCancelledAt(
       policy.cancellationRules,

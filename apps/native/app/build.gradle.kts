@@ -34,6 +34,9 @@ val uploadAlias = providers.environmentVariable("KRAMYA_UPLOAD_KEY_ALIAS").orNul
 val uploadKeyPassword = providers.environmentVariable("KRAMYA_UPLOAD_KEY_PASSWORD").orNull
 val signingValues = listOf(uploadStore, uploadStorePassword, uploadAlias, uploadKeyPassword)
 val releaseSigningConfigured = signingValues.all { !it.isNullOrBlank() }
+val deploymentEnvironment = providers.gradleProperty("deploymentEnvironment").orElse("STAGING").get()
+require(deploymentEnvironment in setOf("STAGING", "PRODUCTION")) { "Unknown deploymentEnvironment" }
+val releaseApi = if (deploymentEnvironment == "PRODUCTION") providers.gradleProperty("apiUrlProduction").orNull else prop("apiUrlRelease")
 check(signingValues.none { !it.isNullOrBlank() } || releaseSigningConfigured) {
     "Release signing requires all four KRAMYA_UPLOAD_* environment variables."
 }
@@ -41,8 +44,14 @@ gradle.taskGraph.whenReady {
     if (allTasks.any { it.path in setOf(":app:assembleRelease", ":app:bundleRelease", ":app:packageRelease") }) {
         check(releaseSigningConfigured) { "Release signing is missing. See docs/android-release.md; unsigned release artifacts are refused." }
         check(firebaseConfigured) { "Release requires the matching Firebase client configuration." }
-        val target = URI(prop("apiUrlRelease"))
-        check(target.scheme == "https" && !target.host.isNullOrBlank() && target.rawUserInfo == null) { "Release API must use HTTPS." }
+        check(!releaseApi.isNullOrBlank()) { "Production requires an explicit apiUrlProduction; staging URL fallback is refused." }
+        val target = URI(releaseApi!!)
+        check(target.scheme == "https" && !target.host.isNullOrBlank() && target.rawUserInfo == null && target.query == null && target.fragment == null) { "Release API must use HTTPS with no credentials, query or fragment." }
+        if (deploymentEnvironment == "PRODUCTION") {
+            check(!target.host.equals(URI(prop("apiUrlRelease")).host, ignoreCase = true)) { "Production must use a separate API host from fictional staging." }
+            check(providers.gradleProperty("publicWebUrlProduction").isPresent) { "Production requires publicWebUrlProduction." }
+            check(!URI(providers.gradleProperty("publicWebUrlProduction").get()).host.equals(URI(prop("publicWebUrl")).host, ignoreCase = true)) { "Production requires a separate web host from staging." }
+        }
     }
 }
 
@@ -55,8 +64,8 @@ android {
         applicationId = "com.kramya.native"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = providers.gradleProperty("releaseVersionCode").orElse("4").get().toInt().also { require(it > 0) }
+        versionName = providers.gradleProperty("releaseVersionName").orElse("0.2.0").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -64,6 +73,10 @@ android {
         // Read by push/Push.kt, so the app can say "push is not configured in this build"
         // rather than throwing when Firebase was never initialised.
         buildConfigField("boolean", "PUSH_ENABLED", firebaseConfigured.toString())
+        buildConfigField("String", "DEPLOYMENT_ENVIRONMENT", "\"$deploymentEnvironment\"")
+        val webUrl = if (deploymentEnvironment == "PRODUCTION") providers.gradleProperty("publicWebUrlProduction").orElse("https://invalid.invalid").get() else providers.gradleProperty("publicWebUrl").orElse("https://kramya.vercel.app").get()
+        require(URI(webUrl).scheme == "https" && URI(webUrl).host != null && URI(webUrl).userInfo == null && URI(webUrl).query == null && URI(webUrl).fragment == null && URI(webUrl).path in setOf("", "/")) { "publicWebUrl must be an HTTPS origin" }
+        buildConfigField("String", "WEB_URL", "\"${webUrl.trimEnd('/')}\"")
     }
 
     signingConfigs {
@@ -80,10 +93,11 @@ android {
             buildConfigField("String", "API_URL", "\"${prop("apiUrlDebug")}\"")
         }
         release {
+            if (deploymentEnvironment == "STAGING") versionNameSuffix = "-staging"
             // Keep shrinker changes separate until device verification is complete.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            buildConfigField("String", "API_URL", "\"${prop("apiUrlRelease")}\"")
+            buildConfigField("String", "API_URL", "\"${releaseApi ?: "https://invalid.invalid"}\"")
             if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("upload")
         }
     }

@@ -2,6 +2,7 @@
 
 import type { QueueCommandResult } from '@opd/contracts';
 import { ApiCallError, apiSend } from '../../../../../lib/api';
+import { writeQueueNotice } from '../../../../../lib/queue-notice';
 import { runQueueAction, text } from '../../_run';
 
 /**
@@ -33,7 +34,7 @@ async function checkIn(
   // The token AND the name. A receptionist glancing up between two patients needs to
   // see WHO was checked in, or a mis-scan is invisible until the wrong person is
   // called into the room.
-  return `ok=${encodeURIComponent(`${entry?.tokenLabel ?? ''} · ${entry?.patientName ?? ''} checked in`)}`;
+  return writeQueueNotice(sessionId, `${entry?.tokenLabel ?? ''} · ${entry?.patientName ?? ''} checked in`);
 }
 
 /** The scanned QR. Sent verbatim - the client never parses or trims the payload. */

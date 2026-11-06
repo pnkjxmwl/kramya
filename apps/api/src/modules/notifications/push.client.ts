@@ -4,6 +4,7 @@ export interface PushMessage {
   title: string;
   body: string;
   data: Record<string, string>;
+  guarded?: boolean;
 }
 
 export interface PushResult {

@@ -9,6 +9,9 @@ import { isUniqueViolation } from "../../common/prisma-errors";
 import type { PushApi } from "./push.client";
 import { PUSH_CLIENT } from "./push.token";
 import { render } from "./templates";
+import type { Prisma } from '@prisma/client';
+import { UnauthorizedError } from '../../common/errors';
+import { env } from '../../config/env';
 
 /**
  * P8-BE-01 · everything we tell a patient goes through here
@@ -30,6 +33,10 @@ const BATCH = 100;
 
 @Injectable()
 export class NotificationsService {
+  async eraseAccountData(accountId: string, tx: Prisma.TransactionClient, history: boolean): Promise<void> {
+    await tx.pushToken.deleteMany({ where: { accountId } });
+    if (history) await tx.notification.deleteMany({ where: { accountId } });
+  }
   @DatabaseIdentityFor((accountId: string) => ({
     accountId,
     purpose: "account",
@@ -65,20 +72,24 @@ export class NotificationsService {
     accountId: string,
     input: RegisterPushTokenRequest,
   ): Promise<void> {
-    await this.prisma.pushToken.upsert({
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${accountId} FOR UPDATE`;
+      if (!(await tx.account.findFirst({ where: { id: accountId, deletedAt: null }, select: { id: true } }))) throw new UnauthorizedError();
+      await tx.pushToken.upsert({
       where: { token: input.token },
       create: {
         accountId,
         token: input.token,
-        platform: input.platform ?? null,
+        platform: input.deliveryVersion === 2 ? 'android-v2' : input.platform ?? null,
         lastUsedAt: new Date(),
       },
       update: {
         accountId,
-        platform: input.platform ?? null,
+        platform: input.deliveryVersion === 2 ? 'android-v2' : input.platform ?? null,
         disabledAt: null,
         lastUsedAt: new Date(),
       },
+      });
     });
   }
 
@@ -208,7 +219,8 @@ export class NotificationsService {
           token: device.token,
           title: notification.title,
           body: notification.body,
-          data: (notification.data ?? {}) as Record<string, string>,
+          data: { ...(notification.data ?? {}) as Record<string, string>, accountId: notification.accountId, environment: env().DEPLOYMENT_ENVIRONMENT },
+          guarded: device.platform === 'android-v2',
         })),
       );
 

@@ -24,7 +24,11 @@ jobs:
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
       - name: Test and assemble Kotlin patient app
         working-directory: apps/native
-        run: bash gradlew --no-daemon testDebugUnitTest assembleDebug
+        run: bash gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug
+      - name: Check native library and APK alignment
+        run: |
+          python3 scripts/inspect-android-native.py apps/native/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 apps/native/app/build/outputs/apk/debug/app-debug.apk
 
   verify:
     runs-on: ubuntu-latest

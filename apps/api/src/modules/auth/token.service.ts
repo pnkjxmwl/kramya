@@ -27,8 +27,13 @@ export class TokenService {
     accountId: account.id,
     purpose: "account",
   }))
-  async issue(account: { id: string; email: string }): Promise<AuthTokens> {
-    return this.mint(account, randomUUID());
+  async issue(account: { id: string; email: string; authVersion?: number }): Promise<AuthTokens> {
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${account.id} FOR UPDATE`;
+      const current = await tx.account.findFirst({ where: { id: account.id, deletedAt: null }, select: { id: true, email: true, authVersion: true } });
+      if (!current || (account.authVersion !== undefined && account.authVersion !== current.authVersion)) throw new UnauthorizedError();
+      return this.mint(current, randomUUID(), tx);
+    });
   }
 
   /** Same client retries share one successor for 60 seconds; other replay revokes the family. */
@@ -40,7 +45,7 @@ export class TokenService {
     const tokenHash = hash(presented);
     const existing = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
-      include: { account: { select: { id: true, email: true } } },
+      include: { account: { select: { id: true, email: true, authVersion: true } } },
     });
     if (!existing) throw new UnauthorizedError("Invalid refresh token");
     setDatabaseIdentity({ accountId: existing.accountId });
@@ -58,6 +63,8 @@ export class TokenService {
       // Stable parent lock also serializes logout; newly inserted token rows cannot
       // fall outside the lock as they could with a SELECT over the current family.
       await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${existing.accountId} FOR UPDATE`;
+      const active = await tx.account.findFirst({ where: { id: existing.accountId, deletedAt: null, authVersion: existing.account.authVersion }, select: { id: true } });
+      if (!active) return null;
       const current = await tx.refreshToken.findUniqueOrThrow({
         where: { tokenHash },
       });
@@ -140,9 +147,9 @@ export class TokenService {
     });
   }
 
-  private accessToken(account: { id: string; email: string }): Promise<string> {
+  private accessToken(account: { id: string; email: string; authVersion?: number }): Promise<string> {
     return this.jwt.signAsync(
-      { sub: account.id, email: account.email },
+      { sub: account.id, email: account.email, ver: account.authVersion ?? 0, env: env().DEPLOYMENT_ENVIRONMENT },
       {
         secret: env().JWT_ACCESS_SECRET,
         expiresIn: env().JWT_ACCESS_TTL_SEC,
@@ -151,7 +158,7 @@ export class TokenService {
   }
 
   private async mint(
-    account: { id: string; email: string },
+    account: { id: string; email: string; authVersion?: number },
     familyId: string,
     /** The rotation's transaction, so the new token lands under the family lock. */
     client: Prisma.TransactionClient | PrismaService = this.prisma,

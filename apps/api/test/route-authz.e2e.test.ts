@@ -35,6 +35,8 @@ interface Route {
  */
 const INTENTIONALLY_PUBLIC = new Set([
   'post /auth/signup',
+  'post /auth/account-actions/request',
+  'post /auth/account-actions/confirm',
   'post /auth/login',
   'post /auth/google',
   'post /auth/accept-invite',

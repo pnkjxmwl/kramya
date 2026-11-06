@@ -22,6 +22,9 @@ export const EnvSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
+  // Node's production mode is also used on fictional staging; keep this separate.
+  DEPLOYMENT_ENVIRONMENT: z.enum(['STAGING', 'PRODUCTION']).default('STAGING'),
+  REMOTE_BOOKING_ACCESS: z.enum(['OPEN_TEST', 'APPROVED_ONLY', 'VERIFIED_EMAIL']).default('OPEN_TEST'),
 
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
@@ -82,6 +85,11 @@ export const EnvSchema = z.object({
   // all just because they have no gateway account. `paymentsConfigured()` below is
   // the single check, and join fails loudly with a real message when it is false.
   RAZORPAY_KEY_ID: z.string().default(""),
+  // Online booking holds a place; verified capture confirms the token.
+  BOOKING_PAYMENT_MODE: z.enum(["AT_CLINIC", "ONLINE"]).default("ONLINE"),
+  MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT: z.coerce.number().int().min(1).max(20).default(6),
+  MAX_PATIENT_PROFILES_PER_ACCOUNT: z.coerce.number().int().min(1).max(50).default(20),
+  REQUIRE_VERIFIED_EMAIL_FOR_RESERVATIONS: z.enum(['true', 'false']).default('false').transform(v => v === 'true'),
   RAZORPAY_MODE: z.enum(["test", "live"]).default("test"),
   DEPLOYMENT_AVAILABILITY: z
     .enum(["best-effort", "always-on"])

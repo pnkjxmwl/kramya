@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -197,14 +198,20 @@ fun initialsOf(name: String): String = name
     .mapNotNull { it.firstOrNull()?.uppercaseChar() }
     .joinToString("")
 
+private fun avatarTint(name: String): Pair<Color,Color> {
+    val palette=listOf(Theme.Colors.PrimarySoft to Theme.Colors.BrandDeep,
+        Color(0xFFF7E8D6) to Color(0xFF80500F),Color(0xFFEDE8F3) to Color(0xFF655879))
+    return palette[(name.hashCode().toLong().let { if(it<0) -it else it }%palette.size).toInt()]
+}
+
 @Composable
 fun Avatar(name: String, size: Dp = 40.dp) {
     val initials = initialsOf(name).ifEmpty { "?" }
     Box(
         Modifier
             .size(size)
-            .clip(RoundedCornerShape(percent = 50))
-            .background(Theme.Colors.FillAvatar),
+            .clip(RoundedCornerShape(Theme.Radius.Control))
+            .background(avatarTint(name).first),
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
@@ -212,7 +219,7 @@ fun Avatar(name: String, size: Dp = 40.dp) {
             style = Theme.Font.Label.copy(
                 fontSize = (size.value * 0.34f).sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Theme.Colors.InkSecondary,
+                color = avatarTint(name).second,
                 // Two capitals alone in a circle read as one glyph without this.
                 letterSpacing = 0.3.sp,
             ),
@@ -350,7 +357,7 @@ fun Card(
     Column(
         modifier
             .fillMaxWidth()
-            .shadow(Theme.Elevation.Card, RoundedCornerShape(Theme.Radius.Group))
+            .border(1.dp, Theme.Colors.Border, RoundedCornerShape(Theme.Radius.Group))
             .clip(RoundedCornerShape(Theme.Radius.Group))
             .background(Theme.Colors.Surface)
             .padding(Theme.Space.x5),
@@ -394,7 +401,7 @@ fun ListGroup(
     Column(
         modifier
             .fillMaxWidth()
-            .shadow(Theme.Elevation.Sm, RoundedCornerShape(Theme.Radius.Group))
+            .border(1.dp, Theme.Colors.Border, RoundedCornerShape(Theme.Radius.Group))
             // clip AFTER the background so a selected row's full-bleed rail takes the
             // group's corner rather than poking past it.
             .clip(RoundedCornerShape(Theme.Radius.Group))
@@ -486,14 +493,16 @@ fun Button(
         // still reads as "press me", just badly printed.
         inert -> Theme.Colors.FillSecondary
         variant == ButtonVariant.Primary -> Theme.Colors.Primary
-        variant == ButtonVariant.Danger -> Theme.Colors.Danger.Bg
+        variant == ButtonVariant.Danger -> Theme.Colors.Danger.Fg
         variant == ButtonVariant.Ghost -> Color.Transparent
-        else -> Theme.Colors.FillSecondary
+        variant == ButtonVariant.Secondary -> Theme.Colors.Surface
+        else -> Color.Transparent
     }
     val foreground = when {
         inert -> Theme.Colors.InkTertiary
         variant == ButtonVariant.Primary -> Color.White
-        variant == ButtonVariant.Danger -> Theme.Colors.Danger.Fg
+        variant == ButtonVariant.Danger -> Color.White
+        variant == ButtonVariant.Ghost -> Theme.Colors.Primary
         else -> Theme.Colors.Ink
     }
 
@@ -502,9 +511,11 @@ fun Button(
     Row(
         modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .heightIn(min=52.dp)
+            .border(1.dp, if(variant==ButtonVariant.Secondary) Theme.Colors.Border else Color.Transparent, RoundedCornerShape(Theme.Radius.Control))
             .pressable(radius = Theme.Radius.Control, enabled = !inert, onClick = onClick)
-            .background(fill),
+            .background(fill)
+            .padding(horizontal=14.dp,vertical=14.dp),
         horizontalArrangement = Arrangement.spacedBy(Theme.Space.x2, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -518,7 +529,7 @@ fun Button(
             if (icon != null) Icon(icon, size = 17.dp, tint = foreground)
             BasicText(
                 text = title,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = Theme.Font.Label.copy(
                     fontSize = 16.sp,
@@ -546,17 +557,18 @@ fun Field(
     helper: String? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
+    var revealed by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Theme.Space.x2)) {
         BasicText(
-            text = label.uppercase(),
-            style = Theme.Font.Overline.copy(color = Theme.Colors.InkTertiary),
+            text = label,
+            style = Theme.Font.Label.copy(color = Theme.Colors.InkTertiary),
         )
 
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .heightIn(min=52.dp)
                 .clip(RoundedCornerShape(Theme.Radius.Control))
                 // A recessed well, not a bordered box - the handoff's search field at
                 // form size.
@@ -567,7 +579,8 @@ fun Field(
                 // shadow layer under a focused input, which drops focus, which fires
                 // blur, which removes the elevation - the keyboard opened and shut on a
                 // loop. Even a 0->1 border is suspect on a centred, scrolling form.
-                .background(if (focused) Theme.Colors.PrimarySoft else Theme.Colors.FillSubtle)
+                .border(1.dp, if(focused) Theme.Colors.Primary else Theme.Colors.Border, RoundedCornerShape(Theme.Radius.Control))
+                .background(Theme.Colors.Surface)
                 .padding(horizontal = Theme.Space.x4),
             horizontalArrangement = Arrangement.spacedBy(Theme.Space.x2),
             verticalAlignment = Alignment.CenterVertically,
@@ -586,19 +599,27 @@ fun Field(
                     onValueChange = onValueChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onFocusChanged { focused = it.isFocused },
+                        .onFocusChanged { focused = it.isFocused }
+                        .semantics { contentDescription = label }
+                        .padding(vertical=12.dp),
                     singleLine = true,
                     textStyle = Theme.Font.BodyLg.copy(color = Theme.Colors.Ink),
                     cursorBrush = SolidColor(Theme.Colors.Primary),
                     visualTransformation =
-                        if (secure) PasswordVisualTransformation() else VisualTransformation.None,
+                        if (secure && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
                     keyboardOptions = KeyboardOptions(
                         capitalization = capitalization,
                         autoCorrectEnabled = false,
-                        keyboardType = keyboardType,
+                        keyboardType = if (secure) KeyboardType.Password else keyboardType,
                         imeAction = ImeAction.Next,
                     ),
                 )
+            }
+            if(secure) {
+                Box(Modifier.minTouchTarget().pressable(label=if(revealed) "Hide password" else "Show password") { revealed=!revealed },
+                    contentAlignment=Alignment.Center) {
+                    BasicText(if(revealed) "Hide" else "Show",style=Theme.Font.Caption.copy(color=Theme.Colors.Primary))
+                }
             }
         }
 
@@ -639,7 +660,7 @@ fun <T> Segmented(
                     .weight(1f)
                     // 44 is the floor in docs/Design.md 8; the track's own padding takes
                     // it past that.
-                    .heightIn(min = 40.dp)
+                    .heightIn(min = 48.dp)
                     .then(
                         if (on) {
                             Modifier
@@ -679,4 +700,4 @@ fun TrailingSpacer(width: Dp) {
 }
 
 /** A minimum touch target. docs/Design.md 8: 44x44, never less. */
-fun Modifier.minTouchTarget(): Modifier = this.defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+fun Modifier.minTouchTarget(): Modifier = this.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)

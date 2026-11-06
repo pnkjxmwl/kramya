@@ -1,6 +1,10 @@
 package app.kramya.push
 
 import android.app.NotificationManager
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -19,10 +23,8 @@ import kotlinx.coroutines.launch
 /**
  * Receives pushes from FCM.
  *
- * The server sends a `notification` block AND a `data` block, so Android's own tray renders
- * the message whatever state this app is in - including not running at all, which is the
- * case this whole feature exists for. This class therefore only has to handle two things:
- * a rotated token, and a message that arrives while the app is in the foreground.
+ * Updated installs advertise v2 data-only delivery so the current local account is
+ * checked in both foreground and background before anything is displayed.
  */
 class KramyaMessagingService : FirebaseMessagingService() {
 
@@ -62,19 +64,31 @@ class KramyaMessagingService : FirebaseMessagingService() {
      * `shouldShowBanner: true`, and for the same reason.
      */
     override fun onMessageReceived(message: RemoteMessage) {
+        if (!matchesPushEnvironment(message.data["environment"], app.kramya.BuildConfig.DEPLOYMENT_ENVIRONMENT)) return
+        val auth = (application as? KramyaApp)?.services?.auth ?: return
+        auth.forCurrentPushRecipient(message.data["accountId"]) { display(message) }
+    }
+
+    private fun display(message: RemoteMessage) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this,
+                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val notification = message.notification
-        val title = notification?.title ?: return
-        val body = notification.body.orEmpty()
+        val title = message.data["title"] ?: notification?.title ?: return
+        val body = message.data["body"] ?: notification?.body.orEmpty()
 
         // The only field read from the payload, and only to decide where a tap goes.
         // Everything the screen then shows is fetched over REST (docs/Rules.md 8).
         val entryId = message.data["entryId"]
+        val accountId = message.data["accountId"] ?: return
+        if (entryId.isNullOrBlank()) return
 
         ensureQueueChannel(this)
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            if (entryId != null) putExtra(EXTRA_ENTRY_ID, entryId)
+            putExtra(EXTRA_ENTRY_ID, entryId)
+            putExtra(EXTRA_ACCOUNT_ID, accountId)
+            putExtra(EXTRA_ENVIRONMENT, message.data["environment"] ?: "STAGING")
         }
 
         val pending = PendingIntent.getActivity(
@@ -111,5 +125,7 @@ class KramyaMessagingService : FirebaseMessagingService() {
     companion object {
         /** The intent extra a tap carries into MainActivity. */
         const val EXTRA_ENTRY_ID = "kramya.entryId"
+        const val EXTRA_ACCOUNT_ID = "kramya.accountId"
+        const val EXTRA_ENVIRONMENT = "kramya.environment"
     }
 }

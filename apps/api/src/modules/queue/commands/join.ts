@@ -1,4 +1,5 @@
-import { NotFoundError, RegistrationClosedError, AlreadyInQueueError } from '../../../common/errors';
+import { env } from '../../../config/env';
+import { NotFoundError, RegistrationClosedError, AlreadyInQueueError, ConflictError } from '../../../common/errors';
 import { registrationGate } from '../../../common/registration';
 import { nextTokenNumber, tokenLabel } from '../call-order';
 import { HOLDS_A_SLOT, JOIN_INITIAL_STATUS } from '../state-machine';
@@ -66,6 +67,10 @@ export function joinQueue(
         }
       }
 
+      if (ctx.session.feePaise < 100) {
+        throw new ConflictError('Online checkout is unavailable for a fee below INR 1. Contact the clinic to arrange this visit; no payment hold was created.');
+      }
+      await assertRemoteBookingAllowed(ctx, input.patientId, input.accountId);
       await assertRegistrationOpen(ctx);
 
       const tokenNumber = await nextTokenNumber(ctx);
@@ -102,7 +107,7 @@ export function joinQueue(
  * account could book on behalf of any patient id it could guess, which is both an
  * IDOR and a way to fill a stranger's queue (docs/Rules.md 1.3).
  */
-async function assertPatientBelongsToAccount(
+export async function assertPatientBelongsToAccount(
   ctx: CommandContext,
   patientId: string,
   accountId: string,
@@ -150,7 +155,7 @@ async function findExistingEntry(
  * answer can go stale between the read and the write - the last slot can go to
  * somebody else while a patient is looking at the screen.
  */
-async function assertRegistrationOpen(ctx: CommandContext): Promise<void> {
+export async function assertRegistrationOpen(ctx: CommandContext): Promise<void> {
   const onlineTokensHeld = await ctx.tx.queueMetric.count({
     where: {
       sessionId: ctx.session.id,
@@ -177,4 +182,31 @@ async function assertRegistrationOpen(ctx: CommandContext): Promise<void> {
   if (!gate.open) {
     throw new RegistrationClosedError(gate.reason ?? 'SESSION_NOT_OPEN');
   }
+}
+
+/** Account lock is already held by runCommand; include live unpaid holds in quotas. */
+export async function assertRemoteBookingAllowed(ctx: CommandContext, patientId: string, accountId: string): Promise<void> {
+  const active = ['RESERVED', 'CONFIRMED', 'VIRTUAL_WAITING', 'CHECKED_IN', 'READY', 'CALLED', 'IN_CONSULTATION', 'SKIPPED'] as const;
+  const access = await ctx.tx.bookingAccess.findUnique({ where: {
+    hospitalId_patientId: { hospitalId: ctx.session.hospitalId, patientId: patientId },
+  } });
+  if (access?.pausedUntil && access.pausedUntil > ctx.now) {
+    throw new ConflictError(`Online reservations for this profile at this clinic are paused until ${access.pausedUntil.toISOString()}. Contact reception to request a review or arrange a visit. Your existing reservations remain valid.`,
+      { retryAt: access.pausedUntil.toISOString(), scope: 'PATIENT_AT_CLINIC' });
+  }
+  const accountReservations = await ctx.tx.queueEntry.count({
+    where: { accountId: accountId, status: { in: [...active] },
+      NOT: { status: 'RESERVED', reservationExpiresAt: { lte: ctx.now } },
+      session: { scheduledEnd: { gt: ctx.now } } },
+  });
+  if (accountReservations >= env().MAX_ACTIVE_RESERVATIONS_PER_ACCOUNT) {
+    throw new ConflictError('This account has reached its active booking limit. Cancel an unused reservation or contact reception.');
+  }
+  const overlapping = await ctx.tx.queueEntry.findFirst({
+    where: { patientId: patientId, accountId: accountId, status: { in: [...active] },
+      NOT: { status: 'RESERVED', reservationExpiresAt: { lte: ctx.now } },
+      session: { scheduledStart: { lt: ctx.session.scheduledEnd }, scheduledEnd: { gt: ctx.session.scheduledStart } } },
+    select: { id: true },
+  });
+  if (overlapping) throw new ConflictError('This patient already has a booking during this session. Cancel it before booking another overlapping visit.');
 }

@@ -6,6 +6,7 @@ import { auth, createTestApp, request, resetDb, signup } from './helpers';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EtaTick } from '../src/modules/eta/eta-tick';
 import { dateColumnFromString, istToday } from '../src/common/ist';
+import { RealtimeGateway } from '../src/realtime/realtime.gateway';
 
 /**
  * P7-BE-01 / P7-BE-02 · the realtime gateway.
@@ -162,6 +163,21 @@ describe('realtime gateway (P7-BE-01, P7-BE-02)', () => {
     it('accepts a socket carrying a valid access token', async () => {
       const socket = await connect(staff.accessToken);
       expect(socket.connected).toBe(true);
+    });
+
+    it('waits for account authentication when subscribing immediately after connect', async () => {
+      const socket = await connect(patient.accessToken);
+      expect(await subscribe(socket, sessionId)).toEqual({ ok: true });
+      const disconnected = waitFor(socket, 'disconnect');
+      await prisma.account.update({ where: { id: patient.accountId }, data: { authVersion: { increment: 1 } } });
+      app.get(RealtimeGateway).disconnectAccount(patient.accountId);
+      await disconnected;
+      expect(socket.connected).toBe(false);
+      const revoked = io(url, { auth: { token: patient.accessToken }, transports: ['websocket'], forceNew: true });
+      sockets.push(revoked);
+      const refused = waitFor(revoked, 'disconnect');
+      await refused;
+      expect(revoked.connected).toBe(false);
     });
 
     it('disconnects a socket with no token rather than leaving it connected and mute', async () => {

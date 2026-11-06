@@ -4,5 +4,6 @@
     <color name="launcher_background">#FFFFFF</color>
     <!-- theme.ts: color.canvas. The window ground, so a cold start does not flash white
          under a canvas-coloured app. -->
-    <color name="canvas">#F7F7F8</color>
+    <color name="canvas">#FAF7F2</color>
+    <color name="daylight_launcher">#2E6B4F</color>
 </resources>

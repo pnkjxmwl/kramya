@@ -38,6 +38,9 @@ Narrative history, decisions and surprises go in **PROGRESS.md**; this table is 
 | ☑ | 8 — Notifications + Background Jobs | M | 4–5 | 5 | `phase-8-done` |
 | ☑ | 9 — Hardening | L | 5–7 | 6 | `phase-9-done` |
 | ☐ | 10 — Staging Deploy + Pilot | M | 3–4 | 3 | `phase-10-done` |
+| ◐ | 11 — Booking + Play readiness ([current payment plan](payment-restoration-plan.md)) | XL | Acceptance-gated | Sequential | Razorpay restored locally; 49 payment, 18 RLS and 59 Android tests per variant pass; signed staging release built; hosted/device/Play/clinic gates pending |
+
+**6 November design rollout:** ◐ Daylight is implemented in the existing Kotlin routes, authenticated staff/doctor console and rebuilt public landing page. Native debug tests/APK/lint and web typecheck/lint pass; final release, browser regression, CI and hosted rollout remain in progress. Track [the implementation plan](daylight-implementation-plan.md).
 
 **MVP total: ~47–66 focused days.**
 

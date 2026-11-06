@@ -64,7 +64,7 @@ const listableSession = (date?: Date): Prisma.OPDSessionWhereInput => ({
 
 /** Everything a card needs, in one round trip - never one query per card. */
 const SESSION_INCLUDE = {
-  hospital: { select: { id: true, name: true, area: true, address: true } },
+  hospital: { select: { id: true, name: true, area: true, address: true, receptionPhone: true, receptionEmail: true } },
   department: { select: { id: true, name: true } },
   currentProvider: {
     select: { id: true, name: true, specialization: true, defaultConsultMins: true, photoUrl: true },
@@ -245,6 +245,8 @@ export class DiscoveryService {
       city: row.city,
       area: row.area,
       address: row.address,
+      receptionPhone: row.receptionPhone,
+      receptionEmail: row.receptionEmail,
       photoUrl: row.photoUrl,
       todaySessionCount: counts.get(row.id) ?? 0,
       openSessionCount: open.get(row.id) ?? 0,
@@ -372,12 +374,20 @@ export class DiscoveryService {
 
     const now = new Date();
     const snapshots = await this.snapshots([row], now);
+    const policy = await this.policies.read(row.hospitalId);
 
     return {
       ...toCardDto(row, snapshots.get(row.id)!),
       hospitalArea: row.hospital.area,
       hospitalAddress: row.hospital.address,
+      receptionPhone: row.hospital.receptionPhone,
+      receptionEmail: row.hospital.receptionEmail,
       doctorDefaultConsultMins: row.currentProvider.defaultConsultMins,
+      arrivalGuidance: {
+        arriveBeforeMins: policy.arriveBeforeMins, gracePeriodSec: policy.gracePeriodSec,
+        recallAttempts: policy.recallAttempts, requeueBehavior: policy.requeueBehavior,
+        instructions: policy.arrivalInstructions,
+      },
     };
   }
 

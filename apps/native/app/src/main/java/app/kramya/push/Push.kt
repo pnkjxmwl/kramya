@@ -27,9 +27,6 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 // Push notifications. Mirror of apps/mobile/lib/push.tsx.
 //
@@ -177,21 +174,7 @@ suspend fun registerDeviceToken(context: Context, auth: AuthStore) {
 
         val token = FirebaseMessaging.getInstance().token.await()
 
-        val body = Json.encodeToString(
-            JsonObject.serializer(),
-            JsonObject(
-                mapOf(
-                    "token" to JsonPrimitive(token),
-                    "platform" to JsonPrimitive("android"),
-                ),
-            ),
-        )
-
-        auth.authedFetch("/me/push-tokens", method = "POST", body = body).use { response ->
-            if (!response.isSuccessful) {
-                Log.w(TAG, "the API refused this device token: HTTP ${response.code}")
-            }
-        }
+        auth.registerPushToken(token)
     } catch (error: Exception) {
         // Never surfaced to the patient.
         Log.w(TAG, "this device did not register, so it will receive nothing", error)
